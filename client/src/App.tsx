@@ -12,6 +12,8 @@ import Onboarding from "@/pages/onboarding";
 import SellBook from "@/pages/sell";
 import { Navbar } from "@/components/layout/Navbar";
 
+import Profile from "@/pages/profile";
+
 function Router() {
   const [location] = useLocation();
   // Hide navbar on onboarding and sell pages
@@ -27,6 +29,7 @@ function Router() {
         <Route path="/marketplace" component={Marketplace} />
         <Route path="/book/:id" component={BookDetails} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/profile" component={Profile} />
         <Route component={NotFound} />
       </Switch>
     </div>
