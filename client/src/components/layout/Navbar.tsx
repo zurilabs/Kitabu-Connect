@@ -50,13 +50,11 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center px-4 md:px-6">
         <div className="mr-4 hidden md:flex">
-          <Link href="/">
-            <a className="mr-6 flex items-center space-x-2">
-              <BookOpen className="h-6 w-6 text-primary" />
-              <span className="hidden font-display font-bold text-xl sm:inline-block">
-                Kitabu
-              </span>
-            </a>
+          <Link href="/" className="mr-6 flex items-center space-x-2">
+            <BookOpen className="h-6 w-6 text-primary" />
+            <span className="hidden font-display font-bold text-xl sm:inline-block">
+              Kitabu
+            </span>
           </Link>
           <nav className="flex items-center space-x-6 text-sm font-medium">
             <NavLinks />
@@ -112,21 +110,19 @@ export function Navbar() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="pr-0">
-                <Link href="/">
-                  <a className="flex items-center space-x-2" onClick={() => setIsMobileOpen(false)}>
-                    <BookOpen className="h-6 w-6 text-primary" />
-                    <span className="font-bold text-xl">Kitabu</span>
-                  </a>
+                <Link href="/" className="flex items-center space-x-2" onClick={() => setIsMobileOpen(false)}>
+                  <BookOpen className="h-6 w-6 text-primary" />
+                  <span className="font-bold text-xl">Kitabu</span>
                 </Link>
                 <div className="my-4 flex flex-col space-y-3 pb-10 pl-6">
-                  <Link href="/marketplace">
-                    <a className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>Marketplace</a>
+                  <Link href="/marketplace" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                    Marketplace
                   </Link>
-                  <Link href="/dashboard">
-                    <a className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>Dashboard</a>
+                  <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                    Dashboard
                   </Link>
-                  <Link href="/sell">
-                    <a className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>Sell Books</a>
+                  <Link href="/sell" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                    Sell Books
                   </Link>
                 </div>
               </SheetContent>

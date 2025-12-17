@@ -29,17 +29,17 @@ export default function Home() {
                 Secure payments, verified handshakes, and zero stress.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/marketplace">
-                  <Button size="lg" className="h-12 px-8 text-base">
+                <Button size="lg" className="h-12 px-8 text-base" asChild>
+                  <Link href="/marketplace">
                     Find Books
                     <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/sell">
-                  <Button size="lg" variant="outline" className="h-12 px-8 text-base">
+                  </Link>
+                </Button>
+                <Button size="lg" variant="outline" className="h-12 px-8 text-base" asChild>
+                  <Link href="/sell">
                     Sell a Book
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
               
               <div className="pt-4 flex items-center gap-6 text-sm text-muted-foreground">
@@ -81,11 +81,11 @@ export default function Home() {
               <h2 className="text-3xl font-display font-bold tracking-tight mb-2">Fresh on the Shelf</h2>
               <p className="text-muted-foreground">Recently listed textbooks from your campus.</p>
             </div>
-            <Link href="/marketplace">
-              <Button variant="ghost" className="hidden sm:flex">
+            <Button variant="ghost" className="hidden sm:flex" asChild>
+              <Link href="/marketplace">
                 View All <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -95,11 +95,11 @@ export default function Home() {
           </div>
           
           <div className="mt-8 text-center sm:hidden">
-            <Link href="/marketplace">
-              <Button variant="outline" className="w-full">
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/marketplace">
                 View All Listings
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
       </section>

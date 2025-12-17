@@ -43,11 +43,11 @@ export function BookCard({ book }: BookCardProps) {
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0">
-        <Link href={`/book/${book.id}`} className="w-full">
-          <Button className="w-full group-hover:bg-primary/90">
+        <Button className="w-full group-hover:bg-primary/90" asChild>
+          <Link href={`/book/${book.id}`}>
             View Details
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </CardFooter>
     </Card>
   );

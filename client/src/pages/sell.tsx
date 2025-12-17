@@ -55,11 +55,11 @@ export default function SellBook() {
     <div className="min-h-screen bg-muted/10 pb-20">
       <div className="bg-primary pb-24 pt-12 text-primary-foreground">
         <div className="container px-4">
-          <Link href="/">
-            <Button variant="ghost" className="text-white hover:text-white/80 hover:bg-white/10 pl-0 mb-6">
+          <Button variant="ghost" className="text-white hover:text-white/80 hover:bg-white/10 pl-0 mb-6" asChild>
+            <Link href="/">
               <ArrowLeft className="mr-2 w-4 h-4" /> Back Home
-            </Button>
-          </Link>
+            </Link>
+          </Button>
           <div className="max-w-2xl">
             <h1 className="text-3xl md:text-4xl font-display font-bold mb-4">Sell Your Textbooks</h1>
             <p className="text-primary-foreground/80 text-lg">
