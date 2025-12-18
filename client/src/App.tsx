@@ -8,7 +8,10 @@ import Home from "@/pages/home";
 import Marketplace from "@/pages/marketplace";
 import BookDetails from "@/pages/book-details";
 import Dashboard from "@/pages/dashboard";
-import Onboarding from "@/pages/onboarding";
+import OnboardingNew from "@/pages/onboarding-new";
+import Login from "@/pages/login";
+import Signup from "@/pages/signup";
+import ForgotPassword from "@/pages/forgot-password";
 import SellBook from "@/pages/sell";
 import { Navbar } from "@/components/layout/Navbar";
 
@@ -16,14 +19,17 @@ import Profile from "@/pages/profile";
 
 function Router() {
   const [location] = useLocation();
-  // Hide navbar on onboarding and sell pages
-  const shouldHideNavbar = location === "/onboarding" || location === "/sell";
+  // Hide navbar on auth pages, onboarding and sell pages
+  const shouldHideNavbar = location === "/login" || location === "/signup" || location === "/forgot-password" || location === "/onboarding" || location === "/sell";
 
   return (
     <div className="min-h-screen bg-background font-sans antialiased">
       {!shouldHideNavbar && <Navbar />}
       <Switch>
-        <Route path="/onboarding" component={Onboarding} />
+        <Route path="/login" component={Login} />
+        <Route path="/signup" component={Signup} />
+        <Route path="/forgot-password" component={ForgotPassword} />
+        <Route path="/onboarding" component={OnboardingNew} />
         <Route path="/sell" component={SellBook} />
         <Route path="/" component={Home} />
         <Route path="/marketplace" component={Marketplace} />

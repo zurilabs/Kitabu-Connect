@@ -38,18 +38,18 @@ export function SwapCalculator() {
           <div className="space-y-2">
             <Label htmlFor="your-val" className="text-xs">Your Books</Label>
             <div className="relative">
-              <span className="absolute left-2 top-2.5 text-muted-foreground text-sm">₦</span>
-              <Input 
-                id="your-val" 
-                placeholder="0" 
-                className="pl-6"
+              <span className="absolute left-2 top-2.5 text-muted-foreground text-sm">KSh</span>
+              <Input
+                id="your-val"
+                placeholder="0"
+                className="pl-10"
                 value={yourBookValue}
                 onChange={(e) => setYourBookValue(e.target.value)}
                 type="number"
               />
             </div>
           </div>
-          
+
           <div className="pb-3 text-muted-foreground">
             <ArrowRight className="w-4 h-4" />
           </div>
@@ -57,11 +57,11 @@ export function SwapCalculator() {
           <div className="space-y-2">
             <Label htmlFor="target-val" className="text-xs">Their Books</Label>
             <div className="relative">
-              <span className="absolute left-2 top-2.5 text-muted-foreground text-sm">₦</span>
-              <Input 
-                id="target-val" 
-                placeholder="0" 
-                className="pl-6"
+              <span className="absolute left-2 top-2.5 text-muted-foreground text-sm">KSh</span>
+              <Input
+                id="target-val"
+                placeholder="0"
+                className="pl-10"
                 value={targetBookValue}
                 onChange={(e) => setTargetBookValue(e.target.value)}
                 type="number"
@@ -73,7 +73,7 @@ export function SwapCalculator() {
         {difference !== null && (
           <div className={`p-3 rounded-md text-sm font-medium flex justify-between items-center animate-in fade-in slide-in-from-top-2 ${difference > 0 ? 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'}`}>
             <span>{difference > 0 ? "You pay difference:" : "You receive difference:"}</span>
-            <span className="text-lg font-bold">₦{Math.abs(difference).toLocaleString()}</span>
+            <span className="text-lg font-bold">KSh {Math.abs(difference).toLocaleString()}</span>
           </div>
         )}
       </CardContent>

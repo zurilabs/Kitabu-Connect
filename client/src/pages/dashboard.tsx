@@ -50,7 +50,7 @@ export default function Dashboard() {
                 <span className="text-sm font-medium">Wallet Balance</span>
               </div>
               <div className="text-2xl font-bold text-primary">
-                ₦{CURRENT_USER.walletBalance.toLocaleString()}
+                KSh {CURRENT_USER.walletBalance.toLocaleString()}
               </div>
               <div className="mt-2 flex gap-2">
                 <Button size="sm" className="w-full text-xs">Top Up</Button>
@@ -75,7 +75,7 @@ export default function Dashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Sales</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₦45,000</div>
+              <div className="text-2xl font-bold">KSh 45,000</div>
             </CardContent>
           </Card>
           <Card>
@@ -83,7 +83,7 @@ export default function Dashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Escrow Held</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">₦18,000</div>
+              <div className="text-2xl font-bold text-orange-600">KSh 18,000</div>
             </CardContent>
           </Card>
           <Card>
@@ -127,7 +127,7 @@ export default function Dashboard() {
                       
                       <div className="flex items-center gap-4 self-end sm:self-center">
                         <div className="text-right">
-                          <div className="font-bold">₦{tx.amount.toLocaleString()}</div>
+                          <div className="font-bold">KSh {tx.amount.toLocaleString()}</div>
                           <Badge variant={tx.status === 'escrow' ? 'secondary' : 'outline'} className={tx.status === 'escrow' ? 'bg-orange-100 text-orange-800' : ''}>
                             {tx.status}
                           </Badge>

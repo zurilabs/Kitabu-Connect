@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,15 +10,15 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { CURRENT_USER, SCHOOLS } from "@/lib/mockData";
-import { 
-  User, 
-  MapPin, 
-  Mail, 
-  Phone, 
-  ShieldCheck, 
-  CreditCard, 
-  Bell, 
+import { useAuth } from "@/hooks/useAuth";
+import {
+  User,
+  MapPin,
+  Mail,
+  Phone,
+  ShieldCheck,
+  CreditCard,
+  Bell,
   LogOut,
   Camera,
   CheckCircle2,
@@ -28,14 +28,23 @@ import {
 export default function Profile() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user, logout, isLoggingOut, isLoading: isLoadingAuth } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Mock state for form fields
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!isLoadingAuth && !user) {
+      setLocation("/login");
+    }
+  }, [user, isLoadingAuth, setLocation]);
+
+  // Form state
   const [formData, setFormData] = useState({
-    name: CURRENT_USER.name,
-    email: CURRENT_USER.email,
-    phone: "+234 800 123 4567",
-    schoolId: CURRENT_USER.schoolId,
+    name: user?.fullName || "",
+    email: user?.email || "",
+    phone: user?.phoneNumber || "",
+    schoolId: user?.schoolId || "",
+    schoolName: user?.schoolName || "",
     notifications: {
       email: true,
       push: true,
@@ -43,11 +52,27 @@ export default function Profile() {
     }
   });
 
-  const schoolName = SCHOOLS.find(s => s.id === formData.schoolId)?.name;
+  // Update form data when user data loads
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.fullName || "",
+        email: user.email || "",
+        phone: user.phoneNumber || "",
+        schoolId: user.schoolId || "",
+        schoolName: user.schoolName || "",
+        notifications: {
+          email: true,
+          push: true,
+          sms: false
+        }
+      });
+    }
+  }, [user]);
 
   const handleSave = () => {
     setIsLoading(true);
-    // Simulate API call
+    // TODO: Implement API call to update profile
     setTimeout(() => {
       setIsLoading(false);
       toast({
@@ -57,13 +82,33 @@ export default function Profile() {
     }, 1000);
   };
 
-  const handleLogout = () => {
-    toast({
-      title: "Logged Out",
-      description: "See you next time!",
-    });
-    setLocation("/");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+      });
+      setLocation("/login");
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: error instanceof Error ? error.message : "Failed to logout",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container px-4 py-8 max-w-4xl">

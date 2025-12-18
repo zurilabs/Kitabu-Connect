@@ -1,12 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  BookOpen, 
-  User as UserIcon, 
+import {
+  Search,
+  BookOpen,
+  User as UserIcon,
   Menu,
-  ShoppingCart
+  ShoppingCart,
+  LogOut
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -17,14 +18,41 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { CURRENT_USER } from "@/lib/mockData";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 
 export function Navbar() {
   const [location, setLocation] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const { user, logout, isLoggingOut } = useAuth();
+  const { toast } = useToast();
 
   const isActive = (path: string) => location === path;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+      });
+      setLocation("/login");
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: error instanceof Error ? error.message : "Failed to logout",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSellClick = (e: React.MouseEvent) => {
+    if (!user) {
+      e.preventDefault();
+      setLocation('/signup');
+    }
+  };
 
   const NavLinks = () => (
     <>
@@ -33,12 +61,14 @@ export function Navbar() {
           Marketplace
         </span>
       </Link>
-      <Link href="/dashboard">
-        <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground'}`}>
-          Dashboard
-        </span>
-      </Link>
-      <Link href="/sell">
+      {user && (
+        <Link href="/dashboard">
+          <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground'}`}>
+            Dashboard
+          </span>
+        </Link>
+      )}
+      <Link href="/sell" onClick={handleSellClick}>
         <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/sell') ? 'text-primary' : 'text-muted-foreground'}`}>
           Sell Books
         </span>
@@ -61,46 +91,45 @@ export function Navbar() {
           </nav>
         </div>
         
-        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-          <div className="w-full flex-1 md:w-auto md:flex-none">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search by title, ISBN..."
-                className="h-9 w-full rounded-md border border-input bg-background pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px] focus-visible:ring-1"
-              />
-            </div>
-          </div>
-          
+        <div className="flex flex-1 items-center justify-end space-x-2">
           <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
-                  <div className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <UserIcon className="h-4 w-4" />
-                  </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{CURRENT_USER.name}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {CURRENT_USER.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setLocation('/dashboard')}>
-                  Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLocation('/profile')}>
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem>Log out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <UserIcon className="h-4 w-4" />
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{user?.fullName || 'User'}</p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {user?.email || user?.phoneNumber}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setLocation('/dashboard')}>
+                    Dashboard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLocation('/profile')}>
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} disabled={isLoggingOut}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    {isLoggingOut ? 'Logging out...' : 'Log out'}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button asChild>
+                <Link href="/signup">Get Started</Link>
+              </Button>
+            )}
 
             <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
               <SheetTrigger asChild>
@@ -118,12 +147,22 @@ export function Navbar() {
                   <Link href="/marketplace" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
                     Marketplace
                   </Link>
-                  <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                    Dashboard
-                  </Link>
-                  <Link href="/sell" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                  {user && (
+                    <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                      Dashboard
+                    </Link>
+                  )}
+                  <Link href="/sell" className="py-2 hover:text-primary" onClick={(e) => {
+                    handleSellClick(e);
+                    setIsMobileOpen(false);
+                  }}>
                     Sell Books
                   </Link>
+                  {!user && (
+                    <Link href="/signup" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                      Get Started
+                    </Link>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>

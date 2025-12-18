@@ -110,7 +110,7 @@ export default function BookDetails() {
             <CardContent className="p-6 space-y-6">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-muted-foreground">Price</span>
-                <span className="text-3xl font-bold text-primary">₦{book.price.toLocaleString()}</span>
+                <span className="text-3xl font-bold text-primary">KSh {book.price.toLocaleString()}</span>
               </div>
 
               <Separator />
@@ -155,18 +155,18 @@ export default function BookDetails() {
                   <div className="space-y-4 py-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Book Price</span>
-                      <span>₦{book.price.toLocaleString()}</span>
+                      <span>KSh {book.price.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <Truck className="w-3 h-3" /> Logistics Fee
                       </span>
-                      <span>₦1,500</span>
+                      <span>KSh 1,500</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
-                      <span>₦{(book.price + 1500).toLocaleString()}</span>
+                      <span>KSh {(book.price + 1500).toLocaleString()}</span>
                     </div>
 
                     <div className="bg-muted p-3 rounded-md text-xs text-muted-foreground flex gap-2">
@@ -181,7 +181,7 @@ export default function BookDetails() {
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setShowConfirm(false)}>Cancel</Button>
                     <Button onClick={handleBuy} disabled={isProcessing} className="bg-green-600 hover:bg-green-700 text-white">
-                      {isProcessing ? "Processing..." : `Pay ₦${(book.price + 1500).toLocaleString()}`}
+                      {isProcessing ? "Processing..." : `Pay KSh ${(book.price + 1500).toLocaleString()}`}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

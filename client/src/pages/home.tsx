@@ -1,14 +1,24 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { BookCard } from "@/components/ui/book-card";
 import { SwapCalculator } from "@/components/ui/swap-calculator";
 import { MOCK_BOOKS } from "@/lib/mockData";
 import { ArrowRight, BookOpen, ShieldCheck, Users } from "lucide-react";
 import heroImage from "@assets/generated_images/students_exchanging_books_on_campus.png";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Home() {
   const featuredBooks = MOCK_BOOKS.slice(0, 3);
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  const handleSellClick = (e: React.MouseEvent) => {
+    if (!user) {
+      e.preventDefault();
+      setLocation('/signup');
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -25,7 +35,8 @@ export default function Home() {
                 <span className="text-primary">Textbook Marketplace</span>
               </h1>
               <p className="text-xl text-muted-foreground max-w-[600px]">
-                Buy, sell, and swap textbooks with students on your campus. 
+                Buy, sell, and swap textbooks with parents close to 
+                your location. 
                 Secure payments, verified handshakes, and zero stress.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
@@ -36,7 +47,7 @@ export default function Home() {
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 px-8 text-base" asChild>
-                  <Link href="/sell">
+                  <Link href="/sell" onClick={handleSellClick}>
                     Sell a Book
                   </Link>
                 </Button>

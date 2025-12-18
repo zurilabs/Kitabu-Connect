@@ -189,10 +189,10 @@ export default function SellBook() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="price">Selling Price (₦)</Label>
+                          <Label htmlFor="price">Selling Price (KSh)</Label>
                           <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">₦</span>
-                            <Input id="price" type="number" placeholder="0.00" className="pl-8" />
+                            <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">KSh</span>
+                            <Input id="price" type="number" placeholder="0.00" className="pl-12" />
                           </div>
                         </div>
                       </div>
