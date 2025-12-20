@@ -12,6 +12,14 @@ import {
 } from '../db/schema';
 import { fromZodError } from 'zod-validation-error';
 
+/**
+ * Get callback URL from environment or default to localhost
+ */
+function getCallbackUrl(path: string = '/dashboard'): string {
+  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5000';
+  return `${baseUrl}${path}`;
+}
+
 const router = Router();
 
 /* ================================
@@ -117,7 +125,7 @@ router.post('/topup/initialize', authenticateToken, async (req, res) => {
       userId,
       amount,
       email: userEmail,
-      callbackUrl: `${process.env.FRONTEND_URL}/wallet/verify`,
+      callbackUrl: getCallbackUrl('/dashboard'),
     });
 
     if (!result.success) {

@@ -35,6 +35,18 @@ export async function registerRoutes(
   app.use("/api/upload", uploadRoutes);
 
   // ============================================
+  // DEBUG ENDPOINT - Check environment variables
+  // ============================================
+  app.get("/api/debug/config", (req, res) => {
+    return res.json({
+      FRONTEND_URL: process.env.FRONTEND_URL || 'NOT SET',
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      PORT: process.env.PORT || '5000',
+      PAYSTACK_CONFIGURED: !!process.env.PAYSTACK_SECRET_KEY,
+    });
+  });
+
+  // ============================================
   // WALLET & ORDER ROUTES
   // ============================================
   app.use("/api/wallet", walletRoutes);

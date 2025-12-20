@@ -1,6 +1,14 @@
 import { initializePayment, verifyPayment, generateReference } from "../config/paystack";
 import { walletService } from "./wallet.service";
 
+/**
+ * Get callback URL from environment or default to localhost
+ */
+function getCallbackUrl(path: string = '/dashboard'): string {
+  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5000';
+  return `${baseUrl}${path}`;
+}
+
 export class PaymentService {
   /**
    * Initialize wallet top-up via Paystack
@@ -46,7 +54,7 @@ export class PaymentService {
         email: params.email,
         amount: params.amount,
         reference,
-        callback_url: params.callbackUrl || `${process.env.FRONTEND_URL}/wallet/verify`,
+        callback_url: params.callbackUrl || getCallbackUrl('/dashboard'),
         metadata: {
           userId: params.userId,
           transactionId: txResult.transactionId,

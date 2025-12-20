@@ -3,18 +3,38 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState } from "react";
-import { Wallet, Package, Plus, Edit, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Wallet, Package, Plus, Edit, Trash2, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBookListing } from "@/hooks/useBookListing";
-import { Link } from "wouter";
+import { useWallet } from "@/hooks/useWallet";
+import { Link, useLocation, useSearch } from "wouter";
+import { TopUpDialog } from "@/components/wallet/TopUpDialog";
+import { WithdrawDialog } from "@/components/wallet/WithdrawDialog";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("listings");
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const { myListings, isLoadingMyListings, deleteListing } = useBookListing();
+  const { balance, transactions, isLoadingTransactions, verifyPayment } = useWallet();
+  const searchParams = useSearch();
+
+  // Handle payment verification after redirect from Paystack
+  useEffect(() => {
+    const urlParams = new URLSearchParams(searchParams);
+    const reference = urlParams.get('reference');
+    const status = urlParams.get('status');
+
+    if (reference && status === 'success') {
+      verifyPayment.mutate(reference);
+      // Clean up URL
+      window.history.replaceState({}, '', '/dashboard');
+    }
+  }, [searchParams]);
 
   const handleDeleteListing = (id: number, title: string) => {
     if (confirm(`Are you sure you want to delete "${title}"?`)) {
@@ -31,6 +51,26 @@ export default function Dashboard() {
   const getInitials = (name: string | null) => {
     if (!name) return "?";
     return name.split(" ").map(n => n[0]).join("").toUpperCase();
+  };
+
+  const formatTransactionType = (type: string) => {
+    const typeMap: Record<string, string> = {
+      'topup': 'Top-up',
+      'withdrawal': 'Withdrawal',
+      'purchase': 'Purchase',
+      'sale': 'Sale',
+      'refund': 'Refund',
+      'escrow_hold': 'Escrow Hold',
+      'escrow_release': 'Payment Received',
+    };
+    return typeMap[type] || type;
+  };
+
+  const getTransactionIcon = (type: string) => {
+    if (type === 'credit') {
+      return <ArrowDownCircle className="w-4 h-4 text-green-600" />;
+    }
+    return <ArrowUpCircle className="w-4 h-4 text-red-600" />;
   };
 
   return (
@@ -56,11 +96,15 @@ export default function Dashboard() {
                 <span className="text-sm font-medium">Wallet Balance</span>
               </div>
               <div className="text-2xl font-bold text-primary">
-                KSh {parseFloat(user?.walletBalance || "0").toLocaleString()}
+                KSh {balance.toLocaleString()}
               </div>
               <div className="mt-2 flex gap-2">
-                <Button size="sm" className="w-full text-xs">Top Up</Button>
-                <Button size="sm" variant="outline" className="w-full text-xs">Withdraw</Button>
+                <Button size="sm" className="w-full text-xs" onClick={() => setTopUpOpen(true)}>
+                  Top Up
+                </Button>
+                <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => setWithdrawOpen(true)}>
+                  Withdraw
+                </Button>
               </div>
             </div>
 
@@ -120,7 +164,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <Tabs defaultValue="listings" className="space-y-4">
+      <Tabs defaultValue="listings" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="listings">My Listings</TabsTrigger>
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
@@ -223,16 +267,61 @@ export default function Dashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Transaction History</CardTitle>
-              <CardDescription>Your buying and selling history.</CardDescription>
+              <CardDescription>Your wallet transactions.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                No transactions yet. Start buying or selling books to see your transaction history here.
-              </div>
+              {isLoadingTransactions ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Loading transactions...
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No transactions yet. Top up your wallet or start buying books to see your transaction history here.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {transactions.map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        {getTransactionIcon(transaction.type)}
+                        <div>
+                          <div className="font-medium text-sm">
+                            {transaction.description}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(transaction.createdAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`font-bold ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                          {transaction.type === 'credit' ? '+' : '-'}KSh {parseFloat(transaction.amount).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Balance: KSh {parseFloat(transaction.balanceAfter).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialogs */}
+      <TopUpDialog open={topUpOpen} onOpenChange={setTopUpOpen} />
+      <WithdrawDialog open={withdrawOpen} onOpenChange={setWithdrawOpen} currentBalance={balance} />
     </div>
   );
 }

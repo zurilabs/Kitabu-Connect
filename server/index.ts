@@ -97,6 +97,28 @@ app.use((req, res, next) => {
 
       // Start the escrow release scheduler
       startEscrowReleaseScheduler();
+
+      // Display ngrok instructions if in development
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('🚀 Server Started Successfully');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('');
+        console.log('📌 To enable Paystack webhooks in development:');
+        console.log('');
+        console.log('1. Run ngrok in a separate terminal:');
+        console.log('   ngrok http 5000');
+        console.log('');
+        console.log('2. Copy the HTTPS URL (e.g., https://abc123.ngrok.io)');
+        console.log('');
+        console.log('3. Configure in Paystack Dashboard:');
+        console.log('   - Callback URL: https://your-ngrok-url.ngrok.io/dashboard');
+        console.log('   - Webhook URL: https://your-ngrok-url.ngrok.io/api/webhooks/paystack');
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('');
+      }
     },
   );
 })();

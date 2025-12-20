@@ -1,23 +1,15 @@
-import Paystack from 'paystack-node';
+// Paystack Configuration using REST API (more reliable than SDK)
 
-// Initialize Paystack with secret key from environment
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
+const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
 if (!PAYSTACK_SECRET_KEY) {
   console.warn('[Paystack] Warning: PAYSTACK_SECRET_KEY not set in environment variables');
 }
 
-const paystack = new Paystack(PAYSTACK_SECRET_KEY, process.env.NODE_ENV || 'development');
-
-export default paystack;
-
-/**
- * Paystack Helper Functions
- */
-
 export interface InitializePaymentParams {
   email: string;
-  amount: number; // Amount in kobo (multiply by 100)
+  amount: number; // Amount in KES (will be converted to kobo)
   reference?: string;
   callback_url?: string;
   metadata?: Record<string, any>;
@@ -30,21 +22,52 @@ export interface VerifyPaymentResponse {
 }
 
 /**
+ * Generate a unique payment reference
+ */
+export function generateReference(): string {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000000);
+  return `KITABU-${timestamp}-${random}`;
+}
+
+/**
  * Initialize a payment transaction
  */
 export async function initializePayment(params: InitializePaymentParams) {
   try {
-    const response = await paystack.transaction.initialize({
-      email: params.email,
-      amount: Math.round(params.amount * 100), // Convert to kobo
-      reference: params.reference || generateReference(),
-      callback_url: params.callback_url,
-      metadata: params.metadata,
+    const reference = params.reference || generateReference();
+
+    const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: params.email,
+        amount: Math.round(params.amount * 100), // Convert to kobo (smallest unit)
+        reference,
+        callback_url: params.callback_url,
+        metadata: params.metadata,
+        currency: 'KES',
+      }),
     });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.status) {
+      console.error('[Paystack] Initialize failed:', data);
+      return {
+        success: false,
+        message: data.message || 'Payment initialization failed',
+      };
+    }
+
+    console.log('[Paystack] Payment initialized successfully:', reference);
 
     return {
       success: true,
-      data: response.body.data,
+      data: data.data,
     };
   } catch (error) {
     console.error('[Paystack] Initialize payment error:', error);
@@ -60,20 +83,35 @@ export async function initializePayment(params: InitializePaymentParams) {
  */
 export async function verifyPayment(reference: string): Promise<VerifyPaymentResponse> {
   try {
-    const response = await paystack.transaction.verify({
-      reference,
+    const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
     });
 
-    if (response.body.data.status === 'success') {
+    const data = await response.json();
+
+    if (!response.ok || !data.status) {
+      console.error('[Paystack] Verification failed:', data);
+      return {
+        success: false,
+        message: data.message || 'Payment verification failed',
+      };
+    }
+
+    if (data.data.status === 'success') {
+      console.log('[Paystack] Payment verified successfully:', reference);
       return {
         success: true,
-        data: response.body.data,
+        data: data.data,
       };
     }
 
     return {
       success: false,
-      message: 'Payment verification failed',
+      message: 'Payment not successful',
     };
   } catch (error) {
     console.error('[Paystack] Verify payment error:', error);
@@ -82,15 +120,6 @@ export async function verifyPayment(reference: string): Promise<VerifyPaymentRes
       message: error instanceof Error ? error.message : 'Payment verification failed',
     };
   }
-}
-
-/**
- * Generate a unique payment reference
- */
-export function generateReference(): string {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000000);
-  return `KITABU-${timestamp}-${random}`;
 }
 
 /**
@@ -103,17 +132,39 @@ export async function initiateTransfer(params: {
   reference?: string;
 }) {
   try {
-    const response = await paystack.transfer.create({
-      source: 'balance',
-      amount: Math.round(params.amount * 100), // Convert to kobo
-      recipient: params.recipient,
-      reason: params.reason || 'Wallet withdrawal',
-      reference: params.reference || generateReference(),
+    const reference = params.reference || generateReference();
+
+    const response = await fetch(`${PAYSTACK_BASE_URL}/transfer`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        source: 'balance',
+        amount: Math.round(params.amount * 100), // Convert to kobo
+        recipient: params.recipient,
+        reason: params.reason || 'Wallet withdrawal',
+        reference,
+        currency: 'KES',
+      }),
     });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.status) {
+      console.error('[Paystack] Transfer failed:', data);
+      return {
+        success: false,
+        message: data.message || 'Transfer failed',
+      };
+    }
+
+    console.log('[Paystack] Transfer initiated successfully:', reference);
 
     return {
       success: true,
-      data: response.body.data,
+      data: data.data,
     };
   } catch (error) {
     console.error('[Paystack] Transfer error:', error);
@@ -135,23 +186,78 @@ export async function createTransferRecipient(params: {
   currency?: string;
 }) {
   try {
-    const response = await paystack.transferRecipient.create({
-      type: params.type,
-      name: params.name,
-      account_number: params.account_number,
-      bank_code: params.bank_code,
-      currency: params.currency || 'KES',
+    const response = await fetch(`${PAYSTACK_BASE_URL}/transferrecipient`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: params.type,
+        name: params.name,
+        account_number: params.account_number,
+        bank_code: params.bank_code,
+        currency: params.currency || 'KES',
+      }),
     });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.status) {
+      console.error('[Paystack] Create recipient failed:', data);
+      return {
+        success: false,
+        message: data.message || 'Failed to create transfer recipient',
+      };
+    }
+
+    console.log('[Paystack] Transfer recipient created successfully');
 
     return {
       success: true,
-      data: response.body.data,
+      data: data.data,
     };
   } catch (error) {
     console.error('[Paystack] Create recipient error:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Failed to create transfer recipient',
+    };
+  }
+}
+
+/**
+ * Get list of banks (for withdrawal setup)
+ */
+export async function getBanks() {
+  try {
+    const response = await fetch(`${PAYSTACK_BASE_URL}/bank?currency=KES`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.status) {
+      console.error('[Paystack] Get banks failed:', data);
+      return {
+        success: false,
+        message: data.message || 'Failed to get banks',
+      };
+    }
+
+    return {
+      success: true,
+      data: data.data,
+    };
+  } catch (error) {
+    console.error('[Paystack] Get banks error:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to get banks',
     };
   }
 }
