@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { users, otpCodes, type User } from "@shared/schema";
+import { users, otpCodes, type User } from "server/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { generateToken } from "../lib/jwt";
 import { sendSMS, formatKenyanPhoneNumber } from "../lib/twilio";

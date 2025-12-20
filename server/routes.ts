@@ -3,15 +3,24 @@ import type { Server } from "http";
 import cookieParser from "cookie-parser";
 import { authService } from "./services/auth.service";
 import { onboardingService } from "./services/onboarding.service";
+import { bookListingService } from "./services/bookListing.service";
 import { authenticateToken, checkOnboardingStatus } from "./middleware/auth.middleware";
 import {
   sendOTPSchema,
   verifyOTPSchema,
   completeOnboardingSchema,
+  createBookListingSchema,
+  updateBookListingSchema,
   schools,
-} from "@shared/schema";
+  publishers,
+  users,
+} from "server/db/schema";
 import { db } from "./db";
+import { eq } from "drizzle-orm";
 import { fromZodError } from "zod-validation-error";
+import uploadRoutes from "./routes/upload";
+import walletRoutes from "./routes/wallet";
+import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -19,6 +28,33 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Add cookie parser middleware
   app.use(cookieParser());
+
+  // ============================================
+  // UPLOAD ROUTES
+  // ============================================
+  app.use("/api/upload", uploadRoutes);
+
+  // ============================================
+  // WALLET & ORDER ROUTES
+  // ============================================
+  app.use("/api/wallet", walletRoutes);
+
+  // ============================================
+  // PAYSTACK WEBHOOK
+  // ============================================
+  app.post("/api/webhooks/paystack", async (req, res) => {
+    try {
+      const event = req.body;
+      console.log("[Webhook] Paystack event received:", event.event);
+
+      await paymentService.handlePaystackWebhook(event);
+
+      return res.status(200).send("OK");
+    } catch (error) {
+      console.error("[Webhook] Paystack webhook error:", error);
+      return res.status(500).send("Error");
+    }
+  });
 
   // ============================================
   // AUTH ROUTES
@@ -205,14 +241,293 @@ export async function registerRoutes(
   // Update user profile
   app.put("/api/profile", authenticateToken, checkOnboardingStatus, async (req, res) => {
     try {
-      // TODO: Implement profile update logic
+      const { updateProfileSchema } = await import("./db/schema/index");
+      const { fromZodError } = await import("zod-validation-error");
+
+      const validation = updateProfileSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        const zodError = fromZodError(validation.error);
+        return res.status(400).json({ message: zodError.message });
+      }
+
+      const userId = req.user!.id;
+      const { fullName, email, phoneNumber, schoolId, schoolName, profilePictureUrl } = validation.data;
+
+      // If phone number is being changed, require verification
+      if (phoneNumber && phoneNumber !== req.user!.phoneNumber) {
+        return res.status(400).json({
+          message: "Phone number change requires verification",
+          requiresVerification: true
+        });
+      }
+
+      // Build update object with only provided fields
+      const updateData: any = {};
+      if (fullName !== undefined) updateData.fullName = fullName;
+      if (email !== undefined) updateData.email = email;
+      if (schoolId !== undefined) updateData.schoolId = schoolId;
+      if (schoolName !== undefined) updateData.schoolName = schoolName;
+      if (profilePictureUrl !== undefined) updateData.profilePictureUrl = profilePictureUrl;
+
+      // Update user in database
+      if (Object.keys(updateData).length > 0) {
+        await db.update(users).set(updateData).where(eq(users.id, userId));
+      }
+
+      // Fetch updated user
+      const [updatedUser] = await db.select().from(users).where(eq(users.id, userId));
+
       return res.status(200).json({
         success: true,
         message: "Profile updated successfully",
-        user: req.user,
+        user: updatedUser,
       });
     } catch (error) {
       console.error("[Route] update-profile error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ============================================
+  // PREFERENCES ROUTES
+  // ============================================
+
+  // Get user preferences
+  app.get("/api/preferences", authenticateToken, async (req, res) => {
+    try {
+      const { userPreferences } = await import("./db/schema/index");
+      const userId = req.user!.id;
+
+      const [preferences] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+
+      // Create default preferences if they don't exist
+      if (!preferences) {
+        await db.insert(userPreferences).values({ userId });
+        const [createdPreferences] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+
+        return res.status(200).json({
+          success: true,
+          preferences: createdPreferences,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        preferences,
+      });
+    } catch (error) {
+      console.error("[Route] get-preferences error:", error);
+      console.error("[Route] Error details:", error instanceof Error ? error.message : error);
+      return res.status(500).json({ message: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Update notification preferences
+  app.put("/api/preferences/notifications", authenticateToken, async (req, res) => {
+    try {
+      const { userPreferences, updateNotificationPreferencesSchema } = await import("./db/schema/index");
+      const { fromZodError } = await import("zod-validation-error");
+
+      const validation = updateNotificationPreferencesSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        const zodError = fromZodError(validation.error);
+        return res.status(400).json({ message: zodError.message });
+      }
+
+      const userId = req.user!.id;
+
+      // Build update object with only provided fields
+      const updateData: any = {};
+      Object.keys(validation.data).forEach(key => {
+        if (validation.data[key as keyof typeof validation.data] !== undefined) {
+          updateData[key] = validation.data[key as keyof typeof validation.data];
+        }
+      });
+
+      // Update or create preferences
+      const [existing] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+
+      if (existing) {
+        await db.update(userPreferences).set(updateData).where(eq(userPreferences.userId, userId));
+      } else {
+        await db.insert(userPreferences).values({ userId, ...updateData });
+      }
+
+      // Fetch updated preferences
+      const [updated] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+
+      return res.status(200).json({
+        success: true,
+        message: "Notification preferences updated successfully",
+        preferences: updated,
+      });
+    } catch (error) {
+      console.error("[Route] update-notification-preferences error:", error);
+      console.error("[Route] Error details:", error instanceof Error ? error.message : error);
+      return res.status(500).json({ message: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Update payment preferences
+  app.put("/api/preferences/payment", authenticateToken, async (req, res) => {
+    try {
+      const { userPreferences, updatePaymentPreferencesSchema } = await import("./db/schema/index");
+      const { fromZodError } = await import("zod-validation-error");
+
+      console.log("[Route] Payment update request body:", req.body);
+
+      const validation = updatePaymentPreferencesSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        const zodError = fromZodError(validation.error);
+        console.error("[Route] Validation failed:", zodError.message);
+        return res.status(400).json({ message: zodError.message });
+      }
+
+      const userId = req.user!.id;
+
+      // Build update object with only provided fields
+      // Convert empty strings to null
+      const updateData: any = {};
+      Object.keys(validation.data).forEach(key => {
+        const value = validation.data[key as keyof typeof validation.data];
+        if (value !== undefined) {
+          updateData[key] = value === "" ? null : value;
+        }
+      });
+
+      console.log("[Route] Update data:", updateData);
+
+      // Update or create preferences
+      const [existing] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+
+      if (existing) {
+        console.log("[Route] Updating existing preferences");
+        await db.update(userPreferences).set(updateData).where(eq(userPreferences.userId, userId));
+      } else {
+        console.log("[Route] Creating new preferences");
+        await db.insert(userPreferences).values({ userId, ...updateData });
+      }
+
+      // Fetch updated preferences
+      const [updated] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment preferences updated successfully",
+        preferences: updated,
+      });
+    } catch (error) {
+      console.error("[Route] update-payment-preferences error:", error);
+      console.error("[Route] Error stack:", error instanceof Error ? error.stack : error);
+      return res.status(500).json({ message: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // ============================================
+  // REFERENCE DATA ROUTES
+  // ============================================
+
+  // Get all publishers
+  app.get("/api/publishers", async (req, res) => {
+    try {
+      const allPublishers = await db.select().from(publishers);
+      console.log("[Publishers] Found:", allPublishers.length, "publishers");
+      console.log("[Publishers] Data:", JSON.stringify(allPublishers));
+      return res.status(200).json({
+        success: true,
+        publishers: allPublishers,
+      });
+    } catch (error) {
+      console.error("[Route] publishers error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ISBN Lookup - search local database first, then online
+  app.get("/api/isbn/:isbn", authenticateToken, async (req, res) => {
+    try {
+      const { isbn } = req.params;
+
+      if (!isbn) {
+        return res.status(400).json({ message: "ISBN is required" });
+      }
+
+      console.log("[ISBN Lookup] Searching for ISBN:", isbn);
+
+      // First, search local database
+      const { bookListings } = await import("./db/schema/index");
+      const localBook = await db
+        .select()
+        .from(bookListings)
+        .where(eq(bookListings.isbn, isbn))
+        .limit(1);
+
+      if (localBook.length > 0) {
+        console.log("[ISBN Lookup] Found in local database");
+        const book = localBook[0];
+        return res.status(200).json({
+          success: true,
+          source: "local",
+          bookData: {
+            title: book.title,
+            author: book.author,
+            publisher: book.publisher,
+            isbn: book.isbn,
+            edition: book.edition,
+            publicationYear: book.publicationYear,
+            language: book.language,
+            bindingType: book.bindingType,
+            numberOfPages: book.numberOfPages,
+            subject: book.subject,
+            classGrade: book.classGrade,
+            curriculum: book.curriculum,
+          },
+        });
+      }
+
+      // If not found locally, search Open Library API
+      console.log("[ISBN Lookup] Not found locally, searching online...");
+      const openLibraryUrl = `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`;
+
+      const response = await fetch(openLibraryUrl);
+      const data = await response.json();
+
+      const bookKey = `ISBN:${isbn}`;
+      if (data[bookKey]) {
+        const bookInfo = data[bookKey];
+        console.log("[ISBN Lookup] Found online:", bookInfo.title);
+
+        return res.status(200).json({
+          success: true,
+          source: "online",
+          bookData: {
+            title: bookInfo.title || null,
+            author: bookInfo.authors?.[0]?.name || null,
+            publisher: bookInfo.publishers?.[0]?.name || null,
+            isbn: isbn,
+            edition: null,
+            publicationYear: bookInfo.publish_date ? parseInt(bookInfo.publish_date) : null,
+            language: "English",
+            bindingType: null,
+            numberOfPages: bookInfo.number_of_pages || null,
+            subject: bookInfo.subjects?.[0]?.name || null,
+            classGrade: null,
+            curriculum: null,
+          },
+        });
+      }
+
+      // Not found anywhere
+      console.log("[ISBN Lookup] Not found in local or online databases");
+      return res.status(404).json({
+        success: false,
+        message: "Book not found with this ISBN",
+      });
+    } catch (error) {
+      console.error("[Route] isbn-lookup error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -224,12 +539,18 @@ export async function registerRoutes(
   // Get all books in marketplace
   app.get("/api/books", authenticateToken, checkOnboardingStatus, async (req, res) => {
     try {
-      // TODO: Implement book listing logic
-      return res.status(200).json({
-        success: true,
-        books: [],
-        message: "Book marketplace - Coming soon",
-      });
+      const { subject, classGrade, condition, minPrice, maxPrice } = req.query;
+
+      const filters = {
+        subject: subject as string | undefined,
+        classGrade: classGrade as string | undefined,
+        condition: condition as string | undefined,
+        minPrice: minPrice ? Number(minPrice) : undefined,
+        maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      };
+
+      const result = await bookListingService.getAllListings(filters);
+      return res.status(200).json(result);
     } catch (error) {
       console.error("[Route] books error:", error);
       return res.status(500).json({ message: "Internal server error" });
@@ -240,11 +561,18 @@ export async function registerRoutes(
   app.get("/api/books/:id", authenticateToken, checkOnboardingStatus, async (req, res) => {
     try {
       const { id } = req.params;
-      // TODO: Implement book details logic
+      const listing = await bookListingService.getListingById(parseInt(id));
+
+      if (!listing) {
+        return res.status(404).json({ message: "Book listing not found" });
+      }
+
+      // Increment view count
+      await bookListingService.incrementViews(parseInt(id));
+
       return res.status(200).json({
         success: true,
-        book: null,
-        message: `Book details for ID: ${id} - Coming soon`,
+        listing,
       });
     } catch (error) {
       console.error("[Route] book-details error:", error);
@@ -255,12 +583,17 @@ export async function registerRoutes(
   // Create/sell a book listing
   app.post("/api/books", authenticateToken, checkOnboardingStatus, async (req, res) => {
     try {
-      // TODO: Implement create book listing logic
-      return res.status(201).json({
-        success: true,
-        message: "Book listing created successfully",
-        book: null,
-      });
+      const validation = createBookListingSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        const zodError = fromZodError(validation.error);
+        return res.status(400).json({ message: zodError.message });
+      }
+
+      const sellerId = req.user!.id;
+      const result = await bookListingService.createListing(sellerId, validation.data);
+
+      return res.status(201).json(result);
     } catch (error) {
       console.error("[Route] create-book error:", error);
       return res.status(500).json({ message: "Internal server error" });
@@ -271,12 +604,25 @@ export async function registerRoutes(
   app.put("/api/books/:id", authenticateToken, checkOnboardingStatus, async (req, res) => {
     try {
       const { id } = req.params;
-      // TODO: Implement update book listing logic
-      // Verify user owns this listing
-      return res.status(200).json({
-        success: true,
-        message: `Book ${id} updated successfully`,
-      });
+      const validation = updateBookListingSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        const zodError = fromZodError(validation.error);
+        return res.status(400).json({ message: zodError.message });
+      }
+
+      const sellerId = req.user!.id;
+      const result = await bookListingService.updateListing(
+        parseInt(id),
+        sellerId,
+        validation.data
+      );
+
+      if (!result.success) {
+        return res.status(404).json({ message: result.message });
+      }
+
+      return res.status(200).json(result);
     } catch (error) {
       console.error("[Route] update-book error:", error);
       return res.status(500).json({ message: "Internal server error" });
@@ -287,14 +633,31 @@ export async function registerRoutes(
   app.delete("/api/books/:id", authenticateToken, checkOnboardingStatus, async (req, res) => {
     try {
       const { id } = req.params;
-      // TODO: Implement delete book listing logic
-      // Verify user owns this listing
-      return res.status(200).json({
-        success: true,
-        message: `Book ${id} deleted successfully`,
-      });
+      const sellerId = req.user!.id;
+      const result = await bookListingService.deleteListing(parseInt(id), sellerId);
+
+      if (!result.success) {
+        return res.status(404).json({ message: result.message });
+      }
+
+      return res.status(200).json(result);
     } catch (error) {
       console.error("[Route] delete-book error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Get current user's listings
+  app.get("/api/my-books", authenticateToken, checkOnboardingStatus, async (req, res) => {
+    try {
+      const sellerId = req.user!.id;
+      console.log("[My Books] Fetching listings for seller:", sellerId);
+      const result = await bookListingService.getListingsBySeller(sellerId);
+      console.log("[My Books] Found", result.listings?.length || 0, "listings");
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("[Route] my-books error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });

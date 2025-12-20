@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { verifyToken, type JWTPayload } from "../lib/jwt";
 import { authService } from "../services/auth.service";
 import { onboardingService } from "../services/onboarding.service";
-import type { User } from "@shared/schema";
+import type { User } from "server/db/schema";
 
 // Extend Express Request to include user
 declare global {

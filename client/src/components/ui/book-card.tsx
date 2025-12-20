@@ -4,12 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Book } from "@/lib/mockData";
 import { Link } from "wouter";
 import { MapPin, User, ArrowRight } from "lucide-react";
+import { generateBookSlug } from "@/lib/utils";
 
 interface BookCardProps {
   book: Book;
 }
 
 export function BookCard({ book }: BookCardProps) {
+  const bookSlug = generateBookSlug(book.title, book.id);
+
   return (
     <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 border-border/50">
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
@@ -44,7 +47,7 @@ export function BookCard({ book }: BookCardProps) {
       </CardContent>
       <CardFooter className="p-3 pt-0">
         <Button className="w-full group-hover:bg-primary/90 h-8 text-sm" asChild>
-          <Link href={`/book/${book.id}`}>
+          <Link href={`/book/${bookSlug}`}>
             View Details
           </Link>
         </Button>

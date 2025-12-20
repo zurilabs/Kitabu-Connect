@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -96,10 +97,22 @@ export function Navbar() {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
-                    <div className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <UserIcon className="h-4 w-4" />
-                    </div>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0">
+                    <Avatar className="h-8 w-8">
+                      {user.profilePictureUrl && (
+                        <AvatarImage src={user.profilePictureUrl} alt={user.fullName || 'User'} />
+                      )}
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {user.fullName
+                          ? user.fullName
+                              .split(' ')
+                              .map((n) => n[0])
+                              .join('')
+                              .toUpperCase()
+                              .slice(0, 2)
+                          : <UserIcon className="h-4 w-4" />}
+                      </AvatarFallback>
+                    </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">

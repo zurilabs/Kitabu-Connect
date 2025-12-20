@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { users, type User, type CompleteOnboardingInput } from "@shared/schema";
+import { users, type User, type CompleteOnboardingInput } from "server/db/schema";
 import { eq } from "drizzle-orm";
 
 export class OnboardingService {

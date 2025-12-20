@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { User, CompleteOnboardingInput } from "@shared/schema";
+import type { User, CompleteOnboardingInput } from "server/db/schema";
 
 interface CompleteOnboardingResponse {
   success: boolean;

@@ -1,47 +1,62 @@
 import { useParams, useLocation } from "wouter";
-import { MOCK_BOOKS, SCHOOLS, CURRENT_USER } from "@/lib/mockData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  ArrowLeft, 
-  MapPin, 
-  ShieldCheck, 
-  User, 
-  BookOpen, 
+import {
+  ArrowLeft,
+  MapPin,
+  ShieldCheck,
+  BookOpen,
   AlertCircle,
-  Truck
+  Truck,
+  Loader2
 } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useBookListing } from "@/hooks/useBookListing";
+import { extractIdFromSlug } from "@/lib/utils";
 
 export default function BookDetails() {
-  const { id } = useParams();
-  const [location, setLocation] = useLocation();
+  const { id: slug } = useParams();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  
-  const book = MOCK_BOOKS.find(b => b.id === id);
-  
-  if (!book) {
+
+  // Extract book ID from slug
+  const bookId = slug ? parseInt(extractIdFromSlug(slug)) : 0;
+  const { data: bookData, isLoading } = useBookListing().fetchBookListing(bookId);
+
+  if (isLoading) {
+    return (
+      <div className="container py-20 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!bookData?.listing) {
     return <div className="container py-20 text-center">Book not found</div>;
   }
 
-  const school = SCHOOLS.find(s => s.id === book.schoolId);
+  const book = bookData.listing;
+  const bookPrice = Number(book.price);
+  const originalPrice = book.originalRetailPrice ? Number(book.originalRetailPrice) : null;
+  const logisticsFee = 1500;
+  const totalPrice = bookPrice + logisticsFee;
 
   const handleBuy = async () => {
     setIsProcessing(true);
-    
+
     // Simulate Paystack processing
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     setIsProcessing(false);
     setShowConfirm(false);
-    
+
     toast({
       title: "Payment Successful!",
       description: "Funds are now held in escrow. Visit your dashboard to track this transaction.",
@@ -60,14 +75,14 @@ export default function BookDetails() {
         {/* Left Column: Image & Info */}
         <div className="space-y-8">
           <div className="rounded-xl overflow-hidden border bg-muted aspect-[4/3] relative">
-            <img 
-              src={book.image} 
+            <img
+              src={book.primaryPhotoUrl || book.photos?.[0]?.photoUrl || "/placeholder-book.png"}
               alt={book.title}
               className="w-full h-full object-cover"
             />
-            {book.status !== 'available' && (
+            {book.listingStatus !== 'active' && (
               <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
-                <Badge className="text-lg px-6 py-2">{book.status.toUpperCase()}</Badge>
+                <Badge className="text-lg px-6 py-2">{book.listingStatus.toUpperCase()}</Badge>
               </div>
             )}
           </div>
@@ -76,7 +91,7 @@ export default function BookDetails() {
             <div>
               <div className="flex items-center gap-2 text-sm text-primary font-medium mb-2">
                 <BookOpen className="w-4 h-4" />
-                <span>{book.category}</span>
+                <span>{book.subject}</span>
               </div>
               <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-2">
                 {book.title}
@@ -89,18 +104,43 @@ export default function BookDetails() {
             <div className="grid grid-cols-2 gap-6">
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground mb-1">ISBN</h3>
-                <p className="font-mono text-foreground">{book.isbn}</p>
+                <p className="font-mono text-foreground">{book.isbn || "N/A"}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground mb-1">Condition</h3>
                 <Badge variant="outline">{book.condition}</Badge>
               </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">Publisher</h3>
+                <p className="text-foreground">{book.publisher || "N/A"}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">Edition</h3>
+                <p className="text-foreground">{book.edition || "N/A"}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">Class/Grade</h3>
+                <p className="text-foreground">{book.classGrade}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">Language</h3>
+                <p className="text-foreground">{book.language}</p>
+              </div>
             </div>
 
-            <div className="prose prose-sm max-w-none text-muted-foreground">
-              <h3 className="text-foreground font-medium mb-2">Description</h3>
-              <p>{book.description}</p>
-            </div>
+            {book.description && (
+              <div className="prose prose-sm max-w-none text-muted-foreground">
+                <h3 className="text-foreground font-medium mb-2">Description</h3>
+                <p>{book.description}</p>
+              </div>
+            )}
+
+            {book.conditionNotes && (
+              <div className="bg-muted p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-foreground mb-2">Condition Notes</h3>
+                <p className="text-sm text-muted-foreground">{book.conditionNotes}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -110,8 +150,23 @@ export default function BookDetails() {
             <CardContent className="p-6 space-y-6">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-muted-foreground">Price</span>
-                <span className="text-3xl font-bold text-primary">KSh {book.price.toLocaleString()}</span>
+                <span className="text-3xl font-bold text-primary">KSh {bookPrice.toLocaleString()}</span>
               </div>
+
+              {originalPrice && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Original Price</span>
+                  <span className="line-through text-muted-foreground">
+                    KSh {originalPrice.toLocaleString()}
+                  </span>
+                </div>
+              )}
+
+              {book.negotiable && (
+                <Badge variant="secondary" className="w-full justify-center">
+                  Price Negotiable
+                </Badge>
+              )}
 
               <Separator />
 
@@ -124,7 +179,7 @@ export default function BookDetails() {
                     <p className="text-sm font-medium truncate">Seller ID: {book.sellerId}</p>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <MapPin className="w-3 h-3" />
-                      <span className="truncate">{school?.name}</span>
+                      <span className="truncate">Available quantity: {book.quantityAvailable}</span>
                     </div>
                   </div>
                 </div>
@@ -140,8 +195,8 @@ export default function BookDetails() {
 
               <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
                 <DialogTrigger asChild>
-                  <Button className="w-full h-12 text-lg font-semibold" disabled={book.status !== 'available'}>
-                    {book.status === 'available' ? 'Buy Now' : 'Not Available'}
+                  <Button className="w-full h-12 text-lg font-semibold" disabled={book.listingStatus !== 'active'}>
+                    {book.listingStatus === 'active' ? 'Buy Now' : 'Not Available'}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
@@ -151,28 +206,28 @@ export default function BookDetails() {
                       You are about to purchase <strong>{book.title}</strong>.
                     </DialogDescription>
                   </DialogHeader>
-                  
+
                   <div className="space-y-4 py-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Book Price</span>
-                      <span>KSh {book.price.toLocaleString()}</span>
+                      <span>KSh {bookPrice.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <Truck className="w-3 h-3" /> Logistics Fee
                       </span>
-                      <span>KSh 1,500</span>
+                      <span>KSh {logisticsFee.toLocaleString()}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
-                      <span>KSh {(book.price + 1500).toLocaleString()}</span>
+                      <span>KSh {totalPrice.toLocaleString()}</span>
                     </div>
 
                     <div className="bg-muted p-3 rounded-md text-xs text-muted-foreground flex gap-2">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       <p>
-                        Clicking "Pay Securely" will initialize a Paystack transaction. 
+                        Clicking "Pay Securely" will initialize a Paystack transaction.
                         Your funds will be locked in escrow until you confirm receipt.
                       </p>
                     </div>
@@ -181,11 +236,36 @@ export default function BookDetails() {
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setShowConfirm(false)}>Cancel</Button>
                     <Button onClick={handleBuy} disabled={isProcessing} className="bg-green-600 hover:bg-green-700 text-white">
-                      {isProcessing ? "Processing..." : `Pay KSh ${(book.price + 1500).toLocaleString()}`}
+                      {isProcessing ? "Processing..." : `Pay KSh ${totalPrice.toLocaleString()}`}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+            </CardContent>
+          </Card>
+
+          {/* Additional Book Info */}
+          <Card>
+            <CardContent className="p-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Curriculum</span>
+                <span className="font-medium">{book.curriculum || "N/A"}</span>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Term</span>
+                <span className="font-medium">{book.term || "All Terms"}</span>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Region</span>
+                <span className="font-medium">{book.region}</span>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Views</span>
+                <span className="font-medium">{book.viewsCount || 0}</span>
+              </div>
             </CardContent>
           </Card>
         </div>

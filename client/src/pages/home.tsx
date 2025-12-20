@@ -1,17 +1,40 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { BookCard } from "@/components/ui/book-card";
 import { SwapCalculator } from "@/components/ui/swap-calculator";
-import { MOCK_BOOKS } from "@/lib/mockData";
-import { ArrowRight, BookOpen, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight, BookOpen, ShieldCheck, Users, Loader2 } from "lucide-react";
 import heroImage from "@assets/generated_images/students_exchanging_books_on_campus.png";
 import { useAuth } from "@/hooks/useAuth";
+import { useBookListing } from "@/hooks/useBookListing";
 
 export default function Home() {
-  const featuredBooks = MOCK_BOOKS.slice(0, 3);
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const { listings, isLoadingListings } = useBookListing();
+
+  // Get the 3 most recent listings
+  const featuredBooks = useMemo(() => {
+    const recentListings = listings
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
+
+    // Transform to match BookCard expected format
+    return recentListings.map(book => ({
+      id: book.id.toString(),
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn || "",
+      condition: book.condition,
+      price: parseFloat(book.price),
+      sellerId: book.sellerId,
+      schoolId: "",
+      status: book.listingStatus === "active" ? "available" : book.listingStatus,
+      image: book.primaryPhotoUrl || book.photos?.[0]?.photoUrl || "/placeholder-book.png",
+      description: book.description || "",
+      category: book.subject,
+    }));
+  }, [listings]);
 
   const handleSellClick = (e: React.MouseEvent) => {
     if (!user) {
@@ -98,13 +121,27 @@ export default function Home() {
               </Link>
             </Button>
           </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredBooks.map((book) => (
-              <BookCard key={book.id} book={book} />
-            ))}
-          </div>
-          
+
+          {isLoadingListings ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : featuredBooks.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredBooks.map((book) => (
+                <BookCard key={book.id} book={book} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20 bg-muted/20 rounded-xl border border-dashed">
+              <h3 className="text-lg font-medium">No books listed yet</h3>
+              <p className="text-muted-foreground mb-4">Be the first to list a book!</p>
+              <Button asChild>
+                <Link href="/sell">List a Book</Link>
+              </Button>
+            </div>
+          )}
+
           <div className="mt-8 text-center sm:hidden">
             <Button variant="outline" className="w-full" asChild>
               <Link href="/marketplace">

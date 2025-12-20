@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { User } from "@shared/schema";
+import type { User } from "server/db/schema";
 
 interface AuthResponse {
   user: User;

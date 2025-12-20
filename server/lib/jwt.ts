@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
-import type { User } from "@shared/schema";
+import type { User } from "server/db/schema";
 
 const JWT_SECRET = process.env.JWT_SECRET || "kitabu-secret-change-in-production";
 const secret = new TextEncoder().encode(JWT_SECRET);

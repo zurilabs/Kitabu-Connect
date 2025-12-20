@@ -1,35 +1,63 @@
-import { useState } from "react";
-import { MOCK_BOOKS, SCHOOLS } from "@/lib/mockData";
+import { useState, useMemo } from "react";
 import { BookCard } from "@/components/ui/book-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Filter, School } from "lucide-react";
+import { Search, Filter, BookOpen, Loader2 } from "lucide-react";
+import { useBookListing } from "@/hooks/useBookListing";
+import { useSchools } from "@/hooks/useSchools";
 
 export default function Marketplace() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSchool, setSelectedSchool] = useState<string>("all");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedSubject, setSelectedSubject] = useState<string>("all");
 
-  // Get unique categories
-  const categories = Array.from(new Set(MOCK_BOOKS.map(b => b.category)));
+  const { listings, isLoadingListings } = useBookListing();
+  const { schools, isLoading: isLoadingSchools } = useSchools();
+
+  // Get unique subjects from listings
+  const subjects = useMemo(() => {
+    return Array.from(new Set(listings.map(b => b.subject).filter(Boolean)));
+  }, [listings]);
 
   // Filter books
-  const filteredBooks = MOCK_BOOKS.filter(book => {
-    const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          book.isbn.includes(searchTerm);
-    const matchesSchool = selectedSchool === "all" || book.schoolId === selectedSchool;
-    const matchesCategory = selectedCategory === "all" || book.category === selectedCategory;
-    
-    return matchesSearch && matchesSchool && matchesCategory;
-  });
+  const filteredBooks = useMemo(() => {
+    return listings.filter(book => {
+      const matchesSearch =
+        book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (book.isbn && book.isbn.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesSchool = selectedSchool === "all" || book.sellerId === selectedSchool;
+      const matchesSubject = selectedSubject === "all" || book.subject === selectedSubject;
+
+      return matchesSearch && matchesSchool && matchesSubject;
+    });
+  }, [listings, searchTerm, selectedSchool, selectedSubject]);
+
+  // Transform book listings to match BookCard expected format
+  const transformedBooks = useMemo(() => {
+    return filteredBooks.map(book => ({
+      id: book.id.toString(),
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn || "",
+      condition: book.condition,
+      price: parseFloat(book.price),
+      sellerId: book.sellerId,
+      schoolId: "", // Books don't have direct schoolId in new schema
+      status: book.listingStatus === "active" ? "available" : book.listingStatus,
+      image: book.primaryPhotoUrl || book.photos?.[0]?.photoUrl || "/placeholder-book.png",
+      description: book.description || "",
+      category: book.subject,
+    }));
+  }, [filteredBooks]);
 
   return (
     <div className="min-h-screen bg-muted/10 pb-20">
@@ -38,40 +66,25 @@ export default function Marketplace() {
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search by title, author, or ISBN..." 
+              <Input
+                placeholder="Search by title, author, or ISBN..."
                 className="pl-9 h-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-              <Select value={selectedSchool} onValueChange={setSelectedSchool}>
-                <SelectTrigger className="w-[180px] h-10">
-                  <div className="flex items-center gap-2">
-                    <School className="w-4 h-4 text-muted-foreground" />
-                    <SelectValue placeholder="Select School" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Schools</SelectItem>
-                  {SCHOOLS.map(school => (
-                    <SelectItem key={school.id} value={school.id}>{school.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select value={selectedSubject} onValueChange={setSelectedSubject}>
                 <SelectTrigger className="w-[160px] h-10">
                   <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-muted-foreground" />
-                    <SelectValue placeholder="Category" />
+                    <BookOpen className="w-4 h-4 text-muted-foreground" />
+                    <SelectValue placeholder="Subject" />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  <SelectItem value="all">All Subjects</SelectItem>
+                  {subjects.map(subject => (
+                    <SelectItem key={subject} value={subject}>{subject}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -82,17 +95,26 @@ export default function Marketplace() {
 
       <div className="container px-4 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold font-display">
-            {selectedSchool !== "all" 
-              ? `Listings at ${SCHOOLS.find(s => s.id === selectedSchool)?.name}` 
-              : "All Listings"}
-          </h1>
-          <span className="text-muted-foreground text-sm">{filteredBooks.length} results</span>
+          <h1 className="text-2xl font-bold font-display">All Listings</h1>
+          <span className="text-muted-foreground text-sm">
+            {isLoadingListings ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading...
+              </span>
+            ) : (
+              `${transformedBooks.length} results`
+            )}
+          </span>
         </div>
 
-        {filteredBooks.length > 0 ? (
+        {isLoadingListings ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : transformedBooks.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredBooks.map((book) => (
+            {transformedBooks.map((book) => (
               <BookCard key={book.id} book={book} />
             ))}
           </div>
@@ -103,7 +125,7 @@ export default function Marketplace() {
             <Button variant="outline" onClick={() => {
               setSearchTerm("");
               setSelectedSchool("all");
-              setSelectedCategory("all");
+              setSelectedSubject("all");
             }}>Clear Filters</Button>
           </div>
         )}
