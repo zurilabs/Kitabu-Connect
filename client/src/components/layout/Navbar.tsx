@@ -7,7 +7,8 @@ import {
   User as UserIcon,
   Menu,
   ShoppingCart,
-  LogOut
+  LogOut,
+  Heart
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -63,11 +64,18 @@ export function Navbar() {
         </span>
       </Link>
       {user && (
-        <Link href="/dashboard">
-          <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground'}`}>
-            Dashboard
-          </span>
-        </Link>
+        <>
+          <Link href="/favorites">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/favorites') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Favorites
+            </span>
+          </Link>
+          <Link href="/dashboard">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Dashboard
+            </span>
+          </Link>
+        </>
       )}
       <Link href="/sell" onClick={handleSellClick}>
         <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/sell') ? 'text-primary' : 'text-muted-foreground'}`}>

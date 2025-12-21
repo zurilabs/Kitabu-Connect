@@ -14,6 +14,7 @@ import Signup from "@/pages/signup";
 import ForgotPassword from "@/pages/forgot-password";
 import SellBook from "@/pages/sell";
 import EditBook from "@/pages/edit-book";
+import Favorites from "@/pages/favorites";
 import { Navbar } from "@/components/layout/Navbar";
 
 import Profile from "@/pages/profile";
@@ -35,6 +36,7 @@ function Router() {
         <Route path="/edit-book/:id" component={EditBook} />
         <Route path="/" component={Home} />
         <Route path="/marketplace" component={Marketplace} />
+        <Route path="/favorites" component={Favorites} />
         <Route path="/book/:id" component={BookDetails} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/profile" component={Profile} />

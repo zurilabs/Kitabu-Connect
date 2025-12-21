@@ -45,8 +45,8 @@ export default function BookDetails() {
   const book = bookData.listing;
   const bookPrice = Number(book.price);
   const originalPrice = book.originalRetailPrice ? Number(book.originalRetailPrice) : null;
-  const logisticsFee = 1500;
-  const totalPrice = bookPrice + logisticsFee;
+  const convenienceFee = bookPrice * 0.05; // 5% convenience fee
+  const totalPrice = bookPrice + convenienceFee;
 
   const handleBuy = async () => {
     setIsProcessing(true);
@@ -214,9 +214,9 @@ export default function BookDetails() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
-                        <Truck className="w-3 h-3" /> Logistics Fee
+                        <ShieldCheck className="w-3 h-3" /> Convenience Fee (5%)
                       </span>
-                      <span>KSh {logisticsFee.toLocaleString()}</span>
+                      <span>KSh {convenienceFee.toLocaleString()}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between font-bold text-lg">

@@ -16,6 +16,8 @@ export class EscrowService {
 
   /**
    * Create an escrow account when a purchase is made
+   * Note: The amount passed here should be the seller's amount (book price only)
+   * The convenience fee has already been collected at purchase time
    */
   async createEscrow(params: {
     bookListingId: number;
@@ -25,8 +27,9 @@ export class EscrowService {
     orderId?: number;
   }): Promise<{ success: boolean; escrowId?: number; message?: string }> {
     try {
-      const platformFee = this.calculatePlatformFee(params.amount);
-      const sellerAmount = params.amount - platformFee;
+      // The amount passed is already the seller's portion (no fee deduction needed here)
+      // Convenience fee was collected when the buyer paid
+      const sellerAmount = params.amount;
 
       // Calculate release date (7 days from now)
       const releaseAt = new Date();
@@ -38,7 +41,7 @@ export class EscrowService {
         buyerId: params.buyerId,
         sellerId: params.sellerId,
         amount: params.amount.toFixed(2),
-        platformFee: platformFee.toFixed(2),
+        platformFee: "0.00", // Fee already collected at purchase
         status: "active",
         holdPeriodDays: 7,
         releaseAt,
@@ -57,7 +60,6 @@ export class EscrowService {
         metadata: {
           escrowId,
           sellerAmount,
-          platformFee,
         },
       });
 
@@ -100,7 +102,9 @@ export class EscrowService {
         return { success: false, message: "Escrow is under dispute and cannot be released" };
       }
 
-      const sellerAmount = parseFloat(escrowData.amount) - parseFloat(escrowData.platformFee);
+      // Release the full escrowed amount to seller
+      // The convenience fee was already collected at purchase time
+      const sellerAmount = parseFloat(escrowData.amount);
 
       // Create transaction for seller
       const txResult = await walletService.createTransaction({
@@ -113,7 +117,6 @@ export class EscrowService {
         metadata: {
           escrowId,
           originalAmount: escrowData.amount,
-          platformFee: escrowData.platformFee,
         },
       });
 

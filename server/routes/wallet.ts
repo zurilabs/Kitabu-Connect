@@ -4,6 +4,7 @@ import { walletService } from '../services/wallet.service';
 import { paymentService } from '../services/payment.service';
 import { escrowService } from '../services/escrow.service';
 import { orderService } from '../services/order.service';
+import { withdrawalService } from '../services/withdrawal.service';
 import {
   walletTopUpSchema,
   createOrderSchema,
@@ -11,6 +12,7 @@ import {
   createDisputeSchema,
 } from '../db/schema';
 import { fromZodError } from 'zod-validation-error';
+import { z } from 'zod';
 
 /**
  * Get callback URL from environment or default to localhost
@@ -164,6 +166,112 @@ router.get('/topup/verify/:reference', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('[Wallet] Verify payment error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+/* ================================
+   WITHDRAWAL ROUTES
+================================ */
+
+/**
+ * Get available balance for withdrawal
+ * GET /api/wallet/withdrawal/available
+ */
+router.get('/withdrawal/available', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user!.id;
+
+    const result = await withdrawalService.getAvailableBalance(userId);
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.json({
+      success: true,
+      totalBalance: result.totalBalance,
+      lockedInEscrow: result.lockedInEscrow,
+      availableForWithdrawal: result.availableForWithdrawal,
+      pendingEscrows: result.pendingEscrows,
+    });
+  } catch (error) {
+    console.error('[Wallet] Get available balance error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+/**
+ * Initiate withdrawal request
+ * POST /api/wallet/withdrawal/initiate
+ */
+const withdrawalSchema = z.object({
+  amount: z.number().min(100, 'Minimum withdrawal is KES 100').max(100000, 'Maximum withdrawal is KES 100,000'),
+  paymentMethod: z.enum(['mpesa', 'bank', 'paypal']),
+  accountDetails: z.object({
+    mpesaPhone: z.string().optional(),
+    bankName: z.string().optional(),
+    accountNumber: z.string().optional(),
+    accountName: z.string().optional(),
+    paypalEmail: z.string().email().optional(),
+  }),
+});
+
+router.post('/withdrawal/initiate', authenticateToken, async (req, res) => {
+  try {
+    const validation = withdrawalSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      const zodError = fromZodError(validation.error);
+      return res.status(400).json({ message: zodError.message });
+    }
+
+    const userId = req.user!.id;
+    const { amount, paymentMethod, accountDetails } = validation.data;
+
+    const result = await withdrawalService.initiateWithdrawal({
+      userId,
+      amount,
+      paymentMethod,
+      accountDetails,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.json({
+      success: true,
+      withdrawalId: result.withdrawalId,
+      message: result.message,
+    });
+  } catch (error) {
+    console.error('[Wallet] Initiate withdrawal error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+/**
+ * Get withdrawal history
+ * GET /api/wallet/withdrawal/history
+ */
+router.get('/withdrawal/history', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    const result = await withdrawalService.getWithdrawalHistory(userId, limit);
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.json({
+      success: true,
+      withdrawals: result.withdrawals,
+    });
+  } catch (error) {
+    console.error('[Wallet] Get withdrawal history error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

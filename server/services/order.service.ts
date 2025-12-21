@@ -56,9 +56,13 @@ export class OrderService {
         return { success: false, message: "Insufficient quantity available" };
       }
 
-      const totalAmount = parseFloat(book.price) * quantity;
-      const platformFee = (totalAmount * 5) / 100; // 5% platform fee
-      const sellerAmount = totalAmount - platformFee;
+      // Calculate pricing
+      // Buyer pays: Book price + 5% convenience fee
+      // Seller receives: Book price (platform keeps the 5% fee)
+      const bookAmount = parseFloat(book.price) * quantity;
+      const convenienceFee = (bookAmount * 5) / 100; // 5% convenience fee
+      const totalAmount = bookAmount + convenienceFee; // Total charged to buyer
+      const sellerAmount = bookAmount; // Seller gets the book price only
 
       // Create order
       const result = await db.insert(orders).values({
@@ -68,7 +72,7 @@ export class OrderService {
         bookListingId: params.bookListingId,
         quantity,
         totalAmount: totalAmount.toFixed(2),
-        platformFee: platformFee.toFixed(2),
+        platformFee: convenienceFee.toFixed(2),
         sellerAmount: sellerAmount.toFixed(2),
         status: "pending",
         deliveryMethod: params.deliveryMethod,
@@ -167,11 +171,13 @@ export class OrderService {
       }
 
       // Create escrow account
+      // Only put seller's amount in escrow (book price), not the convenience fee
+      const sellerAmount = parseFloat(orderData.sellerAmount);
       const escrowResult = await escrowService.createEscrow({
         bookListingId: orderData.bookListingId,
         buyerId,
         sellerId: orderData.sellerId,
-        amount,
+        amount: sellerAmount, // Only escrow the seller's portion
         orderId,
       });
 

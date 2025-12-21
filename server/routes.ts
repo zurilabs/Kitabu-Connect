@@ -20,6 +20,7 @@ import { eq } from "drizzle-orm";
 import { fromZodError } from "zod-validation-error";
 import uploadRoutes from "./routes/upload";
 import walletRoutes from "./routes/wallet";
+import favoritesRoutes from "./routes/favorites";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -52,14 +53,50 @@ export async function registerRoutes(
   app.use("/api/wallet", walletRoutes);
 
   // ============================================
+  // FAVORITES ROUTES
+  // ============================================
+  app.use("/api/favorites", favoritesRoutes);
+
+  // ============================================
   // PAYSTACK WEBHOOK
   // ============================================
   app.post("/api/webhooks/paystack", async (req, res) => {
     try {
+      const { verifyWebhookSignature } = await import("./config/paystack");
+      const { withdrawalService } = await import("./services/withdrawal.service");
+
+      // Verify webhook signature
+      const signature = req.headers["x-paystack-signature"] as string;
+      const payload = JSON.stringify(req.body);
+
+      if (signature && !verifyWebhookSignature(payload, signature)) {
+        console.error("[Webhook] Invalid signature");
+        return res.status(400).send("Invalid signature");
+      }
+
       const event = req.body;
       console.log("[Webhook] Paystack event received:", event.event);
 
-      await paymentService.handlePaystackWebhook(event);
+      // Handle different event types
+      if (event.event === "charge.success") {
+        // Wallet top-up successful
+        await paymentService.handlePaystackWebhook(event);
+      } else if (event.event === "transfer.success") {
+        // Withdrawal successful
+        const reference = event.data.reference;
+        const transactionId = parseInt(reference.split("-")[1]); // Extract from WD-{txId}-{timestamp}
+
+        await withdrawalService.completeWithdrawal(transactionId, reference);
+        console.log(`[Webhook] Transfer successful: ${reference}`);
+      } else if (event.event === "transfer.failed" || event.event === "transfer.reversed") {
+        // Withdrawal failed
+        const reference = event.data.reference;
+        const transactionId = parseInt(reference.split("-")[1]);
+        const reason = event.data.reason || "Transfer failed";
+
+        await withdrawalService.failWithdrawal(transactionId, reason);
+        console.log(`[Webhook] Transfer failed: ${reference}, Reason: ${reason}`);
+      }
 
       return res.status(200).send("OK");
     } catch (error) {

@@ -247,7 +247,10 @@ export const favorites = mysqlTable("favorites", {
     .references(() => bookListings.id, { onDelete: "cascade" }),
 
   addedAt: timestamp("added_at").defaultNow(),
-});
+}, (table) => ({
+  userIdIdx: index("idx_favorites_user_id").on(table.userId),
+  listingIdIdx: index("idx_favorites_listing_id").on(table.listingId),
+}));
 
 /* ================================
    USER PREFERENCES
@@ -469,6 +472,41 @@ export const orders = mysqlTable("orders", {
 });
 
 /* ================================
+   PAYSTACK TRANSFER RECIPIENTS
+================================ */
+export const paystackRecipients = mysqlTable("paystack_recipients", {
+  id: int("id").primaryKey().autoincrement(),
+
+  // User who owns this recipient
+  userId: varchar("user_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Paystack recipient code
+  recipientCode: varchar("recipient_code", { length: 255 }).notNull().unique(),
+
+  // Payment method type
+  type: varchar("type", { length: 20 }).notNull(), // 'nuban' (bank), 'mobile_money' (mpesa)
+
+  // Account details
+  name: varchar("name", { length: 255 }).notNull(),
+  accountNumber: varchar("account_number", { length: 50 }).notNull(),
+  bankCode: varchar("bank_code", { length: 50 }).notNull(),
+  bankName: varchar("bank_name", { length: 255 }),
+  currency: varchar("currency", { length: 10 }).notNull().default("KES"),
+
+  // Status
+  active: boolean("active").notNull().default(true),
+
+  // Metadata from Paystack
+  paystackData: text("paystack_data"), // JSON string
+
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+/* ================================
    VALIDATION SCHEMAS
 ================================ */
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -619,6 +657,7 @@ export type Transaction = typeof transactions.$inferSelect;
 export type EscrowAccount = typeof escrowAccounts.$inferSelect;
 export type WalletTransaction = typeof walletTransactions.$inferSelect;
 export type Order = typeof orders.$inferSelect;
+export type PaystackRecipient = typeof paystackRecipients.$inferSelect;
 export type WalletTopUpInput = z.infer<typeof walletTopUpSchema>;
 export type WalletWithdrawalInput = z.infer<typeof walletWithdrawalSchema>;
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

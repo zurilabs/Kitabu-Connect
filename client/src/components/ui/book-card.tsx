@@ -5,6 +5,8 @@ import { Book } from "@/lib/mockData";
 import { Link } from "wouter";
 import { MapPin, User, ArrowRight } from "lucide-react";
 import { generateBookSlug } from "@/lib/utils";
+import { FavoriteButton } from "@/components/books/FavoriteButton";
+import { useIsFavorited } from "@/hooks/use-favorites";
 
 interface BookCardProps {
   book: Book;
@@ -12,6 +14,8 @@ interface BookCardProps {
 
 export function BookCard({ book }: BookCardProps) {
   const bookSlug = generateBookSlug(book.title, book.id);
+  const listingId = parseInt(book.id);
+  const isFavorited = useIsFavorited(listingId);
 
   return (
     <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 border-border/50">
@@ -25,6 +29,14 @@ export function BookCard({ book }: BookCardProps) {
           <Badge variant={book.status === 'available' ? 'default' : 'secondary'} className="bg-background/80 backdrop-blur text-foreground font-medium text-xs px-2 py-0.5">
             {book.condition}
           </Badge>
+        </div>
+        <div className="absolute top-1.5 left-1.5">
+          <FavoriteButton
+            listingId={listingId}
+            initialIsFavorited={isFavorited}
+            size="icon"
+            className="bg-background/80 backdrop-blur hover:bg-background/90"
+          />
         </div>
       </div>
       <CardContent className="p-3">
