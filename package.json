@@ -10,8 +10,12 @@
     "build": "tsx script/build.ts",
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx server/db/seeders/seed.ts"
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx server/db/seeders/seed.ts",
+    "db": "npm run db:generate && npm run db:migrate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -17,6 +17,8 @@ export default function Marketplace() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSchool, setSelectedSchool] = useState<string>("all");
   const [selectedSubject, setSelectedSubject] = useState<string>("all");
+  const [listingType, setListingType] = useState<string>("all");
+  const [sameSchoolOnly, setSameSchoolOnly] = useState(false);
 
   const { listings, isLoadingListings } = useBookListing();
   const { schools, isLoading: isLoadingSchools } = useSchools();
@@ -36,10 +38,11 @@ export default function Marketplace() {
 
       const matchesSchool = selectedSchool === "all" || book.sellerId === selectedSchool;
       const matchesSubject = selectedSubject === "all" || book.subject === selectedSubject;
+      const matchesListingType = listingType === "all" || book.listingType === listingType;
 
-      return matchesSearch && matchesSchool && matchesSubject;
+      return matchesSearch && matchesSchool && matchesSubject && matchesListingType;
     });
-  }, [listings, searchTerm, selectedSchool, selectedSubject]);
+  }, [listings, searchTerm, selectedSchool, selectedSubject, listingType]);
 
   // Transform book listings to match BookCard expected format
   const transformedBooks = useMemo(() => {
@@ -56,6 +59,9 @@ export default function Marketplace() {
       image: book.primaryPhotoUrl || book.photos?.[0]?.photoUrl || "/placeholder-book.png",
       description: book.description || "",
       category: book.subject,
+      listingType: book.listingType,
+      willingToSwapFor: book.willingToSwapFor,
+      schoolName: book.seller?.schoolName,
     }));
   }, [filteredBooks]);
 
@@ -74,6 +80,20 @@ export default function Marketplace() {
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
+              <Select value={listingType} onValueChange={setListingType}>
+                <SelectTrigger className="w-[140px] h-10">
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-muted-foreground" />
+                    <SelectValue placeholder="Type" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Listings</SelectItem>
+                  <SelectItem value="sell">For Sale</SelectItem>
+                  <SelectItem value="swap">For Swap</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select value={selectedSubject} onValueChange={setSelectedSubject}>
                 <SelectTrigger className="w-[160px] h-10">
                   <div className="flex items-center gap-2">

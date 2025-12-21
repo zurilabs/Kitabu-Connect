@@ -21,6 +21,8 @@ import { fromZodError } from "zod-validation-error";
 import uploadRoutes from "./routes/upload";
 import walletRoutes from "./routes/wallet";
 import favoritesRoutes from "./routes/favorites";
+import swapRoutes from "./routes/swaps";
+import notificationRoutes from "./routes/notifications";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -56,6 +58,16 @@ export async function registerRoutes(
   // FAVORITES ROUTES
   // ============================================
   app.use("/api/favorites", favoritesRoutes);
+
+  // ============================================
+  // SWAP ROUTES
+  // ============================================
+  app.use("/api/swaps", swapRoutes);
+
+  // ============================================
+  // NOTIFICATION ROUTES
+  // ============================================
+  app.use("/api/notifications", notificationRoutes);
 
   // ============================================
   // PAYSTACK WEBHOOK
@@ -585,10 +597,35 @@ export async function registerRoutes(
   // BOOKS/MARKETPLACE ROUTES (require authentication + onboarding)
   // ============================================
 
-  // Get all books in marketplace
-  app.get("/api/books", authenticateToken, checkOnboardingStatus, async (req, res) => {
+  // Get all books in marketplace (accessible to everyone, authenticated or not)
+  app.get("/api/books", async (req, res) => {
     try {
-      const { subject, classGrade, condition, minPrice, maxPrice } = req.query;
+      const {
+        subject,
+        classGrade,
+        condition,
+        minPrice,
+        maxPrice,
+        listingType,
+        sameSchoolOnly,
+        maxDistance
+      } = req.query;
+
+      // Get current user's info if authenticated (optional)
+      let currentUser = null;
+      if (req.cookies?.auth_token) {
+        try {
+          const { verifyToken } = await import("./lib/jwt");
+          const payload = await verifyToken(req.cookies.auth_token);
+          if (payload) {
+            const [user] = await db.select().from(users).where(eq(users.id, payload.userId));
+            currentUser = user;
+          }
+        } catch (error) {
+          // User is not authenticated, that's fine - continue as guest
+          console.log("[Route] Guest user browsing marketplace");
+        }
+      }
 
       const filters = {
         subject: subject as string | undefined,
@@ -596,6 +633,11 @@ export async function registerRoutes(
         condition: condition as string | undefined,
         minPrice: minPrice ? Number(minPrice) : undefined,
         maxPrice: maxPrice ? Number(maxPrice) : undefined,
+        listingType: listingType as string | undefined,
+        schoolId: sameSchoolOnly === 'true' && currentUser?.schoolId ? currentUser.schoolId : undefined,
+        maxDistance: maxDistance ? Number(maxDistance) : undefined,
+        userLatitude: currentUser?.latitude ? Number(currentUser.latitude) : undefined,
+        userLongitude: currentUser?.longitude ? Number(currentUser.longitude) : undefined,
       };
 
       const result = await bookListingService.getAllListings(filters);
@@ -606,8 +648,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get single book details
-  app.get("/api/books/:id", authenticateToken, checkOnboardingStatus, async (req, res) => {
+  // Get single book details (accessible to everyone)
+  app.get("/api/books/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const listing = await bookListingService.getListingById(parseInt(id));

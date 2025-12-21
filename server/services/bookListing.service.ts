@@ -1,6 +1,6 @@
 import { db } from "../db.ts";
-import { bookListings, bookPhotos, type CreateBookListingInput, type UpdateBookListingInput } from "../db/schema/index.ts";
-import { eq, and, desc } from "drizzle-orm";
+import { bookListings, bookPhotos, users, type CreateBookListingInput, type UpdateBookListingInput } from "../db/schema/index.ts";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 class BookListingService {
   async createListing(sellerId: string, data: CreateBookListingInput) {
@@ -102,31 +102,70 @@ class BookListingService {
     condition?: string;
     minPrice?: number;
     maxPrice?: number;
+    listingType?: string;
+    schoolId?: string;
+    maxDistance?: number;
+    userLatitude?: number;
+    userLongitude?: number;
   }) {
     try {
-      let query = db.select().from(bookListings)
+      // Join with users table to get seller info for school/location filtering
+      const listingsWithSellers = await db
+        .select({
+          listing: bookListings,
+          seller: {
+            id: users.id,
+            fullName: users.fullName,
+            schoolId: users.schoolId,
+            schoolName: users.schoolName,
+            latitude: users.latitude,
+            longitude: users.longitude,
+          }
+        })
+        .from(bookListings)
+        .innerJoin(users, eq(bookListings.sellerId, users.id))
         .where(eq(bookListings.listingStatus, "active"))
         .orderBy(desc(bookListings.createdAt));
 
-      const listings = await query;
-
-      // Apply filters if provided
-      let filteredListings = listings;
+      // Apply filters
+      let filteredListings = listingsWithSellers;
 
       if (filters) {
-        filteredListings = listings.filter(listing => {
+        filteredListings = listingsWithSellers.filter(({ listing, seller }) => {
           if (filters.subject && listing.subject !== filters.subject) return false;
           if (filters.classGrade && listing.classGrade !== filters.classGrade) return false;
           if (filters.condition && listing.condition !== filters.condition) return false;
           if (filters.minPrice && Number(listing.price) < filters.minPrice) return false;
           if (filters.maxPrice && Number(listing.price) > filters.maxPrice) return false;
+          if (filters.listingType && listing.listingType !== filters.listingType) return false;
+
+          // School filter - show only listings from same school
+          if (filters.schoolId && seller.schoolId !== filters.schoolId) return false;
+
+          // Location/distance filter - calculate distance if both have coordinates
+          if (filters.maxDistance && filters.userLatitude && filters.userLongitude) {
+            const sellerLat = seller.latitude ? Number(seller.latitude) : null;
+            const sellerLng = seller.longitude ? Number(seller.longitude) : null;
+
+            if (sellerLat && sellerLng) {
+              const distance = this.calculateDistance(
+                filters.userLatitude,
+                filters.userLongitude,
+                sellerLat,
+                sellerLng
+              );
+
+              if (distance > filters.maxDistance) return false;
+            }
+          }
+
           return true;
         });
       }
 
       // Fetch photos for each listing
       const listingsWithPhotos = await Promise.all(
-        filteredListings.map(async (listing) => {
+        filteredListings.map(async ({ listing, seller }) => {
           const photos = await db
             .select()
             .from(bookPhotos)
@@ -136,6 +175,11 @@ class BookListingService {
           return {
             ...listing,
             photos,
+            seller: {
+              id: seller.id,
+              fullName: seller.fullName,
+              schoolName: seller.schoolName,
+            }
           };
         })
       );
@@ -145,6 +189,30 @@ class BookListingService {
       console.error("Error fetching all listings:", error);
       throw new Error("Failed to fetch all listings");
     }
+  }
+
+  /**
+   * Calculate distance between two points using Haversine formula
+   * Returns distance in kilometers
+   */
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = this.toRadians(lat2 - lat1);
+    const dLon = this.toRadians(lon2 - lon1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+
+    return distance;
+  }
+
+  private toRadians(degrees: number): number {
+    return degrees * (Math.PI / 180);
   }
 
   async updateListing(listingId: number, sellerId: string, data: UpdateBookListingInput) {

@@ -8,7 +8,8 @@ import {
   Menu,
   ShoppingCart,
   LogOut,
-  Heart
+  Heart,
+  ArrowLeftRight
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -22,6 +23,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { NotificationBell } from "./NotificationBell";
 import { useState } from "react";
 
 export function Navbar() {
@@ -65,6 +67,11 @@ export function Navbar() {
       </Link>
       {user && (
         <>
+          <Link href="/swaps">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/swaps') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Swaps
+            </span>
+          </Link>
           <Link href="/favorites">
             <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/favorites') ? 'text-primary' : 'text-muted-foreground'}`}>
               Favorites
@@ -102,6 +109,7 @@ export function Navbar() {
         
         <div className="flex flex-1 items-center justify-end space-x-2">
           <div className="flex items-center gap-2">
+            {user && <NotificationBell />}
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -253,6 +253,105 @@ export const favorites = mysqlTable("favorites", {
 }));
 
 /* ================================
+   SWAP REQUESTS
+================================ */
+export const swapRequests = mysqlTable("swap_requests", {
+  id: int("id").primaryKey().autoincrement(),
+
+  // The person initiating the swap (wants the listed book)
+  requesterId: varchar("requester_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // The person who listed the book for swap
+  ownerId: varchar("owner_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // The book listing they want to swap for
+  requestedListingId: int("requested_listing_id")
+    .notNull()
+    .references(() => bookListings.id, { onDelete: "cascade" }),
+
+  // What book(s) the requester is offering
+  offeredBookTitle: varchar("offered_book_title", { length: 500 }).notNull(),
+  offeredBookAuthor: varchar("offered_book_author", { length: 255 }),
+  offeredBookCondition: varchar("offered_book_condition", { length: 20 }).notNull(),
+  offeredBookDescription: text("offered_book_description"),
+  offeredBookPhotoUrl: text("offered_book_photo_url"),
+
+  // Message from requester
+  message: text("message"),
+
+  // Status: 'pending', 'accepted', 'rejected', 'completed', 'cancelled'
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+
+  // Commitment fee (optional - small amount both parties deposit)
+  commitmentFee: decimal("commitment_fee", { precision: 10, scale: 2 }).default("0.00"),
+  requesterPaid: boolean("requester_paid").default(false),
+  ownerPaid: boolean("owner_paid").default(false),
+
+  // Escrow tracking
+  escrowId: int("escrow_id").references(() => escrowAccounts.id),
+
+  // Delivery/meetup details
+  meetupLocation: text("meetup_location"),
+  meetupTime: timestamp("meetup_time"),
+  deliveryMethod: varchar("delivery_method", { length: 50 }).default("meetup"),
+
+  // Confirmation
+  requesterConfirmed: boolean("requester_confirmed").default(false),
+  ownerConfirmed: boolean("owner_confirmed").default(false),
+
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  acceptedAt: timestamp("accepted_at"),
+  completedAt: timestamp("completed_at"),
+  cancelledAt: timestamp("cancelled_at"),
+}, (table) => ({
+  requesterIdx: index("idx_swap_requests_requester").on(table.requesterId),
+  ownerIdx: index("idx_swap_requests_owner").on(table.ownerId),
+  listingIdx: index("idx_swap_requests_listing").on(table.requestedListingId),
+  statusIdx: index("idx_swap_requests_status").on(table.status),
+}));
+
+/* ================================
+   NOTIFICATIONS
+================================ */
+export const notifications = mysqlTable("notifications", {
+  id: int("id").primaryKey().autoincrement(),
+
+  userId: varchar("user_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Type: 'swap_request', 'swap_accepted', 'swap_rejected', 'swap_completed', 'book_sold', 'message', etc.
+  type: varchar("type", { length: 50 }).notNull(),
+
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+
+  // Related entities
+  relatedSwapRequestId: int("related_swap_request_id").references(() => swapRequests.id, { onDelete: "cascade" }),
+  relatedBookListingId: int("related_book_listing_id").references(() => bookListings.id, { onDelete: "cascade" }),
+  relatedOrderId: int("related_order_id").references(() => orders.id, { onDelete: "cascade" }),
+
+  // Action URL (where to navigate when clicked)
+  actionUrl: varchar("action_url", { length: 500 }),
+
+  // Status
+  isRead: boolean("is_read").notNull().default(false),
+  readAt: timestamp("read_at"),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index("idx_notifications_user_id").on(table.userId),
+  isReadIdx: index("idx_notifications_is_read").on(table.isRead),
+  typeIdx: index("idx_notifications_type").on(table.type),
+}));
+
+/* ================================
    USER PREFERENCES
 ================================ */
 export const userPreferences = mysqlTable("user_preferences", {
@@ -562,8 +661,8 @@ export const updatePaymentPreferencesSchema = z.object({
   bankBranch: z.string().or(z.literal("")).nullable().optional(),
   paypalEmail: z.string().email().or(z.literal("")).nullable().optional(),
 });
-
-export const createBookListingSchema = z.object({
+// Base schema for updates (before refinement)
+const baseBookListingSchema = z.object({
   // Basic Information (Step 1)
   title: z.string().min(3, "Title must be at least 3 characters"),
   isbn: z.string().nullable().optional(),
@@ -586,9 +685,18 @@ export const createBookListingSchema = z.object({
     required_error: "Condition is required",
   }),
   conditionNotes: z.string().nullable().optional(),
-  price: z.number().min(1, "Price must be greater than 0"),
+
+  // Listing Type - "sell" or "swap"
+  listingType: z.enum(["sell", "swap"]).default("sell"),
+
+  // For sell listings
+  price: z.number().min(0, "Price cannot be negative").optional(),
   originalRetailPrice: z.number().nullable().optional(),
   negotiable: z.boolean().default(true),
+
+  // For swap listings - what books the user wants in exchange
+  willingToSwapFor: z.string().nullable().optional(),
+
   quantityAvailable: z.number().min(1).default(1),
 
   // Description & Photos (Step 4)
@@ -597,7 +705,20 @@ export const createBookListingSchema = z.object({
   additionalPhotos: z.array(z.string()).optional(),
 });
 
-export const updateBookListingSchema = createBookListingSchema.partial();
+// Apply refinement to createBookListingSchema
+export const createBookListingSchema = baseBookListingSchema.refine((data) => {
+  // If listing type is "sell", price is required and must be > 0
+  if (data.listingType === "sell" && (!data.price || data.price <= 0)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Price is required for sell listings",
+  path: ["price"],
+});
+
+// Update schema can be partial
+export const updateBookListingSchema = baseBookListingSchema.partial();
 
 // Wallet & Transaction Schemas
 export const walletTopUpSchema = z.object({
@@ -637,6 +758,27 @@ export const createDisputeSchema = z.object({
   reason: z.string().min(10, "Please provide a detailed reason for the dispute"),
 });
 
+// Swap Request Schemas
+export const createSwapRequestSchema = z.object({
+  requestedListingId: z.number(),
+  offeredBookTitle: z.string().min(3, "Book title is required"),
+  offeredBookAuthor: z.string().optional(),
+  offeredBookCondition: z.enum(["New", "Like New", "Good", "Fair"]),
+  offeredBookDescription: z.string().optional(),
+  offeredBookPhotoUrl: z.string().optional(),
+  message: z.string().optional(),
+  deliveryMethod: z.enum(["meetup", "delivery"]).default("meetup"),
+  meetupLocation: z.string().optional(),
+});
+
+export const updateSwapRequestSchema = z.object({
+  status: z.enum(["pending", "accepted", "rejected", "completed", "cancelled"]).optional(),
+  meetupLocation: z.string().optional(),
+  meetupTime: z.string().optional(),
+  requesterConfirmed: z.boolean().optional(),
+  ownerConfirmed: z.boolean().optional(),
+});
+
 /* ================================
    TYPES
 ================================ */
@@ -662,3 +804,9 @@ export type WalletTopUpInput = z.infer<typeof walletTopUpSchema>;
 export type WalletWithdrawalInput = z.infer<typeof walletWithdrawalSchema>;
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>;
+
+// Swap & Notification Types
+export type SwapRequest = typeof swapRequests.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type CreateSwapRequestInput = z.infer<typeof createSwapRequestSchema>;
+export type UpdateSwapRequestInput = z.infer<typeof updateSwapRequestSchema>;

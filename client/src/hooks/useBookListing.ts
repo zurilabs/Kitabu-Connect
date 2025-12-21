@@ -22,10 +22,14 @@ interface CreateBookListingData {
   // Condition & Pricing
   condition: "New" | "Like New" | "Good" | "Fair";
   conditionNotes?: string;
-  price: number;
+  price?: number;
   originalRetailPrice?: number;
   negotiable?: boolean;
   quantityAvailable?: number;
+
+  // Listing Type (Sell or Swap)
+  listingType?: "sell" | "swap";
+  willingToSwapFor?: string;
 
   // Description & Photos
   description?: string;
@@ -37,7 +41,7 @@ interface BookListing extends CreateBookListingData {
   id: number;
   sellerId: string;
   listingStatus: string;
-  listingType: string;
+  listingType: "sell" | "swap";
   viewsCount: number;
   favoritesCount: number;
   createdAt: string;

@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   Loader2,
   Trash2,
+  ArrowLeftRight,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -54,6 +55,10 @@ interface FormData {
   term?: string;
   language: string;
   bindingType?: string;
+
+  // Listing Type
+  listingType: "sell" | "swap";
+  willingToSwapFor?: string;
 
   // Pricing & Condition
   condition: "New" | "Like New" | "Good" | "Fair" | "";
@@ -103,6 +108,7 @@ export default function EditBook() {
     subject: "",
     classGrade: "",
     condition: "",
+    listingType: "sell",
     price: "",
     language: "English",
     negotiable: true,
@@ -127,6 +133,8 @@ export default function EditBook() {
         term: book.term,
         language: book.language || "English",
         bindingType: book.bindingType,
+        listingType: book.listingType || "sell",
+        willingToSwapFor: book.willingToSwapFor,
         condition: book.condition || "",
         conditionNotes: book.conditionNotes,
         price: book.price?.toString() || "",
@@ -167,10 +175,26 @@ export default function EditBook() {
         }
         break;
       case 'pricing':
-        if (!formData.condition || !formData.price || Number(formData.price) <= 0) {
+        if (!formData.condition) {
           toast({
             title: "Missing Information",
-            description: "Please select condition and enter a valid price.",
+            description: "Please select the book condition.",
+            variant: "destructive",
+          });
+          return false;
+        }
+        if (formData.listingType === 'sell' && (!formData.price || Number(formData.price) <= 0)) {
+          toast({
+            title: "Missing Information",
+            description: "Please enter a valid price for your book.",
+            variant: "destructive",
+          });
+          return false;
+        }
+        if (formData.listingType === 'swap' && !formData.willingToSwapFor) {
+          toast({
+            title: "Missing Information",
+            description: "Please describe what books you want to swap for.",
             variant: "destructive",
           });
           return false;
@@ -522,6 +546,41 @@ export default function EditBook() {
                   </div>
 
                   <div className="space-y-4">
+                    {/* Listing Type Toggle */}
+                    <div className="space-y-2">
+                      <Label>Listing Type *</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button
+                          type="button"
+                          variant={formData.listingType === 'sell' ? 'default' : 'outline'}
+                          onClick={() => updateFormData('listingType', 'sell')}
+                          className="h-auto py-4"
+                        >
+                          <div className="flex items-center gap-3">
+                            <DollarSign className="w-5 h-5" />
+                            <div className="text-left">
+                              <div className="font-semibold">Sell</div>
+                              <div className="text-xs opacity-80">List for sale</div>
+                            </div>
+                          </div>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={formData.listingType === 'swap' ? 'default' : 'outline'}
+                          onClick={() => updateFormData('listingType', 'swap')}
+                          className="h-auto py-4"
+                        >
+                          <div className="flex items-center gap-3">
+                            <ArrowLeftRight className="w-5 h-5" />
+                            <div className="text-left">
+                              <div className="font-semibold">Swap</div>
+                              <div className="text-xs opacity-80">Exchange books</div>
+                            </div>
+                          </div>
+                        </Button>
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="condition">Condition *</Label>
                       <Select value={formData.condition} onValueChange={(value) => updateFormData('condition', value)}>
@@ -548,59 +607,78 @@ export default function EditBook() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="price">Selling Price (KSh) *</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">KSh</span>
+                    {/* Conditional rendering based on listing type */}
+                    {formData.listingType === 'sell' ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="price">Selling Price (KSh) *</Label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">KSh</span>
+                              <Input
+                                id="price"
+                                type="number"
+                                placeholder="0.00"
+                                className="pl-12"
+                                value={formData.price}
+                                onChange={(e) => updateFormData('price', e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="originalPrice">Original Price (KSh)</Label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">KSh</span>
+                              <Input
+                                id="originalPrice"
+                                type="number"
+                                placeholder="0.00"
+                                className="pl-12"
+                                value={formData.originalRetailPrice || ""}
+                                onChange={(e) => updateFormData('originalRetailPrice', e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="negotiable"
+                            checked={formData.negotiable}
+                            onChange={(e) => updateFormData('negotiable', e.target.checked)}
+                            className="rounded"
+                          />
+                          <Label htmlFor="negotiable" className="cursor-pointer">Price is negotiable</Label>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="quantity">Quantity Available</Label>
                           <Input
-                            id="price"
+                            id="quantity"
                             type="number"
-                            placeholder="0.00"
-                            className="pl-12"
-                            value={formData.price}
-                            onChange={(e) => updateFormData('price', e.target.value)}
+                            min="1"
+                            value={formData.quantityAvailable}
+                            onChange={(e) => updateFormData('quantityAvailable', parseInt(e.target.value) || 1)}
                           />
                         </div>
-                      </div>
-
+                      </>
+                    ) : (
                       <div className="space-y-2">
-                        <Label htmlFor="originalPrice">Original Price (KSh)</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">KSh</span>
-                          <Input
-                            id="originalPrice"
-                            type="number"
-                            placeholder="0.00"
-                            className="pl-12"
-                            value={formData.originalRetailPrice || ""}
-                            onChange={(e) => updateFormData('originalRetailPrice', e.target.value)}
-                          />
-                        </div>
+                        <Label htmlFor="willingToSwapFor">What books are you looking to swap for? *</Label>
+                        <Textarea
+                          id="willingToSwapFor"
+                          placeholder="E.g., Looking for Form 2 Chemistry or Biology textbooks, any edition"
+                          value={formData.willingToSwapFor || ""}
+                          onChange={(e) => updateFormData('willingToSwapFor', e.target.value)}
+                          className="h-24"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Describe what books you'd be interested in exchanging for. Be specific about subjects, grades, or topics.
+                        </p>
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="negotiable"
-                        checked={formData.negotiable}
-                        onChange={(e) => updateFormData('negotiable', e.target.checked)}
-                        className="rounded"
-                      />
-                      <Label htmlFor="negotiable" className="cursor-pointer">Price is negotiable</Label>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="quantity">Quantity Available</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        min="1"
-                        value={formData.quantityAvailable}
-                        onChange={(e) => updateFormData('quantityAvailable', parseInt(e.target.value) || 1)}
-                      />
-                    </div>
+                    )}
                   </div>
                 </div>
               )}

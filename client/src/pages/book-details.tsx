@@ -12,17 +12,20 @@ import {
   BookOpen,
   AlertCircle,
   Truck,
-  Loader2
+  Loader2,
+  ArrowLeftRight
 } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useBookListing } from "@/hooks/useBookListing";
+import { useAuth } from "@/hooks/useAuth";
 import { extractIdFromSlug } from "@/lib/utils";
 
 export default function BookDetails() {
   const { id: slug } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -43,7 +46,8 @@ export default function BookDetails() {
   }
 
   const book = bookData.listing;
-  const bookPrice = Number(book.price);
+  const isSwap = book.listingType === 'swap';
+  const bookPrice = book.price ? Number(book.price) : 0;
   const originalPrice = book.originalRetailPrice ? Number(book.originalRetailPrice) : null;
   const convenienceFee = bookPrice * 0.05; // 5% convenience fee
   const totalPrice = bookPrice + convenienceFee;
@@ -65,6 +69,22 @@ export default function BookDetails() {
     setLocation('/dashboard');
   };
 
+  const handleInitiateSwap = () => {
+    // Check if user is authenticated
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to initiate a swap.",
+        variant: "destructive",
+      });
+      setLocation('/login');
+      return;
+    }
+
+    // Navigate to swap request flow
+    setLocation(`/swaps/new?listingId=${book.id}`);
+  };
+
   return (
     <div className="container px-4 py-8 max-w-5xl">
       <Button variant="ghost" className="mb-6 pl-0 hover:pl-2 transition-all" onClick={() => window.history.back()}>
@@ -80,6 +100,14 @@ export default function BookDetails() {
               alt={book.title}
               className="w-full h-full object-cover"
             />
+            {isSwap && (
+              <div className="absolute top-3 right-3">
+                <Badge className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-3 py-1 flex items-center gap-1">
+                  <ArrowLeftRight className="w-4 h-4" />
+                  SWAP
+                </Badge>
+              </div>
+            )}
             {book.listingStatus !== 'active' && (
               <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
                 <Badge className="text-lg px-6 py-2">{book.listingStatus.toUpperCase()}</Badge>
@@ -141,6 +169,16 @@ export default function BookDetails() {
                 <p className="text-sm text-muted-foreground">{book.conditionNotes}</p>
               </div>
             )}
+
+            {isSwap && book.willingToSwapFor && (
+              <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <ArrowLeftRight className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100">Looking to swap for:</h3>
+                </div>
+                <p className="text-sm text-blue-700 dark:text-blue-300">{book.willingToSwapFor}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -148,24 +186,36 @@ export default function BookDetails() {
         <div className="md:sticky md:top-24 h-fit space-y-6">
           <Card className="border-2 border-primary/10 shadow-lg">
             <CardContent className="p-6 space-y-6">
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm text-muted-foreground">Price</span>
-                <span className="text-3xl font-bold text-primary">KSh {bookPrice.toLocaleString()}</span>
-              </div>
-
-              {originalPrice && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Original Price</span>
-                  <span className="line-through text-muted-foreground">
-                    KSh {originalPrice.toLocaleString()}
-                  </span>
+              {isSwap ? (
+                <div className="text-center py-4">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <ArrowLeftRight className="w-6 h-6 text-blue-600" />
+                    <span className="text-2xl font-bold text-blue-600">Swap Only</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">No payment required - book exchange</p>
                 </div>
-              )}
+              ) : (
+                <>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm text-muted-foreground">Price</span>
+                    <span className="text-3xl font-bold text-primary">KSh {bookPrice.toLocaleString()}</span>
+                  </div>
 
-              {book.negotiable && (
-                <Badge variant="secondary" className="w-full justify-center">
-                  Price Negotiable
-                </Badge>
+                  {originalPrice && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Original Price</span>
+                      <span className="line-through text-muted-foreground">
+                        KSh {originalPrice.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {book.negotiable && (
+                    <Badge variant="secondary" className="w-full justify-center">
+                      Price Negotiable
+                    </Badge>
+                  )}
+                </>
               )}
 
               <Separator />
@@ -193,12 +243,22 @@ export default function BookDetails() {
                 </div>
               </div>
 
-              <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-                <DialogTrigger asChild>
-                  <Button className="w-full h-12 text-lg font-semibold" disabled={book.listingStatus !== 'active'}>
-                    {book.listingStatus === 'active' ? 'Buy Now' : 'Not Available'}
-                  </Button>
-                </DialogTrigger>
+              {isSwap ? (
+                <Button
+                  className="w-full h-12 text-lg font-semibold bg-blue-600 hover:bg-blue-700"
+                  disabled={book.listingStatus !== 'active'}
+                  onClick={handleInitiateSwap}
+                >
+                  <ArrowLeftRight className="w-5 h-5 mr-2" />
+                  {book.listingStatus === 'active' ? 'Initiate Swap' : 'Not Available'}
+                </Button>
+              ) : (
+                <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full h-12 text-lg font-semibold" disabled={book.listingStatus !== 'active'}>
+                      {book.listingStatus === 'active' ? 'Buy Now' : 'Not Available'}
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Confirm Purchase</DialogTitle>
@@ -241,6 +301,7 @@ export default function BookDetails() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              )}
             </CardContent>
           </Card>
 
