@@ -306,9 +306,9 @@ export const swapRequests = mysqlTable("swap_requests", {
   // Timestamps
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
-  acceptedAt: timestamp("accepted_at"),
-  completedAt: timestamp("completed_at"),
-  cancelledAt: timestamp("cancelled_at"),
+  acceptedAt: datetime("accepted_at"),
+  completedAt: datetime("completed_at"),
+  cancelledAt: datetime("cancelled_at"),
 }, (table) => ({
   requesterIdx: index("idx_swap_requests_requester").on(table.requesterId),
   ownerIdx: index("idx_swap_requests_owner").on(table.ownerId),
@@ -431,7 +431,7 @@ export const transactions = mysqlTable("transactions", {
 
   // Timestamps
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  completedAt: timestamp("completed_at"),
+  completedAt: datetime("completed_at"),
 });
 
 /* ================================
@@ -469,12 +469,12 @@ export const escrowAccounts = mysqlTable("escrow_accounts", {
   releaseAt: timestamp("release_at").notNull(), // Calculated: createdAt + holdPeriodDays
 
   // Actual release/refund
-  releasedAt: timestamp("released_at"),
-  refundedAt: timestamp("refunded_at"),
+  releasedAt: datetime("released_at"),
+  refundedAt: datetime("refunded_at"),
 
   // Dispute information
   disputeReason: text("dispute_reason"),
-  disputeResolvedAt: timestamp("dispute_resolved_at"),
+  disputeResolvedAt: datetime("dispute_resolved_at"),
 
   // Metadata
   notes: text("notes"),
@@ -556,10 +556,10 @@ export const orders = mysqlTable("orders", {
 
   // Timestamps
   paidAt: timestamp("paid_at"),
-  confirmedAt: timestamp("confirmed_at"),
-  deliveredAt: timestamp("delivered_at"),
-  completedAt: timestamp("completed_at"),
-  cancelledAt: timestamp("cancelled_at"),
+  confirmedAt: datetime("confirmed_at"),
+  deliveredAt: datetime("delivered_at"),
+  completedAt: datetime("completed_at"),
+  cancelledAt: datetime("cancelled_at"),
 
   // Notes
   buyerNotes: text("buyer_notes"),

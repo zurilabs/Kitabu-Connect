@@ -69,10 +69,10 @@ CREATE TABLE `escrow_accounts` (
 	`status` varchar(20) NOT NULL DEFAULT 'pending',
 	`hold_period_days` int NOT NULL DEFAULT 7,
 	`release_at` timestamp NOT NULL,
-	`released_at` timestamp,
-	`refunded_at` timestamp,
+	`released_at` datetime,
+	`refunded_at` datetime,
 	`dispute_reason` text,
-	`dispute_resolved_at` timestamp,
+	`dispute_resolved_at` datetime,
 	`notes` text,
 	`created_at` timestamp NOT NULL DEFAULT (now()),
 	`updated_at` timestamp NOT NULL DEFAULT (now()),
@@ -119,10 +119,10 @@ CREATE TABLE `orders` (
 	`delivery_address` text,
 	`tracking_number` varchar(100),
 	`paid_at` timestamp,
-	`confirmed_at` timestamp,
-	`delivered_at` timestamp,
-	`completed_at` timestamp,
-	`cancelled_at` timestamp,
+	`confirmed_at` datetime,
+	`delivered_at` datetime,
+	`completed_at` datetime,
+	`cancelled_at` datetime,
 	`buyer_notes` text,
 	`seller_notes` text,
 	`cancellation_reason` text,
@@ -212,9 +212,9 @@ CREATE TABLE `swap_requests` (
 	`owner_confirmed` boolean DEFAULT false,
 	`created_at` timestamp NOT NULL DEFAULT (now()),
 	`updated_at` timestamp NOT NULL DEFAULT (now()),
-	`accepted_at` timestamp,
-	`completed_at` timestamp,
-	`cancelled_at` timestamp,
+	`accepted_at` datetime,
+	`completed_at` datetime,
+	`cancelled_at` datetime,
 	CONSTRAINT `swap_requests_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
@@ -232,7 +232,7 @@ CREATE TABLE `transactions` (
 	`description` text,
 	`metadata` text,
 	`created_at` timestamp NOT NULL DEFAULT (now()),
-	`completed_at` timestamp,
+	`completed_at` datetime,
 	CONSTRAINT `transactions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
