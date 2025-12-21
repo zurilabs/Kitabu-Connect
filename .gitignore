@@ -36,3 +36,6 @@ Thumbs.db
 # Optional: Coverage reports (if using Jest/Mocha)
 coverage/
 *.lcov
+# Optional: Temporary files
+tmp/    
+null 
