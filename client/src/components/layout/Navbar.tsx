@@ -68,14 +68,14 @@ export function Navbar() {
       </Link>
       {user && (
         <>
-          <Link href="/swaps">
-            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/swaps') ? 'text-primary' : 'text-muted-foreground'}`}>
-              Swaps
+          <Link href="/dashboard">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Dashboard
             </span>
           </Link>
-          <Link href="/conversations">
-            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/conversations') ? 'text-primary' : 'text-muted-foreground'}`}>
-              Messages
+          <Link href="/swaps">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/swaps') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Swap Books
             </span>
           </Link>
           <Link href="/favorites">
@@ -83,9 +83,9 @@ export function Navbar() {
               Favorites
             </span>
           </Link>
-          <Link href="/dashboard">
-            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground'}`}>
-              Dashboard
+          <Link href="/conversations">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/conversations') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Messages
             </span>
           </Link>
         </>
@@ -112,7 +112,7 @@ export function Navbar() {
             <NavLinks />
           </nav>
         </div>
-        
+
         <div className="flex flex-1 items-center justify-end space-x-2">
           <div className="flex items-center gap-2">
             {user && <NotificationBell />}
@@ -127,11 +127,11 @@ export function Navbar() {
                       <AvatarFallback className="bg-primary/10 text-primary">
                         {user.fullName
                           ? user.fullName
-                              .split(' ')
-                              .map((n) => n[0])
-                              .join('')
-                              .toUpperCase()
-                              .slice(0, 2)
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')
+                            .toUpperCase()
+                            .slice(0, 2)
                           : <UserIcon className="h-4 w-4" />}
                       </AvatarFallback>
                     </Avatar>
