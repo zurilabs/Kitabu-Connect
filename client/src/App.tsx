@@ -17,6 +17,8 @@ import EditBook from "@/pages/edit-book";
 import Favorites from "@/pages/favorites";
 import SwapRequestForm from "@/pages/swap-request-form";
 import SwapsPage from "@/pages/swaps";
+import SwapOrderDetail from "@/pages/swap-order-detail";
+import Conversations from "@/pages/conversations";
 import { Navbar } from "@/components/layout/Navbar";
 
 import Profile from "@/pages/profile";
@@ -38,6 +40,8 @@ function Router() {
         <Route path="/edit-book/:id" component={EditBook} />
         <Route path="/swaps/new" component={SwapRequestForm} />
         <Route path="/swaps" component={SwapsPage} />
+        <Route path="/orders/:id/messages" component={SwapOrderDetail} />
+        <Route path="/conversations" component={Conversations} />
         <Route path="/" component={Home} />
         <Route path="/marketplace" component={Marketplace} />
         <Route path="/favorites" component={Favorites} />

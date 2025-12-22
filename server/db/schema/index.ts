@@ -576,6 +576,147 @@ export const orders = mysqlTable("orders", {
 });
 
 /* ================================
+   SWAP ORDERS (Fiverr-style order management)
+================================ */
+export const swapOrders = mysqlTable("swap_orders", {
+  id: int("id").primaryKey().autoincrement(),
+
+  // Order reference
+  orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
+
+  // Related swap request
+  swapRequestId: int("swap_request_id")
+    .notNull()
+    .references(() => swapRequests.id, { onDelete: "cascade" }),
+
+  // Parties involved
+  requesterId: varchar("requester_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  ownerId: varchar("owner_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Books being swapped
+  requestedListingId: int("requested_listing_id")
+    .notNull()
+    .references(() => bookListings.id, { onDelete: "cascade" }),
+
+  offeredListingId: int("offered_listing_id")
+    .references(() => bookListings.id, { onDelete: "set null" }),
+
+  // Order status: 'active', 'requirements_gathering', 'in_progress', 'delivered', 'revision_requested', 'completed', 'cancelled', 'disputed'
+  status: varchar("status", { length: 30 }).notNull().default("requirements_gathering"),
+
+  // Milestones/Requirements (like Fiverr's order requirements)
+  requirementsSubmitted: boolean("requirements_submitted").default(false),
+  requirementsApproved: boolean("requirements_approved").default(false),
+
+  // Delivery details
+  deliveryMethod: varchar("delivery_method", { length: 50 }).default("meetup"),
+  meetupLocation: text("meetup_location"),
+  meetupTime: timestamp("meetup_time"),
+
+  // Tracking
+  requesterShipped: boolean("requester_shipped").default(false),
+  ownerShipped: boolean("owner_shipped").default(false),
+
+  // Delivery confirmation (both parties must confirm)
+  requesterReceivedBook: boolean("requester_received_book").default(false),
+  ownerReceivedBook: boolean("owner_received_book").default(false),
+
+  // Escrow/Commitment (small fee to ensure commitment)
+  commitmentFee: decimal("commitment_fee", { precision: 10, scale: 2 }).default("50.00"),
+  escrowId: int("escrow_id").references(() => escrowAccounts.id),
+
+  // Payment tracking for commitment fees
+  requesterPaidFee: boolean("requester_paid_fee").default(false),
+  ownerPaidFee: boolean("owner_paid_fee").default(false),
+  requesterPaymentReference: varchar("requester_payment_reference", { length: 255 }),
+  ownerPaymentReference: varchar("owner_payment_reference", { length: 255 }),
+
+  // Revision tracking (like Fiverr)
+  revisionsAllowed: int("revisions_allowed").default(1),
+  revisionsUsed: int("revisions_used").default(0),
+
+  // Delivery deadline
+  deliveryDeadline: datetime("delivery_deadline"),
+
+  // Late delivery tracking
+  isLate: boolean("is_late").default(false),
+
+  // Auto-completion (like Fiverr - auto-completes after 3 days if no action)
+  autoCompleteAt: datetime("auto_complete_at"),
+
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  startedAt: datetime("started_at"),
+  deliveredAt: datetime("delivered_at"),
+  completedAt: datetime("completed_at"),
+  cancelledAt: datetime("cancelled_at"),
+
+  // Cancellation/Dispute
+  cancellationReason: text("cancellation_reason"),
+  cancelledBy: varchar("cancelled_by", { length: 36 }),
+  disputeReason: text("dispute_reason"),
+}, (table) => ({
+  swapRequestIdx: index("idx_swap_orders_swap_request").on(table.swapRequestId),
+  requesterIdx: index("idx_swap_orders_requester").on(table.requesterId),
+  ownerIdx: index("idx_swap_orders_owner").on(table.ownerId),
+  statusIdx: index("idx_swap_orders_status").on(table.status),
+}));
+
+/* ================================
+   MESSAGES (Order-based messaging like Fiverr)
+================================ */
+export const messages = mysqlTable("messages", {
+  id: int("id").primaryKey().autoincrement(),
+
+  // Related swap order
+  swapOrderId: int("swap_order_id")
+    .notNull()
+    .references(() => swapOrders.id, { onDelete: "cascade" }),
+
+  // Sender
+  senderId: varchar("sender_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Receiver
+  receiverId: varchar("receiver_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Message content
+  content: text("content").notNull(),
+
+  // Message type: 'text', 'image', 'file', 'system', 'offer', 'requirement', 'delivery'
+  messageType: varchar("message_type", { length: 20 }).notNull().default("text"),
+
+  // Attachments
+  attachmentUrl: text("attachment_url"),
+  attachmentType: varchar("attachment_type", { length: 50 }),
+
+  // System messages (automated messages like "Order started", "Delivered", etc.)
+  isSystemMessage: boolean("is_system_message").default(false),
+
+  // Read status
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+
+  // Metadata for special message types (JSON)
+  metadata: text("metadata"),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  orderIdx: index("idx_messages_swap_order").on(table.swapOrderId),
+  senderIdx: index("idx_messages_sender").on(table.senderId),
+  receiverIdx: index("idx_messages_receiver").on(table.receiverId),
+}));
+
+/* ================================
    PAYSTACK TRANSFER RECIPIENTS
 ================================ */
 export const paystackRecipients = mysqlTable("paystack_recipients", {
@@ -800,6 +941,56 @@ export const updateSwapRequestSchema = z.object({
   ownerConfirmed: z.boolean().optional(),
 });
 
+// Swap Order Schemas
+export const createSwapOrderSchema = z.object({
+  swapRequestId: z.number(),
+  deliveryMethod: z.enum(["meetup", "delivery", "shipping"]).default("meetup"),
+  meetupLocation: z.string().optional(),
+  meetupTime: z.string().optional(),
+});
+
+export const updateSwapOrderSchema = z.object({
+  status: z.enum([
+    "requirements_gathering",
+    "in_progress",
+    "delivered",
+    "revision_requested",
+    "completed",
+    "cancelled",
+    "disputed"
+  ]).optional(),
+  requirementsSubmitted: z.boolean().optional(),
+  requirementsApproved: z.boolean().optional(),
+  deliveryMethod: z.string().optional(),
+  meetupLocation: z.string().optional(),
+  meetupTime: z.string().optional(),
+  requesterShipped: z.boolean().optional(),
+  ownerShipped: z.boolean().optional(),
+  requesterReceivedBook: z.boolean().optional(),
+  ownerReceivedBook: z.boolean().optional(),
+  cancellationReason: z.string().optional(),
+  disputeReason: z.string().optional(),
+});
+
+export const submitRequirementsSchema = z.object({
+  meetupLocation: z.string().min(5, "Please provide a valid meetup location"),
+  meetupTime: z.string(),
+  additionalNotes: z.string().optional(),
+});
+
+// Message Schemas
+export const sendMessageSchema = z.object({
+  swapOrderId: z.number(),
+  content: z.string().min(1, "Message cannot be empty"),
+  messageType: z.enum(["text", "image", "file"]).default("text"),
+  attachmentUrl: z.string().optional(),
+  attachmentType: z.string().optional(),
+});
+
+export const markMessagesAsReadSchema = z.object({
+  swapOrderId: z.number(),
+});
+
 /* ================================
    TYPES
 ================================ */
@@ -831,3 +1022,11 @@ export type SwapRequest = typeof swapRequests.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type CreateSwapRequestInput = z.infer<typeof createSwapRequestSchema>;
 export type UpdateSwapRequestInput = z.infer<typeof updateSwapRequestSchema>;
+
+// Swap Order & Message Types
+export type SwapOrder = typeof swapOrders.$inferSelect;
+export type Message = typeof messages.$inferSelect;
+export type CreateSwapOrderInput = z.infer<typeof createSwapOrderSchema>;
+export type UpdateSwapOrderInput = z.infer<typeof updateSwapOrderSchema>;
+export type SubmitRequirementsInput = z.infer<typeof submitRequirementsSchema>;
+export type SendMessageInput = z.infer<typeof sendMessageSchema>;

@@ -35,6 +35,7 @@ interface SwapRequest {
     meetupTime: string | null;
     createdAt: string;
   };
+  swapOrderId?: number | null;
   requester?: {
     id: string;
     fullName: string;
@@ -95,12 +96,16 @@ export default function SwapsPage() {
 
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["swaps"] });
       toast({
         title: "Swap Accepted!",
         description: "You can now coordinate the exchange with the requester.",
       });
+      // Redirect to the order messages page
+      if (data.swapOrderId) {
+        setLocation(`/orders/${data.swapOrderId}/messages`);
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -322,11 +327,11 @@ export default function SwapsPage() {
             </Button>
           )}
 
-          {swap.swapRequest.status === "accepted" && (
+          {swap.swapRequest.status === "accepted" && swap.swapOrderId && (
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => setLocation(`/swaps/${swap.swapRequest.id}`)}
+              onClick={() => setLocation(`/orders/${swap.swapOrderId}/messages`)}
             >
               <MessageSquare className="w-4 h-4 mr-2" />
               View Details & Coordinate

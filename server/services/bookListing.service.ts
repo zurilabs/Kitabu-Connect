@@ -107,6 +107,7 @@ class BookListingService {
     maxDistance?: number;
     userLatitude?: number;
     userLongitude?: number;
+    excludeUserId?: string; // Exclude listings from this user
   }) {
     try {
       // Join with users table to get seller info for school/location filtering
@@ -128,10 +129,16 @@ class BookListingService {
         .orderBy(desc(bookListings.createdAt));
 
       // Apply filters
-      let filteredListings = listingsWithSellers;
+      let filteredListings = listingsWithSellers.filter(({ listing }) => {
+        // Always exclude books with 0 quantity (already swapped/sold)
+        return listing.quantityAvailable > 0;
+      });
 
       if (filters) {
-        filteredListings = listingsWithSellers.filter(({ listing, seller }) => {
+        filteredListings = filteredListings.filter(({ listing, seller }) => {
+          // Exclude current user's listings
+          if (filters.excludeUserId && seller.id === filters.excludeUserId) return false;
+
           if (filters.subject && listing.subject !== filters.subject) return false;
           if (filters.classGrade && listing.classGrade !== filters.classGrade) return false;
           if (filters.condition && listing.condition !== filters.condition) return false;

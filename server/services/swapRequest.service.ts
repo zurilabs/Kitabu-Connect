@@ -3,6 +3,7 @@ import {
   swapRequests,
   bookListings,
   users,
+  swapOrders,
   type CreateSwapRequestInput,
   type UpdateSwapRequestInput,
 } from "../db/schema";
@@ -214,6 +215,7 @@ export class SwapRequestService {
       const incoming = await db
         .select({
           swapRequest: swapRequests,
+          swapOrderId: swapOrders.id,
           requester: {
             id: users.id,
             fullName: users.fullName,
@@ -230,6 +232,7 @@ export class SwapRequestService {
         .from(swapRequests)
         .innerJoin(users, eq(swapRequests.requesterId, users.id))
         .innerJoin(bookListings, eq(swapRequests.requestedListingId, bookListings.id))
+        .leftJoin(swapOrders, eq(swapRequests.id, swapOrders.swapRequestId))
         .where(eq(swapRequests.ownerId, userId))
         .orderBy(desc(swapRequests.createdAt));
 
@@ -237,6 +240,7 @@ export class SwapRequestService {
       const outgoingData = await db
         .select({
           swapRequest: swapRequests,
+          swapOrderId: swapOrders.id,
           owner: {
             id: users.id,
             fullName: users.fullName,
@@ -253,6 +257,7 @@ export class SwapRequestService {
         .from(swapRequests)
         .innerJoin(users, eq(swapRequests.ownerId, users.id))
         .innerJoin(bookListings, eq(swapRequests.requestedListingId, bookListings.id))
+        .leftJoin(swapOrders, eq(swapRequests.id, swapOrders.swapRequestId))
         .where(eq(swapRequests.requesterId, userId))
         .orderBy(desc(swapRequests.createdAt));
 

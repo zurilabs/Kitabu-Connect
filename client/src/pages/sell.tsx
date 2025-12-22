@@ -682,6 +682,9 @@ export default function SellBook() {
                         value={formData.quantityAvailable}
                         onChange={(e) => updateFormData('quantityAvailable', parseInt(e.target.value) || 1)}
                       />
+                      <p className="text-xs text-muted-foreground">
+                        How many copies of this book do you have available?
+                      </p>
                     </div>
                   </div>
                 </div>

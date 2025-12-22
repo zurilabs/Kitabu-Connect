@@ -652,17 +652,6 @@ export default function EditBook() {
                           />
                           <Label htmlFor="negotiable" className="cursor-pointer">Price is negotiable</Label>
                         </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="quantity">Quantity Available</Label>
-                          <Input
-                            id="quantity"
-                            type="number"
-                            min="1"
-                            value={formData.quantityAvailable}
-                            onChange={(e) => updateFormData('quantityAvailable', parseInt(e.target.value) || 1)}
-                          />
-                        </div>
                       </>
                     ) : (
                       <div className="space-y-2">
@@ -679,6 +668,20 @@ export default function EditBook() {
                         </p>
                       </div>
                     )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity">Quantity Available</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        min="1"
+                        value={formData.quantityAvailable}
+                        onChange={(e) => updateFormData('quantityAvailable', parseInt(e.target.value) || 1)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        How many copies of this book do you have available?
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}

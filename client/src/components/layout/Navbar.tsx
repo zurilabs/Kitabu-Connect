@@ -9,7 +9,8 @@ import {
   ShoppingCart,
   LogOut,
   Heart,
-  ArrowLeftRight
+  ArrowLeftRight,
+  MessageSquare
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -70,6 +71,11 @@ export function Navbar() {
           <Link href="/swaps">
             <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/swaps') ? 'text-primary' : 'text-muted-foreground'}`}>
               Swaps
+            </span>
+          </Link>
+          <Link href="/conversations">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/conversations') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Messages
             </span>
           </Link>
           <Link href="/favorites">
@@ -177,9 +183,20 @@ export function Navbar() {
                     Marketplace
                   </Link>
                   {user && (
-                    <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                      Dashboard
-                    </Link>
+                    <>
+                      <Link href="/swaps" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Swaps
+                      </Link>
+                      <Link href="/conversations" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Messages
+                      </Link>
+                      <Link href="/favorites" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Favorites
+                      </Link>
+                      <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Dashboard
+                      </Link>
+                    </>
                   )}
                   <Link href="/sell" className="py-2 hover:text-primary" onClick={(e) => {
                     handleSellClick(e);
