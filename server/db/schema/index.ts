@@ -274,6 +274,11 @@ export const swapRequests = mysqlTable("swap_requests", {
     .references(() => bookListings.id, { onDelete: "cascade" }),
 
   // What book(s) the requester is offering
+  // If the user selects an existing swap listing, this will be populated
+  offeredListingId: int("offered_listing_id")
+    .references(() => bookListings.id, { onDelete: "set null" }),
+
+  // If the user manually enters book details (no existing listing)
   offeredBookTitle: varchar("offered_book_title", { length: 500 }).notNull(),
   offeredBookAuthor: varchar("offered_book_author", { length: 255 }),
   offeredBookCondition: varchar("offered_book_condition", { length: 20 }).notNull(),
@@ -761,14 +766,30 @@ export const createDisputeSchema = z.object({
 // Swap Request Schemas
 export const createSwapRequestSchema = z.object({
   requestedListingId: z.number(),
-  offeredBookTitle: z.string().min(3, "Book title is required"),
+
+  // Option 1: User selects an existing swap listing they own
+  offeredListingId: z.number().optional(),
+
+  // Option 2: User manually enters book details (if no existing listing)
+  offeredBookTitle: z.string().min(3, "Book title is required").optional(),
   offeredBookAuthor: z.string().optional(),
-  offeredBookCondition: z.enum(["New", "Like New", "Good", "Fair"]),
+  offeredBookCondition: z.enum(["New", "Like New", "Good", "Fair"]).optional(),
   offeredBookDescription: z.string().optional(),
   offeredBookPhotoUrl: z.string().optional(),
+
   message: z.string().optional(),
   deliveryMethod: z.enum(["meetup", "delivery"]).default("meetup"),
   meetupLocation: z.string().optional(),
+}).refine((data) => {
+  // Either offeredListingId OR manual book details must be provided
+  if (data.offeredListingId) {
+    return true; // Has existing listing
+  }
+  // If no existing listing, title and condition are required
+  return data.offeredBookTitle && data.offeredBookCondition;
+}, {
+  message: "Either select an existing listing or provide book title and condition",
+  path: ["offeredBookTitle"],
 });
 
 export const updateSwapRequestSchema = z.object({

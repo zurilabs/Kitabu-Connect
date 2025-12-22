@@ -1,10 +1,45 @@
 import { Router } from "express";
 import { swapRequestService } from "../services/swapRequest.service";
+import { bookListingService } from "../services/bookListing.service";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { createSwapRequestSchema, updateSwapRequestSchema } from "../db/schema";
 import type { Request, Response } from "express";
 
 const router = Router();
+
+/**
+ * GET /api/swaps/search-listings
+ * Search for existing swap listings based on the book the user wants to offer
+ * Query params: title, author, subject, classGrade, condition
+ */
+router.get("/search-listings", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { title, author, subject, classGrade, condition, schoolId } = req.query;
+
+    const result = await bookListingService.searchSwapListings({
+      title: title as string | undefined,
+      author: author as string | undefined,
+      subject: subject as string | undefined,
+      classGrade: classGrade as string | undefined,
+      condition: condition as string | undefined,
+      schoolId: schoolId as string | undefined,
+      excludeUserId: userId, // Don't show user's own listings
+    });
+
+    if (!result.success) {
+      return res.status(500).json({ message: "Failed to search swap listings" });
+    }
+
+    return res.json({
+      listings: result.listings,
+      count: result.listings?.length || 0,
+    });
+  } catch (error) {
+    console.error("[Swaps API] Search swap listings error:", error);
+    return res.status(500).json({ message: "Failed to search swap listings" });
+  }
+});
 
 /**
  * POST /api/swaps

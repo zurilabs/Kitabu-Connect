@@ -317,6 +317,95 @@ class BookListingService {
       throw new Error("Failed to increment views");
     }
   }
+
+  /**
+   * Search for swap listings based on book criteria
+   * This allows users to find existing swap listings that match what they want to offer
+   */
+  async searchSwapListings(filters?: {
+    title?: string;
+    author?: string;
+    subject?: string;
+    classGrade?: string;
+    condition?: string;
+    schoolId?: string;
+    excludeUserId?: string; // Exclude current user's listings
+  }) {
+    try {
+      // Join with users table to get seller info
+      const listingsWithSellers = await db
+        .select({
+          listing: bookListings,
+          seller: {
+            id: users.id,
+            fullName: users.fullName,
+            schoolId: users.schoolId,
+            schoolName: users.schoolName,
+          }
+        })
+        .from(bookListings)
+        .innerJoin(users, eq(bookListings.sellerId, users.id))
+        .where(
+          and(
+            eq(bookListings.listingStatus, "active"),
+            eq(bookListings.listingType, "swap")
+          )
+        )
+        .orderBy(desc(bookListings.createdAt));
+
+      // Apply filters
+      let filteredListings = listingsWithSellers;
+
+      if (filters) {
+        filteredListings = listingsWithSellers.filter(({ listing, seller }) => {
+          // Exclude current user's listings
+          if (filters.excludeUserId && seller.id === filters.excludeUserId) return false;
+
+          // Title search (case-insensitive, partial match)
+          if (filters.title && !listing.title.toLowerCase().includes(filters.title.toLowerCase())) return false;
+
+          // Author search (case-insensitive, partial match)
+          if (filters.author && listing.author && !listing.author.toLowerCase().includes(filters.author.toLowerCase())) return false;
+
+          // Exact matches for these fields
+          if (filters.subject && listing.subject !== filters.subject) return false;
+          if (filters.classGrade && listing.classGrade !== filters.classGrade) return false;
+          if (filters.condition && listing.condition !== filters.condition) return false;
+
+          // School filter - prioritize same school
+          if (filters.schoolId && seller.schoolId !== filters.schoolId) return false;
+
+          return true;
+        });
+      }
+
+      // Fetch photos for each listing
+      const listingsWithPhotos = await Promise.all(
+        filteredListings.map(async ({ listing, seller }) => {
+          const photos = await db
+            .select()
+            .from(bookPhotos)
+            .where(eq(bookPhotos.listingId, listing.id))
+            .orderBy(bookPhotos.displayOrder);
+
+          return {
+            ...listing,
+            photos,
+            seller: {
+              id: seller.id,
+              fullName: seller.fullName,
+              schoolName: seller.schoolName,
+            }
+          };
+        })
+      );
+
+      return { success: true, listings: listingsWithPhotos };
+    } catch (error) {
+      console.error("Error searching swap listings:", error);
+      throw new Error("Failed to search swap listings");
+    }
+  }
 }
 
 export const bookListingService = new BookListingService();
