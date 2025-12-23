@@ -15,7 +15,10 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx server/db/seeders/seed.ts",
-    "db": "npm run db:generate && npm run db:migrate"
+    "db": "npm run db:generate && npm run db:migrate",
+    "seed:stress-test": "tsx server/db/seeders/stress-test/run-stress-test.ts",
+    "seed:stress-test:clean": "tsx server/db/seeders/stress-test/cleanup.ts",
+    "seed:stress-test:verify": "tsx server/db/seeders/stress-test/verify-results.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

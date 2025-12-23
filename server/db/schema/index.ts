@@ -1245,7 +1245,7 @@ export const bookConditionReports = mysqlTable(
     cycleId: varchar("cycle_id", { length: 36 })
       .notNull()
       .references(() => swapCycles.id, { onDelete: "cascade" }),
-    participantId: varchar("participant_id", { length: 36 })
+    participantId: int("participant_id")
       .notNull()
       .references(() => cycleParticipants.id, { onDelete: "cascade" }),
     reporterId: varchar("reporter_id", { length: 36 })

@@ -10,12 +10,12 @@ async function runSeed() {
   console.log("🌱 Seeding database...");
 
   await seedSchools();
-  await seedUsers();
-  await seedSubjects();
-  await seedClassGrades();
-  await seedPublishers();
-  await seedBookListings();
-  await seedBookPhotos();
+  // await seedUsers();
+  // await seedSubjects();
+  // await seedClassGrades();
+  // await seedPublishers();
+  // await seedBookListings();
+  // await seedBookPhotos();
 
   console.log("✅ Seeding completed");
   process.exit(0);
