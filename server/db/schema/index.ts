@@ -109,18 +109,39 @@ export const schools = mysqlTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
 
-    name: text("name").notNull(),
-    location: text("location"),
+    // Kenya Ministry of Education fields
+    code: int("code"), // Official school code
+    schoolName: varchar("school_name", { length: 255 }).notNull(), // School name
+    level: varchar("level", { length: 50 }), // Primary, Secondary, etc.
+    status: varchar("status", { length: 50 }), // Public, Private
 
-    latitude: decimal("latitude", { precision: 10, scale: 7 }),
-    longitude: decimal("longitude", { precision: 10, scale: 7 }),
+    // Location hierarchy (Kenya administrative structure)
+    county: varchar("county", { length: 100 }),
+    district: varchar("district", { length: 100 }),
+    zone: varchar("zone", { length: 100 }),
+    subCounty: varchar("sub_county", { length: 100 }),
+    ward: varchar("ward", { length: 100 }),
 
+    // Coordinates
+    xCoord: decimal("x_coord", { precision: 10, scale: 7 }), // Longitude
+    yCoord: decimal("y_coord", { precision: 10, scale: 7 }), // Latitude
+
+    // Metadata
+    source: varchar("source", { length: 255 }), // Data source
     createdAt: timestamp("created_at")
       .notNull()
       .defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (t) => ({
-    nameIdx: index("idx_schools_name").on(t.name),
+    schoolNameIdx: index("idx_schools_name").on(t.schoolName),
+    countyIdx: index("idx_schools_county").on(t.county),
+    levelIdx: index("idx_schools_level").on(t.level),
+    statusIdx: index("idx_schools_status").on(t.status),
+    codeIdx: index("idx_schools_code").on(t.code),
   })
 );
 
@@ -211,9 +232,19 @@ export const bookListings = mysqlTable("book_listings", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
 
-  soldAt: datetime("sold_at"), 
+  soldAt: datetime("sold_at"),
 expiresAt: datetime("expires_at"),
-});
+},
+(t) => ({
+  sellerIdx: index("idx_book_listings_seller").on(t.sellerId),
+  statusIdx: index("idx_book_listings_status").on(t.listingStatus),
+  typeIdx: index("idx_book_listings_type").on(t.listingType),
+  createdAtIdx: index("idx_book_listings_created_at").on(t.createdAt),
+  statusCreatedIdx: index("idx_book_listings_status_created").on(t.listingStatus, t.createdAt),
+  subjectIdx: index("idx_book_listings_subject").on(t.subject),
+  gradeIdx: index("idx_book_listings_grade").on(t.classGrade),
+})
+);
 
 /* ================================
    BOOK PHOTOS
@@ -230,7 +261,11 @@ export const bookPhotos = mysqlTable("book_photos", {
   displayOrder: int("display_order").default(0),
 
   uploadedAt: timestamp("uploaded_at").defaultNow(),
-});
+},
+(t) => ({
+  listingIdx: index("idx_book_photos_listing").on(t.listingId),
+})
+);
 
 /* ================================
    FAVORITES
@@ -274,6 +309,11 @@ export const swapRequests = mysqlTable("swap_requests", {
     .references(() => bookListings.id, { onDelete: "cascade" }),
 
   // What book(s) the requester is offering
+  // If the user selects an existing swap listing, this will be populated
+  offeredListingId: int("offered_listing_id")
+    .references(() => bookListings.id, { onDelete: "set null" }),
+
+  // If the user manually enters book details (no existing listing)
   offeredBookTitle: varchar("offered_book_title", { length: 500 }).notNull(),
   offeredBookAuthor: varchar("offered_book_author", { length: 255 }),
   offeredBookCondition: varchar("offered_book_condition", { length: 20 }).notNull(),
@@ -306,9 +346,9 @@ export const swapRequests = mysqlTable("swap_requests", {
   // Timestamps
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
-  acceptedAt: timestamp("accepted_at"),
-  completedAt: timestamp("completed_at"),
-  cancelledAt: timestamp("cancelled_at"),
+  acceptedAt: datetime("accepted_at"),
+  completedAt: datetime("completed_at"),
+  cancelledAt: datetime("cancelled_at"),
 }, (table) => ({
   requesterIdx: index("idx_swap_requests_requester").on(table.requesterId),
   ownerIdx: index("idx_swap_requests_owner").on(table.ownerId),
@@ -431,7 +471,7 @@ export const transactions = mysqlTable("transactions", {
 
   // Timestamps
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  completedAt: timestamp("completed_at"),
+  completedAt: datetime("completed_at"),
 });
 
 /* ================================
@@ -469,12 +509,12 @@ export const escrowAccounts = mysqlTable("escrow_accounts", {
   releaseAt: timestamp("release_at").notNull(), // Calculated: createdAt + holdPeriodDays
 
   // Actual release/refund
-  releasedAt: timestamp("released_at"),
-  refundedAt: timestamp("refunded_at"),
+  releasedAt: datetime("released_at"),
+  refundedAt: datetime("refunded_at"),
 
   // Dispute information
   disputeReason: text("dispute_reason"),
-  disputeResolvedAt: timestamp("dispute_resolved_at"),
+  disputeResolvedAt: datetime("dispute_resolved_at"),
 
   // Metadata
   notes: text("notes"),
@@ -556,10 +596,10 @@ export const orders = mysqlTable("orders", {
 
   // Timestamps
   paidAt: timestamp("paid_at"),
-  confirmedAt: timestamp("confirmed_at"),
-  deliveredAt: timestamp("delivered_at"),
-  completedAt: timestamp("completed_at"),
-  cancelledAt: timestamp("cancelled_at"),
+  confirmedAt: datetime("confirmed_at"),
+  deliveredAt: datetime("delivered_at"),
+  completedAt: datetime("completed_at"),
+  cancelledAt: datetime("cancelled_at"),
 
   // Notes
   buyerNotes: text("buyer_notes"),
@@ -569,6 +609,147 @@ export const orders = mysqlTable("orders", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
 });
+
+/* ================================
+   SWAP ORDERS (Fiverr-style order management)
+================================ */
+export const swapOrders = mysqlTable("swap_orders", {
+  id: int("id").primaryKey().autoincrement(),
+
+  // Order reference
+  orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
+
+  // Related swap request
+  swapRequestId: int("swap_request_id")
+    .notNull()
+    .references(() => swapRequests.id, { onDelete: "cascade" }),
+
+  // Parties involved
+  requesterId: varchar("requester_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  ownerId: varchar("owner_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Books being swapped
+  requestedListingId: int("requested_listing_id")
+    .notNull()
+    .references(() => bookListings.id, { onDelete: "cascade" }),
+
+  offeredListingId: int("offered_listing_id")
+    .references(() => bookListings.id, { onDelete: "set null" }),
+
+  // Order status: 'active', 'requirements_gathering', 'in_progress', 'delivered', 'revision_requested', 'completed', 'cancelled', 'disputed'
+  status: varchar("status", { length: 30 }).notNull().default("requirements_gathering"),
+
+  // Milestones/Requirements (like Fiverr's order requirements)
+  requirementsSubmitted: boolean("requirements_submitted").default(false),
+  requirementsApproved: boolean("requirements_approved").default(false),
+
+  // Delivery details
+  deliveryMethod: varchar("delivery_method", { length: 50 }).default("meetup"),
+  meetupLocation: text("meetup_location"),
+  meetupTime: timestamp("meetup_time"),
+
+  // Tracking
+  requesterShipped: boolean("requester_shipped").default(false),
+  ownerShipped: boolean("owner_shipped").default(false),
+
+  // Delivery confirmation (both parties must confirm)
+  requesterReceivedBook: boolean("requester_received_book").default(false),
+  ownerReceivedBook: boolean("owner_received_book").default(false),
+
+  // Escrow/Commitment (small fee to ensure commitment)
+  commitmentFee: decimal("commitment_fee", { precision: 10, scale: 2 }).default("50.00"),
+  escrowId: int("escrow_id").references(() => escrowAccounts.id),
+
+  // Payment tracking for commitment fees
+  requesterPaidFee: boolean("requester_paid_fee").default(false),
+  ownerPaidFee: boolean("owner_paid_fee").default(false),
+  requesterPaymentReference: varchar("requester_payment_reference", { length: 255 }),
+  ownerPaymentReference: varchar("owner_payment_reference", { length: 255 }),
+
+  // Revision tracking (like Fiverr)
+  revisionsAllowed: int("revisions_allowed").default(1),
+  revisionsUsed: int("revisions_used").default(0),
+
+  // Delivery deadline
+  deliveryDeadline: datetime("delivery_deadline"),
+
+  // Late delivery tracking
+  isLate: boolean("is_late").default(false),
+
+  // Auto-completion (like Fiverr - auto-completes after 3 days if no action)
+  autoCompleteAt: datetime("auto_complete_at"),
+
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  startedAt: datetime("started_at"),
+  deliveredAt: datetime("delivered_at"),
+  completedAt: datetime("completed_at"),
+  cancelledAt: datetime("cancelled_at"),
+
+  // Cancellation/Dispute
+  cancellationReason: text("cancellation_reason"),
+  cancelledBy: varchar("cancelled_by", { length: 36 }),
+  disputeReason: text("dispute_reason"),
+}, (table) => ({
+  swapRequestIdx: index("idx_swap_orders_swap_request").on(table.swapRequestId),
+  requesterIdx: index("idx_swap_orders_requester").on(table.requesterId),
+  ownerIdx: index("idx_swap_orders_owner").on(table.ownerId),
+  statusIdx: index("idx_swap_orders_status").on(table.status),
+}));
+
+/* ================================
+   MESSAGES (Order-based messaging like Fiverr)
+================================ */
+export const messages = mysqlTable("messages", {
+  id: int("id").primaryKey().autoincrement(),
+
+  // Related swap order
+  swapOrderId: int("swap_order_id")
+    .notNull()
+    .references(() => swapOrders.id, { onDelete: "cascade" }),
+
+  // Sender
+  senderId: varchar("sender_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Receiver
+  receiverId: varchar("receiver_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Message content
+  content: text("content").notNull(),
+
+  // Message type: 'text', 'image', 'file', 'system', 'offer', 'requirement', 'delivery'
+  messageType: varchar("message_type", { length: 20 }).notNull().default("text"),
+
+  // Attachments
+  attachmentUrl: text("attachment_url"),
+  attachmentType: varchar("attachment_type", { length: 50 }),
+
+  // System messages (automated messages like "Order started", "Delivered", etc.)
+  isSystemMessage: boolean("is_system_message").default(false),
+
+  // Read status
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+
+  // Metadata for special message types (JSON)
+  metadata: text("metadata"),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  orderIdx: index("idx_messages_swap_order").on(table.swapOrderId),
+  senderIdx: index("idx_messages_sender").on(table.senderId),
+  receiverIdx: index("idx_messages_receiver").on(table.receiverId),
+}));
 
 /* ================================
    PAYSTACK TRANSFER RECIPIENTS
@@ -761,14 +942,30 @@ export const createDisputeSchema = z.object({
 // Swap Request Schemas
 export const createSwapRequestSchema = z.object({
   requestedListingId: z.number(),
-  offeredBookTitle: z.string().min(3, "Book title is required"),
+
+  // Option 1: User selects an existing swap listing they own
+  offeredListingId: z.number().optional(),
+
+  // Option 2: User manually enters book details (if no existing listing)
+  offeredBookTitle: z.string().min(3, "Book title is required").optional(),
   offeredBookAuthor: z.string().optional(),
-  offeredBookCondition: z.enum(["New", "Like New", "Good", "Fair"]),
+  offeredBookCondition: z.enum(["New", "Like New", "Good", "Fair"]).optional(),
   offeredBookDescription: z.string().optional(),
   offeredBookPhotoUrl: z.string().optional(),
+
   message: z.string().optional(),
   deliveryMethod: z.enum(["meetup", "delivery"]).default("meetup"),
   meetupLocation: z.string().optional(),
+}).refine((data) => {
+  // Either offeredListingId OR manual book details must be provided
+  if (data.offeredListingId) {
+    return true; // Has existing listing
+  }
+  // If no existing listing, title and condition are required
+  return data.offeredBookTitle && data.offeredBookCondition;
+}, {
+  message: "Either select an existing listing or provide book title and condition",
+  path: ["offeredBookTitle"],
 });
 
 export const updateSwapRequestSchema = z.object({
@@ -778,6 +975,408 @@ export const updateSwapRequestSchema = z.object({
   requesterConfirmed: z.boolean().optional(),
   ownerConfirmed: z.boolean().optional(),
 });
+
+// Swap Order Schemas
+export const createSwapOrderSchema = z.object({
+  swapRequestId: z.number(),
+  deliveryMethod: z.enum(["meetup", "delivery", "shipping"]).default("meetup"),
+  meetupLocation: z.string().optional(),
+  meetupTime: z.string().optional(),
+});
+
+export const updateSwapOrderSchema = z.object({
+  status: z.enum([
+    "requirements_gathering",
+    "in_progress",
+    "delivered",
+    "revision_requested",
+    "completed",
+    "cancelled",
+    "disputed"
+  ]).optional(),
+  requirementsSubmitted: z.boolean().optional(),
+  requirementsApproved: z.boolean().optional(),
+  deliveryMethod: z.string().optional(),
+  meetupLocation: z.string().optional(),
+  meetupTime: z.string().optional(),
+  requesterShipped: z.boolean().optional(),
+  ownerShipped: z.boolean().optional(),
+  requesterReceivedBook: z.boolean().optional(),
+  ownerReceivedBook: z.boolean().optional(),
+  cancellationReason: z.string().optional(),
+  disputeReason: z.string().optional(),
+});
+
+export const submitRequirementsSchema = z.object({
+  meetupLocation: z.string().min(5, "Please provide a valid meetup location"),
+  meetupTime: z.string(),
+  additionalNotes: z.string().optional(),
+});
+
+// Message Schemas
+export const sendMessageSchema = z.object({
+  swapOrderId: z.number(),
+  content: z.string().min(1, "Message cannot be empty"),
+  messageType: z.enum(["text", "image", "file"]).default("text"),
+  attachmentUrl: z.string().optional(),
+  attachmentType: z.string().optional(),
+});
+
+export const markMessagesAsReadSchema = z.object({
+  swapOrderId: z.number(),
+});
+
+/* ================================
+   SWAP CYCLES (Multilateral Swapping)
+================================ */
+export const swapCycles = mysqlTable(
+  "swap_cycles",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+
+    cycleType: varchar("cycle_type", { length: 20 }).notNull(), // '2-way', '3-way', '4-way', '5-way'
+    status: varchar("status", { length: 30 }).notNull().default("pending_confirmation"), // 'pending_confirmation', 'confirmed', 'active', 'completed', 'cancelled', 'timeout'
+    priorityScore: decimal("priority_score", { precision: 5, scale: 2 }).notNull(), // Calculated score (0-100)
+
+    // Geographic clustering info
+    primaryCounty: varchar("primary_county", { length: 100 }),
+    isSameCounty: boolean("is_same_county").default(false),
+    isSameZone: boolean("is_same_zone").default(false),
+
+    // Cost breakdown
+    totalLogisticsCost: decimal("total_logistics_cost", { precision: 10, scale: 2 }),
+    avgCostPerParticipant: decimal("avg_cost_per_participant", { precision: 10, scale: 2 }),
+
+    // Distance metrics
+    maxDistanceKm: decimal("max_distance_km", { precision: 10, scale: 2 }),
+    avgDistanceKm: decimal("avg_distance_km", { precision: 10, scale: 2 }),
+
+    // Timeouts and deadlines
+    confirmationDeadline: datetime("confirmation_deadline"), // 48 hours from creation
+    completionDeadline: datetime("completion_deadline"), // 7 days from confirmation
+
+    // Tracking
+    confirmedParticipantsCount: int("confirmed_participants_count").default(0),
+    totalParticipantsCount: int("total_participants_count").notNull(),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    confirmedAt: datetime("confirmed_at"),
+    completedAt: datetime("completed_at"),
+    cancelledAt: datetime("cancelled_at"),
+  },
+  (t) => ({
+    statusIdx: index("idx_swap_cycles_status").on(t.status),
+    countyIdx: index("idx_swap_cycles_county").on(t.primaryCounty),
+    priorityIdx: index("idx_swap_cycles_priority").on(t.priorityScore),
+    confirmationDeadlineIdx: index("idx_swap_cycles_confirmation_deadline").on(t.confirmationDeadline),
+  })
+);
+
+/* ================================
+   CYCLE PARTICIPANTS
+================================ */
+export const cycleParticipants = mysqlTable(
+  "cycle_participants",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    cycleId: varchar("cycle_id", { length: 36 })
+      .notNull()
+      .references(() => swapCycles.id, { onDelete: "cascade" }),
+
+    // User info
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userSchoolId: varchar("user_school_id", { length: 36 })
+      .notNull()
+      .references(() => schools.id),
+
+    // Position in cycle
+    positionInCycle: int("position_in_cycle").notNull(), // 0, 1, 2, 3, 4 (for visualization)
+
+    // Books involved
+    bookToGiveId: int("book_to_give_id")
+      .notNull()
+      .references(() => bookListings.id),
+    bookToReceiveId: int("book_to_receive_id")
+      .notNull()
+      .references(() => bookListings.id),
+
+    // Geographic info (denormalized for performance)
+    schoolCounty: varchar("school_county", { length: 100 }),
+    schoolZone: varchar("school_zone", { length: 100 }),
+    schoolName: varchar("school_name", { length: 255 }),
+    schoolCoordinatesX: decimal("school_coordinates_x", { precision: 10, scale: 7 }),
+    schoolCoordinatesY: decimal("school_coordinates_y", { precision: 10, scale: 7 }),
+
+    // Drop-off/Collection tracking
+    assignedDropPointId: int("assigned_drop_point_id"),
+    assignedCollectionPointId: int("assigned_collection_point_id"),
+
+    logisticsCost: decimal("logistics_cost", { precision: 10, scale: 2 }).default("0.00"),
+
+    // Status tracking
+    status: varchar("status", { length: 30 }).default("pending"), // 'pending', 'confirmed', 'book_dropped', 'book_collected', 'completed'
+    confirmed: boolean("confirmed").default(false),
+    confirmedAt: datetime("confirmed_at"),
+
+    bookDropped: boolean("book_dropped").default(false),
+    droppedAt: datetime("dropped_at"),
+    dropVerificationPhotoUrl: text("drop_verification_photo_url"),
+
+    bookCollected: boolean("book_collected").default(false),
+    collectedAt: datetime("collected_at"),
+    collectionVerificationPhotoUrl: text("collection_verification_photo_url"),
+    collectionQrCode: varchar("collection_qr_code", { length: 100 }), // Unique QR for collection
+
+    // Quality verification
+    conditionVerified: boolean("condition_verified").default(false),
+    conditionDispute: boolean("condition_dispute").default(false),
+    disputeReason: text("dispute_reason"),
+  },
+  (t) => ({
+    cycleIdx: index("idx_cycle_participants_cycle").on(t.cycleId),
+    userIdx: index("idx_cycle_participants_user").on(t.userId),
+    statusIdx: index("idx_cycle_participants_status").on(t.status),
+    schoolIdx: index("idx_cycle_participants_school").on(t.userSchoolId),
+  })
+);
+
+/* ================================
+   DROP POINTS
+================================ */
+export const dropPoints = mysqlTable(
+  "drop_points",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    cycleId: varchar("cycle_id", { length: 36 })
+      .notNull()
+      .references(() => swapCycles.id, { onDelete: "cascade" }),
+
+    // Location info
+    schoolId: varchar("school_id", { length: 36 }).references(() => schools.id),
+    schoolName: varchar("school_name", { length: 255 }),
+
+    // Address details
+    county: varchar("county", { length: 100 }),
+    district: varchar("district", { length: 100 }),
+    zone: varchar("zone", { length: 100 }),
+    addressLine: text("address_line"),
+
+    coordinatesX: decimal("coordinates_x", { precision: 10, scale: 7 }),
+    coordinatesY: decimal("coordinates_y", { precision: 10, scale: 7 }),
+
+    // Type of drop point
+    pointType: varchar("point_type", { length: 30 }), // 'school_hub', 'central_location', 'courier_pickup'
+
+    // Participants using this drop point
+    servingParticipantIds: text("serving_participant_ids"), // JSON array of user IDs
+
+    // Operating details
+    operatingHours: varchar("operating_hours", { length: 100 }), // "Mon-Fri 8AM-4PM"
+    contactPerson: varchar("contact_person", { length: 255 }),
+    contactPhone: varchar("contact_phone", { length: 20 }),
+
+    // Status
+    active: boolean("active").default(true),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("idx_drop_points_cycle").on(t.cycleId),
+    schoolIdx: index("idx_drop_points_school").on(t.schoolId),
+    countyIdx: index("idx_drop_points_county").on(t.county),
+  })
+);
+
+/* ================================
+   USER RELIABILITY SCORES
+================================ */
+export const userReliabilityScores = mysqlTable(
+  "user_reliability_scores",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // Overall score (0-100)
+    reliabilityScore: decimal("reliability_score", { precision: 5, scale: 2 }).default("50.00"),
+
+    // Statistics
+    totalSwapsCompleted: int("total_swaps_completed").default(0),
+    totalSwapsCancelled: int("total_swaps_cancelled").default(0),
+    totalSwapsDisputed: int("total_swaps_disputed").default(0),
+
+    // Cycle-specific stats
+    totalCyclesJoined: int("total_cycles_joined").default(0),
+    totalCyclesCompleted: int("total_cycles_completed").default(0),
+    totalCyclesTimeout: int("total_cycles_timeout").default(0),
+
+    // Timing metrics
+    avgConfirmationTimeHours: decimal("avg_confirmation_time_hours", { precision: 6, scale: 2 }),
+    avgDropOffTimeHours: decimal("avg_drop_off_time_hours", { precision: 6, scale: 2 }),
+
+    // Quality metrics
+    onTimeDeliveryRate: decimal("on_time_delivery_rate", { precision: 5, scale: 2 }),
+    bookConditionAccuracyRate: decimal("book_condition_accuracy_rate", { precision: 5, scale: 2 }),
+
+    // Achievements
+    badges: text("badges"), // JSON array of earned badges
+
+    // Penalties
+    penaltyPoints: int("penalty_points").default(0),
+    isSuspended: boolean("is_suspended").default(false),
+    suspensionReason: text("suspension_reason"),
+    suspendedUntil: datetime("suspended_until"),
+
+    lastUpdated: timestamp("last_updated")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    reliabilityScoreIdx: index("idx_reliability_score").on(t.reliabilityScore),
+    userIdx: index("idx_reliability_user").on(t.userId),
+  })
+);
+
+/* ================================
+   QUALITY CONTROL TABLES
+================================ */
+
+/**
+ * Book Condition Reports
+ * Track condition assessments at drop-off and collection
+ */
+export const bookConditionReports = mysqlTable(
+  "book_condition_reports",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    cycleId: varchar("cycle_id", { length: 36 })
+      .notNull()
+      .references(() => swapCycles.id, { onDelete: "cascade" }),
+    participantId: int("participant_id")
+      .notNull()
+      .references(() => cycleParticipants.id, { onDelete: "cascade" }),
+    reporterId: varchar("reporter_id", { length: 36 })
+      .notNull()
+      .references(() => users.id),
+    reportType: varchar("report_type", { length: 20 }).notNull(), // 'drop_off' | 'collection'
+
+    // Book details
+    bookId: int("book_id").notNull(),
+    bookTitle: varchar("book_title", { length: 255 }).notNull(),
+
+    // Condition assessment
+    expectedCondition: varchar("expected_condition", { length: 50 }).notNull(),
+    actualCondition: varchar("actual_condition", { length: 50 }).notNull(),
+    conditionMatch: boolean("condition_match").notNull(),
+
+    // Detailed assessment
+    hasMissingPages: boolean("has_missing_pages").default(false),
+    hasWaterDamage: boolean("has_water_damage").default(false),
+    hasWriting: boolean("has_writing").default(false),
+    hasTornPages: boolean("has_torn_pages").default(false),
+    coverCondition: varchar("cover_condition", { length: 50 }),
+
+    // Photos
+    photoUrls: text("photo_urls"), // JSON array
+
+    // Additional notes
+    notes: text("notes"),
+    rating: int("rating"), // 1-5 stars
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("idx_condition_reports_cycle").on(t.cycleId),
+    participantIdx: index("idx_condition_reports_participant").on(t.participantId),
+  })
+);
+
+/**
+ * Cycle Disputes
+ * Handle disagreements and issues during swaps
+ */
+export const cycleDisputes = mysqlTable(
+  "cycle_disputes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    cycleId: varchar("cycle_id", { length: 36 })
+      .notNull()
+      .references(() => swapCycles.id, { onDelete: "cascade" }),
+    reporterId: varchar("reporter_id", { length: 36 })
+      .notNull()
+      .references(() => users.id),
+    respondentId: varchar("respondent_id", { length: 36 })
+      .references(() => users.id),
+
+    // Dispute details
+    disputeType: varchar("dispute_type", { length: 50 }).notNull(), // 'book_condition', 'missing_book', 'wrong_book', 'damage', 'other'
+    status: varchar("status", { length: 30 }).notNull().default("open"), // 'open', 'investigating', 'resolved', 'escalated', 'closed'
+    priority: varchar("priority", { length: 20 }).default("medium"), // 'low', 'medium', 'high', 'urgent'
+
+    // Description
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description").notNull(),
+
+    // Evidence
+    evidencePhotoUrls: text("evidence_photo_urls"), // JSON array
+    conditionReportId: varchar("condition_report_id", { length: 36 })
+      .references(() => bookConditionReports.id),
+
+    // Resolution
+    resolution: text("resolution"),
+    resolutionType: varchar("resolution_type", { length: 50 }), // 'refund', 'replacement', 'penalty', 'no_action', 'escalated'
+    resolvedBy: varchar("resolved_by", { length: 36 })
+      .references(() => users.id),
+    resolvedAt: datetime("resolved_at"),
+
+    // Admin notes
+    adminNotes: text("admin_notes"),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    cycleIdx: index("idx_disputes_cycle").on(t.cycleId),
+    statusIdx: index("idx_disputes_status").on(t.status),
+    reporterIdx: index("idx_disputes_reporter").on(t.reporterId),
+  })
+);
+
+/**
+ * Dispute Messages
+ * Communication thread for dispute resolution
+ */
+export const disputeMessages = mysqlTable(
+  "dispute_messages",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    disputeId: varchar("dispute_id", { length: 36 })
+      .notNull()
+      .references(() => cycleDisputes.id, { onDelete: "cascade" }),
+    senderId: varchar("sender_id", { length: 36 })
+      .notNull()
+      .references(() => users.id),
+
+    message: text("message").notNull(),
+    isAdminMessage: boolean("is_admin_message").default(false),
+    attachmentUrls: text("attachment_urls"), // JSON array
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    disputeIdx: index("idx_dispute_messages_dispute").on(t.disputeId),
+  })
+);
 
 /* ================================
    TYPES
@@ -810,3 +1409,17 @@ export type SwapRequest = typeof swapRequests.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type CreateSwapRequestInput = z.infer<typeof createSwapRequestSchema>;
 export type UpdateSwapRequestInput = z.infer<typeof updateSwapRequestSchema>;
+
+// Swap Order & Message Types
+export type SwapOrder = typeof swapOrders.$inferSelect;
+export type Message = typeof messages.$inferSelect;
+export type CreateSwapOrderInput = z.infer<typeof createSwapOrderSchema>;
+export type UpdateSwapOrderInput = z.infer<typeof updateSwapOrderSchema>;
+export type SubmitRequirementsInput = z.infer<typeof submitRequirementsSchema>;
+export type SendMessageInput = z.infer<typeof sendMessageSchema>;
+
+// Swap Cycle Types
+export type SwapCycle = typeof swapCycles.$inferSelect;
+export type CycleParticipant = typeof cycleParticipants.$inferSelect;
+export type DropPoint = typeof dropPoints.$inferSelect;
+export type UserReliabilityScore = typeof userReliabilityScores.$inferSelect;

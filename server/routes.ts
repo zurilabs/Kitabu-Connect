@@ -22,7 +22,10 @@ import uploadRoutes from "./routes/upload";
 import walletRoutes from "./routes/wallet";
 import favoritesRoutes from "./routes/favorites";
 import swapRoutes from "./routes/swaps";
+import swapOrderRoutes from "./routes/swapOrders";
 import notificationRoutes from "./routes/notifications";
+import cyclesRoutes from "./routes/cycles";
+import gamificationRoutes from "./routes/gamification";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -65,9 +68,24 @@ export async function registerRoutes(
   app.use("/api/swaps", swapRoutes);
 
   // ============================================
+  // SWAP ORDER & MESSAGING ROUTES
+  // ============================================
+  app.use("/api/swap-orders", swapOrderRoutes);
+
+  // ============================================
   // NOTIFICATION ROUTES
   // ============================================
   app.use("/api/notifications", notificationRoutes);
+
+  // ============================================
+  // SWAP CYCLES ROUTES
+  // ============================================
+  app.use("/api/cycles", cyclesRoutes);
+
+  // ============================================
+  // GAMIFICATION ROUTES
+  // ============================================
+  app.use("/api/gamification", gamificationRoutes);
 
   // ============================================
   // PAYSTACK WEBHOOK
@@ -638,6 +656,7 @@ export async function registerRoutes(
         maxDistance: maxDistance ? Number(maxDistance) : undefined,
         userLatitude: currentUser?.latitude ? Number(currentUser.latitude) : undefined,
         userLongitude: currentUser?.longitude ? Number(currentUser.longitude) : undefined,
+        excludeUserId: currentUser?.id, // Exclude current user's own listings
       };
 
       const result = await bookListingService.getAllListings(filters);

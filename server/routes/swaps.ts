@@ -1,10 +1,46 @@
 import { Router } from "express";
 import { swapRequestService } from "../services/swapRequest.service";
+import { swapOrderService } from "../services/swapOrder.service";
+import { bookListingService } from "../services/bookListing.service";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { createSwapRequestSchema, updateSwapRequestSchema } from "../db/schema";
 import type { Request, Response } from "express";
 
 const router = Router();
+
+/**
+ * GET /api/swaps/search-listings
+ * Search for existing swap listings based on the book the user wants to offer
+ * Query params: title, author, subject, classGrade, condition
+ */
+router.get("/search-listings", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { title, author, subject, classGrade, condition, schoolId } = req.query;
+
+    const result = await bookListingService.searchSwapListings({
+      title: title as string | undefined,
+      author: author as string | undefined,
+      subject: subject as string | undefined,
+      classGrade: classGrade as string | undefined,
+      condition: condition as string | undefined,
+      schoolId: schoolId as string | undefined,
+      excludeUserId: userId, // Don't show user's own listings
+    });
+
+    if (!result.success) {
+      return res.status(500).json({ message: "Failed to search swap listings" });
+    }
+
+    return res.json({
+      listings: result.listings,
+      count: result.listings?.length || 0,
+    });
+  } catch (error) {
+    console.error("[Swaps API] Search swap listings error:", error);
+    return res.status(500).json({ message: "Failed to search swap listings" });
+  }
+});
 
 /**
  * POST /api/swaps
@@ -107,7 +143,8 @@ router.get("/:id", authenticateToken, async (req: Request, res: Response) => {
 
 /**
  * PUT /api/swaps/:id/accept
- * Accept a swap request
+ * Accept a swap request and create a swap order (Fiverr-style)
+ * This redirects to the messaging platform
  */
 router.put("/:id/accept", authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -120,7 +157,8 @@ router.put("/:id/accept", authenticateToken, async (req: Request, res: Response)
 
     const { meetupLocation, meetupTime } = req.body;
 
-    const result = await swapRequestService.updateSwapRequest(
+    // First, update the swap request status to accepted
+    const updateResult = await swapRequestService.updateSwapRequest(
       swapRequestId,
       userId,
       {
@@ -130,11 +168,23 @@ router.put("/:id/accept", authenticateToken, async (req: Request, res: Response)
       }
     );
 
-    if (!result.success) {
-      return res.status(400).json({ message: result.message });
+    if (!updateResult.success) {
+      return res.status(400).json({ message: updateResult.message });
     }
 
-    return res.json({ message: result.message });
+    // Create a swap order (like Fiverr creates an order when a gig is purchased)
+    const orderResult = await swapOrderService.createSwapOrder(swapRequestId);
+
+    if (!orderResult.success) {
+      return res.status(400).json({ message: orderResult.message });
+    }
+
+    // Return the swap order ID so the frontend can redirect to messaging
+    return res.json({
+      message: "Swap request accepted! Order created.",
+      swapOrderId: orderResult.swapOrder?.id,
+      redirectUrl: `/orders/${orderResult.swapOrder?.id}/messages`,
+    });
   } catch (error) {
     console.error("[Swaps API] Accept swap request error:", error);
     return res.status(500).json({ message: "Failed to accept swap request" });

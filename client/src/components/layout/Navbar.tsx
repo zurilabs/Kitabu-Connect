@@ -9,7 +9,9 @@ import {
   ShoppingCart,
   LogOut,
   Heart,
-  ArrowLeftRight
+  ArrowLeftRight,
+  MessageSquare,
+  Users
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -67,9 +69,19 @@ export function Navbar() {
       </Link>
       {user && (
         <>
+          <Link href="/dashboard">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Dashboard
+            </span>
+          </Link>
           <Link href="/swaps">
             <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/swaps') ? 'text-primary' : 'text-muted-foreground'}`}>
               Swaps
+            </span>
+          </Link>
+          <Link href="/swap-cycles">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/swap-cycles') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Multi-Way
             </span>
           </Link>
           <Link href="/favorites">
@@ -77,9 +89,9 @@ export function Navbar() {
               Favorites
             </span>
           </Link>
-          <Link href="/dashboard">
-            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground'}`}>
-              Dashboard
+          <Link href="/conversations">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/conversations') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Messages
             </span>
           </Link>
         </>
@@ -106,7 +118,7 @@ export function Navbar() {
             <NavLinks />
           </nav>
         </div>
-        
+
         <div className="flex flex-1 items-center justify-end space-x-2">
           <div className="flex items-center gap-2">
             {user && <NotificationBell />}
@@ -121,11 +133,11 @@ export function Navbar() {
                       <AvatarFallback className="bg-primary/10 text-primary">
                         {user.fullName
                           ? user.fullName
-                              .split(' ')
-                              .map((n) => n[0])
-                              .join('')
-                              .toUpperCase()
-                              .slice(0, 2)
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')
+                            .toUpperCase()
+                            .slice(0, 2)
                           : <UserIcon className="h-4 w-4" />}
                       </AvatarFallback>
                     </Avatar>
@@ -177,9 +189,23 @@ export function Navbar() {
                     Marketplace
                   </Link>
                   {user && (
-                    <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                      Dashboard
-                    </Link>
+                    <>
+                      <Link href="/swaps" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Swaps
+                      </Link>
+                      <Link href="/swap-cycles" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Multi-Way Swaps
+                      </Link>
+                      <Link href="/conversations" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Messages
+                      </Link>
+                      <Link href="/favorites" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Favorites
+                      </Link>
+                      <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Dashboard
+                      </Link>
+                    </>
                   )}
                   <Link href="/sell" className="py-2 hover:text-primary" onClick={(e) => {
                     handleSellClick(e);

@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ArrowLeftRight, Upload, Loader2 } from "lucide-react";
+import { ImageUpload } from "@/components/ui/image-upload";
+import { ArrowLeft, ArrowLeftRight, Camera, Loader2 } from "lucide-react";
 
 export default function SwapRequestForm() {
   const [, setLocation] = useLocation();
@@ -249,22 +250,16 @@ export default function SwapRequestForm() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="photo">Photo URL (Optional)</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="photo"
-                      placeholder="https://example.com/photo.jpg"
-                      value={formData.offeredBookPhotoUrl}
-                      onChange={(e) =>
-                        setFormData({ ...formData, offeredBookPhotoUrl: e.target.value })
-                      }
-                    />
-                    <Button type="button" variant="outline" size="icon">
-                      <Upload className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    You can upload a photo using the upload button or paste a URL
+                  <Label htmlFor="photo">Book Photo (Optional)</Label>
+                  <ImageUpload
+                    value={formData.offeredBookPhotoUrl}
+                    onChange={(value) =>
+                      setFormData({ ...formData, offeredBookPhotoUrl: value })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Camera className="w-3 h-3" />
+                    Upload a photo of the book you're offering to increase trust
                   </p>
                 </div>
 

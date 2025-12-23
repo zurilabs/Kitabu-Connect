@@ -3,6 +3,7 @@ import {
   swapRequests,
   bookListings,
   users,
+  swapOrders,
   type CreateSwapRequestInput,
   type UpdateSwapRequestInput,
 } from "../db/schema";
@@ -52,6 +53,64 @@ export class SwapRequestService {
         };
       }
 
+      // If user selected an existing listing, verify it belongs to them and is a swap listing
+      let offeredBookData: {
+        title: string;
+        author: string | null;
+        condition: string;
+        description: string | null;
+        photoUrl: string | null;
+      };
+
+      if (data.offeredListingId) {
+        const [offeredListing] = await db
+          .select()
+          .from(bookListings)
+          .where(eq(bookListings.id, data.offeredListingId))
+          .limit(1);
+
+        if (!offeredListing) {
+          return {
+            success: false,
+            message: "Offered book listing not found",
+          };
+        }
+
+        // Verify the offered listing belongs to the requester
+        if (offeredListing.sellerId !== requesterId) {
+          return {
+            success: false,
+            message: "You can only offer books that you own",
+          };
+        }
+
+        // Verify the offered listing is a swap listing
+        if (offeredListing.listingType !== "swap") {
+          return {
+            success: false,
+            message: "The offered book must be listed for swap",
+          };
+        }
+
+        // Use data from the existing listing
+        offeredBookData = {
+          title: offeredListing.title,
+          author: offeredListing.author || null,
+          condition: offeredListing.condition,
+          description: offeredListing.description || null,
+          photoUrl: offeredListing.primaryPhotoUrl || null,
+        };
+      } else {
+        // Use manually entered data
+        offeredBookData = {
+          title: data.offeredBookTitle!,
+          author: data.offeredBookAuthor || null,
+          condition: data.offeredBookCondition!,
+          description: data.offeredBookDescription || null,
+          photoUrl: data.offeredBookPhotoUrl || null,
+        };
+      }
+
       // Check if there's already a pending request
       const existingRequest = await db
         .select()
@@ -80,11 +139,12 @@ export class SwapRequestService {
         requesterId,
         ownerId: listing.sellerId,
         requestedListingId: data.requestedListingId,
-        offeredBookTitle: data.offeredBookTitle,
-        offeredBookAuthor: data.offeredBookAuthor || null,
-        offeredBookCondition: data.offeredBookCondition,
-        offeredBookDescription: data.offeredBookDescription || null,
-        offeredBookPhotoUrl: data.offeredBookPhotoUrl || null,
+        offeredListingId: data.offeredListingId || null,
+        offeredBookTitle: offeredBookData.title,
+        offeredBookAuthor: offeredBookData.author,
+        offeredBookCondition: offeredBookData.condition,
+        offeredBookDescription: offeredBookData.description,
+        offeredBookPhotoUrl: offeredBookData.photoUrl,
         message: data.message || null,
         deliveryMethod: data.deliveryMethod || "meetup",
         meetupLocation: data.meetupLocation || null,
@@ -105,7 +165,7 @@ export class SwapRequestService {
         userId: listing.sellerId,
         type: "swap_request",
         title: "New Swap Request!",
-        message: `${requester.fullName || "Someone"} wants to swap "${data.offeredBookTitle}" for your "${listing.title}"`,
+        message: `${requester.fullName || "Someone"} wants to swap "${offeredBookData.title}" for your "${listing.title}"`,
         relatedSwapRequestId: swapRequestId,
         relatedBookListingId: data.requestedListingId,
         actionUrl: `/swaps/${swapRequestId}`,
@@ -155,6 +215,7 @@ export class SwapRequestService {
       const incoming = await db
         .select({
           swapRequest: swapRequests,
+          swapOrderId: swapOrders.id,
           requester: {
             id: users.id,
             fullName: users.fullName,
@@ -171,6 +232,7 @@ export class SwapRequestService {
         .from(swapRequests)
         .innerJoin(users, eq(swapRequests.requesterId, users.id))
         .innerJoin(bookListings, eq(swapRequests.requestedListingId, bookListings.id))
+        .leftJoin(swapOrders, eq(swapRequests.id, swapOrders.swapRequestId))
         .where(eq(swapRequests.ownerId, userId))
         .orderBy(desc(swapRequests.createdAt));
 
@@ -178,6 +240,7 @@ export class SwapRequestService {
       const outgoingData = await db
         .select({
           swapRequest: swapRequests,
+          swapOrderId: swapOrders.id,
           owner: {
             id: users.id,
             fullName: users.fullName,
@@ -194,6 +257,7 @@ export class SwapRequestService {
         .from(swapRequests)
         .innerJoin(users, eq(swapRequests.ownerId, users.id))
         .innerJoin(bookListings, eq(swapRequests.requestedListingId, bookListings.id))
+        .leftJoin(swapOrders, eq(swapRequests.id, swapOrders.swapRequestId))
         .where(eq(swapRequests.requesterId, userId))
         .orderBy(desc(swapRequests.createdAt));
 
@@ -315,15 +379,29 @@ export class SwapRequestService {
         }
       }
 
+      // Prepare update data with proper type conversions
+      const updateData: any = {
+        status: data.status,
+        meetupLocation: data.meetupLocation,
+        meetupTime: data.meetupTime ? new Date(data.meetupTime) : undefined,
+        requesterConfirmed: data.requesterConfirmed,
+        ownerConfirmed: data.ownerConfirmed,
+        acceptedAt: data.status === "accepted" ? new Date() : undefined,
+        completedAt: data.status === "completed" ? new Date() : undefined,
+        cancelledAt: data.status === "cancelled" ? new Date() : undefined,
+      };
+
+      // Remove undefined values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
       // Update the swap request
       await db
         .update(swapRequests)
-        .set({
-          ...data,
-          acceptedAt: data.status === "accepted" ? new Date() : undefined,
-          completedAt: data.status === "completed" ? new Date() : undefined,
-          cancelledAt: data.status === "cancelled" ? new Date() : undefined,
-        })
+        .set(updateData)
         .where(eq(swapRequests.id, swapRequestId));
 
       // Send appropriate notification
