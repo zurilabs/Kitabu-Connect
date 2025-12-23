@@ -109,18 +109,39 @@ export const schools = mysqlTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
 
-    name: text("name").notNull(),
-    location: text("location"),
+    // Kenya Ministry of Education fields
+    code: int("code"), // Official school code
+    schoolName: varchar("school_name", { length: 255 }).notNull(), // School name
+    level: varchar("level", { length: 50 }), // Primary, Secondary, etc.
+    status: varchar("status", { length: 50 }), // Public, Private
 
-    latitude: decimal("latitude", { precision: 10, scale: 7 }),
-    longitude: decimal("longitude", { precision: 10, scale: 7 }),
+    // Location hierarchy (Kenya administrative structure)
+    county: varchar("county", { length: 100 }),
+    district: varchar("district", { length: 100 }),
+    zone: varchar("zone", { length: 100 }),
+    subCounty: varchar("sub_county", { length: 100 }),
+    ward: varchar("ward", { length: 100 }),
 
+    // Coordinates
+    xCoord: decimal("x_coord", { precision: 10, scale: 7 }), // Longitude
+    yCoord: decimal("y_coord", { precision: 10, scale: 7 }), // Latitude
+
+    // Metadata
+    source: varchar("source", { length: 255 }), // Data source
     createdAt: timestamp("created_at")
       .notNull()
       .defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (t) => ({
-    nameIdx: index("idx_schools_name").on(t.name),
+    schoolNameIdx: index("idx_schools_name").on(t.schoolName),
+    countyIdx: index("idx_schools_county").on(t.county),
+    levelIdx: index("idx_schools_level").on(t.level),
+    statusIdx: index("idx_schools_status").on(t.status),
+    codeIdx: index("idx_schools_code").on(t.code),
   })
 );
 
@@ -992,6 +1013,358 @@ export const markMessagesAsReadSchema = z.object({
 });
 
 /* ================================
+   SWAP CYCLES (Multilateral Swapping)
+================================ */
+export const swapCycles = mysqlTable(
+  "swap_cycles",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+
+    cycleType: varchar("cycle_type", { length: 20 }).notNull(), // '2-way', '3-way', '4-way', '5-way'
+    status: varchar("status", { length: 30 }).notNull().default("pending_confirmation"), // 'pending_confirmation', 'confirmed', 'active', 'completed', 'cancelled', 'timeout'
+    priorityScore: decimal("priority_score", { precision: 5, scale: 2 }).notNull(), // Calculated score (0-100)
+
+    // Geographic clustering info
+    primaryCounty: varchar("primary_county", { length: 100 }),
+    isSameCounty: boolean("is_same_county").default(false),
+    isSameZone: boolean("is_same_zone").default(false),
+
+    // Cost breakdown
+    totalLogisticsCost: decimal("total_logistics_cost", { precision: 10, scale: 2 }),
+    avgCostPerParticipant: decimal("avg_cost_per_participant", { precision: 10, scale: 2 }),
+
+    // Distance metrics
+    maxDistanceKm: decimal("max_distance_km", { precision: 10, scale: 2 }),
+    avgDistanceKm: decimal("avg_distance_km", { precision: 10, scale: 2 }),
+
+    // Timeouts and deadlines
+    confirmationDeadline: datetime("confirmation_deadline"), // 48 hours from creation
+    completionDeadline: datetime("completion_deadline"), // 7 days from confirmation
+
+    // Tracking
+    confirmedParticipantsCount: int("confirmed_participants_count").default(0),
+    totalParticipantsCount: int("total_participants_count").notNull(),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    confirmedAt: datetime("confirmed_at"),
+    completedAt: datetime("completed_at"),
+    cancelledAt: datetime("cancelled_at"),
+  },
+  (t) => ({
+    statusIdx: index("idx_swap_cycles_status").on(t.status),
+    countyIdx: index("idx_swap_cycles_county").on(t.primaryCounty),
+    priorityIdx: index("idx_swap_cycles_priority").on(t.priorityScore),
+    confirmationDeadlineIdx: index("idx_swap_cycles_confirmation_deadline").on(t.confirmationDeadline),
+  })
+);
+
+/* ================================
+   CYCLE PARTICIPANTS
+================================ */
+export const cycleParticipants = mysqlTable(
+  "cycle_participants",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    cycleId: varchar("cycle_id", { length: 36 })
+      .notNull()
+      .references(() => swapCycles.id, { onDelete: "cascade" }),
+
+    // User info
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userSchoolId: varchar("user_school_id", { length: 36 })
+      .notNull()
+      .references(() => schools.id),
+
+    // Position in cycle
+    positionInCycle: int("position_in_cycle").notNull(), // 0, 1, 2, 3, 4 (for visualization)
+
+    // Books involved
+    bookToGiveId: int("book_to_give_id")
+      .notNull()
+      .references(() => bookListings.id),
+    bookToReceiveId: int("book_to_receive_id")
+      .notNull()
+      .references(() => bookListings.id),
+
+    // Geographic info (denormalized for performance)
+    schoolCounty: varchar("school_county", { length: 100 }),
+    schoolZone: varchar("school_zone", { length: 100 }),
+    schoolName: varchar("school_name", { length: 255 }),
+    schoolCoordinatesX: decimal("school_coordinates_x", { precision: 10, scale: 7 }),
+    schoolCoordinatesY: decimal("school_coordinates_y", { precision: 10, scale: 7 }),
+
+    // Drop-off/Collection tracking
+    assignedDropPointId: int("assigned_drop_point_id"),
+    assignedCollectionPointId: int("assigned_collection_point_id"),
+
+    logisticsCost: decimal("logistics_cost", { precision: 10, scale: 2 }).default("0.00"),
+
+    // Status tracking
+    status: varchar("status", { length: 30 }).default("pending"), // 'pending', 'confirmed', 'book_dropped', 'book_collected', 'completed'
+    confirmed: boolean("confirmed").default(false),
+    confirmedAt: datetime("confirmed_at"),
+
+    bookDropped: boolean("book_dropped").default(false),
+    droppedAt: datetime("dropped_at"),
+    dropVerificationPhotoUrl: text("drop_verification_photo_url"),
+
+    bookCollected: boolean("book_collected").default(false),
+    collectedAt: datetime("collected_at"),
+    collectionVerificationPhotoUrl: text("collection_verification_photo_url"),
+    collectionQrCode: varchar("collection_qr_code", { length: 100 }), // Unique QR for collection
+
+    // Quality verification
+    conditionVerified: boolean("condition_verified").default(false),
+    conditionDispute: boolean("condition_dispute").default(false),
+    disputeReason: text("dispute_reason"),
+  },
+  (t) => ({
+    cycleIdx: index("idx_cycle_participants_cycle").on(t.cycleId),
+    userIdx: index("idx_cycle_participants_user").on(t.userId),
+    statusIdx: index("idx_cycle_participants_status").on(t.status),
+    schoolIdx: index("idx_cycle_participants_school").on(t.userSchoolId),
+  })
+);
+
+/* ================================
+   DROP POINTS
+================================ */
+export const dropPoints = mysqlTable(
+  "drop_points",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    cycleId: varchar("cycle_id", { length: 36 })
+      .notNull()
+      .references(() => swapCycles.id, { onDelete: "cascade" }),
+
+    // Location info
+    schoolId: varchar("school_id", { length: 36 }).references(() => schools.id),
+    schoolName: varchar("school_name", { length: 255 }),
+
+    // Address details
+    county: varchar("county", { length: 100 }),
+    district: varchar("district", { length: 100 }),
+    zone: varchar("zone", { length: 100 }),
+    addressLine: text("address_line"),
+
+    coordinatesX: decimal("coordinates_x", { precision: 10, scale: 7 }),
+    coordinatesY: decimal("coordinates_y", { precision: 10, scale: 7 }),
+
+    // Type of drop point
+    pointType: varchar("point_type", { length: 30 }), // 'school_hub', 'central_location', 'courier_pickup'
+
+    // Participants using this drop point
+    servingParticipantIds: text("serving_participant_ids"), // JSON array of user IDs
+
+    // Operating details
+    operatingHours: varchar("operating_hours", { length: 100 }), // "Mon-Fri 8AM-4PM"
+    contactPerson: varchar("contact_person", { length: 255 }),
+    contactPhone: varchar("contact_phone", { length: 20 }),
+
+    // Status
+    active: boolean("active").default(true),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("idx_drop_points_cycle").on(t.cycleId),
+    schoolIdx: index("idx_drop_points_school").on(t.schoolId),
+    countyIdx: index("idx_drop_points_county").on(t.county),
+  })
+);
+
+/* ================================
+   USER RELIABILITY SCORES
+================================ */
+export const userReliabilityScores = mysqlTable(
+  "user_reliability_scores",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // Overall score (0-100)
+    reliabilityScore: decimal("reliability_score", { precision: 5, scale: 2 }).default("50.00"),
+
+    // Statistics
+    totalSwapsCompleted: int("total_swaps_completed").default(0),
+    totalSwapsCancelled: int("total_swaps_cancelled").default(0),
+    totalSwapsDisputed: int("total_swaps_disputed").default(0),
+
+    // Cycle-specific stats
+    totalCyclesJoined: int("total_cycles_joined").default(0),
+    totalCyclesCompleted: int("total_cycles_completed").default(0),
+    totalCyclesTimeout: int("total_cycles_timeout").default(0),
+
+    // Timing metrics
+    avgConfirmationTimeHours: decimal("avg_confirmation_time_hours", { precision: 6, scale: 2 }),
+    avgDropOffTimeHours: decimal("avg_drop_off_time_hours", { precision: 6, scale: 2 }),
+
+    // Quality metrics
+    onTimeDeliveryRate: decimal("on_time_delivery_rate", { precision: 5, scale: 2 }),
+    bookConditionAccuracyRate: decimal("book_condition_accuracy_rate", { precision: 5, scale: 2 }),
+
+    // Achievements
+    badges: text("badges"), // JSON array of earned badges
+
+    // Penalties
+    penaltyPoints: int("penalty_points").default(0),
+    isSuspended: boolean("is_suspended").default(false),
+    suspensionReason: text("suspension_reason"),
+    suspendedUntil: datetime("suspended_until"),
+
+    lastUpdated: timestamp("last_updated")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    reliabilityScoreIdx: index("idx_reliability_score").on(t.reliabilityScore),
+    userIdx: index("idx_reliability_user").on(t.userId),
+  })
+);
+
+/* ================================
+   QUALITY CONTROL TABLES
+================================ */
+
+/**
+ * Book Condition Reports
+ * Track condition assessments at drop-off and collection
+ */
+export const bookConditionReports = mysqlTable(
+  "book_condition_reports",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    cycleId: varchar("cycle_id", { length: 36 })
+      .notNull()
+      .references(() => swapCycles.id, { onDelete: "cascade" }),
+    participantId: varchar("participant_id", { length: 36 })
+      .notNull()
+      .references(() => cycleParticipants.id, { onDelete: "cascade" }),
+    reporterId: varchar("reporter_id", { length: 36 })
+      .notNull()
+      .references(() => users.id),
+    reportType: varchar("report_type", { length: 20 }).notNull(), // 'drop_off' | 'collection'
+
+    // Book details
+    bookId: int("book_id").notNull(),
+    bookTitle: varchar("book_title", { length: 255 }).notNull(),
+
+    // Condition assessment
+    expectedCondition: varchar("expected_condition", { length: 50 }).notNull(),
+    actualCondition: varchar("actual_condition", { length: 50 }).notNull(),
+    conditionMatch: boolean("condition_match").notNull(),
+
+    // Detailed assessment
+    hasMissingPages: boolean("has_missing_pages").default(false),
+    hasWaterDamage: boolean("has_water_damage").default(false),
+    hasWriting: boolean("has_writing").default(false),
+    hasTornPages: boolean("has_torn_pages").default(false),
+    coverCondition: varchar("cover_condition", { length: 50 }),
+
+    // Photos
+    photoUrls: text("photo_urls"), // JSON array
+
+    // Additional notes
+    notes: text("notes"),
+    rating: int("rating"), // 1-5 stars
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("idx_condition_reports_cycle").on(t.cycleId),
+    participantIdx: index("idx_condition_reports_participant").on(t.participantId),
+  })
+);
+
+/**
+ * Cycle Disputes
+ * Handle disagreements and issues during swaps
+ */
+export const cycleDisputes = mysqlTable(
+  "cycle_disputes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    cycleId: varchar("cycle_id", { length: 36 })
+      .notNull()
+      .references(() => swapCycles.id, { onDelete: "cascade" }),
+    reporterId: varchar("reporter_id", { length: 36 })
+      .notNull()
+      .references(() => users.id),
+    respondentId: varchar("respondent_id", { length: 36 })
+      .references(() => users.id),
+
+    // Dispute details
+    disputeType: varchar("dispute_type", { length: 50 }).notNull(), // 'book_condition', 'missing_book', 'wrong_book', 'damage', 'other'
+    status: varchar("status", { length: 30 }).notNull().default("open"), // 'open', 'investigating', 'resolved', 'escalated', 'closed'
+    priority: varchar("priority", { length: 20 }).default("medium"), // 'low', 'medium', 'high', 'urgent'
+
+    // Description
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description").notNull(),
+
+    // Evidence
+    evidencePhotoUrls: text("evidence_photo_urls"), // JSON array
+    conditionReportId: varchar("condition_report_id", { length: 36 })
+      .references(() => bookConditionReports.id),
+
+    // Resolution
+    resolution: text("resolution"),
+    resolutionType: varchar("resolution_type", { length: 50 }), // 'refund', 'replacement', 'penalty', 'no_action', 'escalated'
+    resolvedBy: varchar("resolved_by", { length: 36 })
+      .references(() => users.id),
+    resolvedAt: datetime("resolved_at"),
+
+    // Admin notes
+    adminNotes: text("admin_notes"),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    cycleIdx: index("idx_disputes_cycle").on(t.cycleId),
+    statusIdx: index("idx_disputes_status").on(t.status),
+    reporterIdx: index("idx_disputes_reporter").on(t.reporterId),
+  })
+);
+
+/**
+ * Dispute Messages
+ * Communication thread for dispute resolution
+ */
+export const disputeMessages = mysqlTable(
+  "dispute_messages",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    disputeId: varchar("dispute_id", { length: 36 })
+      .notNull()
+      .references(() => cycleDisputes.id, { onDelete: "cascade" }),
+    senderId: varchar("sender_id", { length: 36 })
+      .notNull()
+      .references(() => users.id),
+
+    message: text("message").notNull(),
+    isAdminMessage: boolean("is_admin_message").default(false),
+    attachmentUrls: text("attachment_urls"), // JSON array
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    disputeIdx: index("idx_dispute_messages_dispute").on(t.disputeId),
+  })
+);
+
+/* ================================
    TYPES
 ================================ */
 export type User = typeof users.$inferSelect;
@@ -1030,3 +1403,9 @@ export type CreateSwapOrderInput = z.infer<typeof createSwapOrderSchema>;
 export type UpdateSwapOrderInput = z.infer<typeof updateSwapOrderSchema>;
 export type SubmitRequirementsInput = z.infer<typeof submitRequirementsSchema>;
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
+
+// Swap Cycle Types
+export type SwapCycle = typeof swapCycles.$inferSelect;
+export type CycleParticipant = typeof cycleParticipants.$inferSelect;
+export type DropPoint = typeof dropPoints.$inferSelect;
+export type UserReliabilityScore = typeof userReliabilityScores.$inferSelect;

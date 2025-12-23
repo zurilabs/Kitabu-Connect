@@ -4,6 +4,8 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startEscrowReleaseScheduler } from "./jobs/escrow-release";
+import { startCycleTimeoutScheduler } from "./jobs/cycle-timeout";
+import { startCycleDetectionScheduler } from "./jobs/cycle-detection";
 
 const app = express();
 const httpServer = createServer(app);
@@ -97,6 +99,12 @@ app.use((req, res, next) => {
 
       // Start the escrow release scheduler
       startEscrowReleaseScheduler();
+
+      // Start the cycle timeout scheduler
+      startCycleTimeoutScheduler();
+
+      // Start the cycle detection scheduler
+      startCycleDetectionScheduler();
 
       // Display ngrok instructions if in development
       if (process.env.NODE_ENV !== 'production') {

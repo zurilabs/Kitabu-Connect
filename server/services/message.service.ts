@@ -3,6 +3,7 @@ import {
   messages,
   swapOrders,
   users,
+  bookListings,
   type SendMessageInput,
 } from "../db/schema";
 import { eq, and, or, desc } from "drizzle-orm";
@@ -311,15 +312,9 @@ export class MessageService {
       // Get all swap orders where user is involved
       const userOrders = await db
         .select({
-          order: swapOrders,
-          requester: {
-            id: users.id,
-            fullName: users.fullName,
-            profilePictureUrl: users.profilePictureUrl,
-          },
+          swapOrder: swapOrders,
         })
         .from(swapOrders)
-        .innerJoin(users, eq(swapOrders.requesterId, users.id))
         .where(
           or(
             eq(swapOrders.requesterId, userId),
@@ -328,16 +323,77 @@ export class MessageService {
         )
         .orderBy(desc(swapOrders.updatedAt));
 
-      // For each order, get the last message and unread count
+      // For each order, get the last message, unread count, and all related data
       const conversations = await Promise.all(
-        userOrders.map(async ({ order, requester }) => {
-          // Get last message
-          const [lastMessage] = await db
-            .select()
+        userOrders.map(async ({ swapOrder }) => {
+          // Get requester info
+          const [requester] = await db
+            .select({
+              id: users.id,
+              fullName: users.fullName,
+              email: users.email,
+              profilePictureUrl: users.profilePictureUrl,
+            })
+            .from(users)
+            .where(eq(users.id, swapOrder.requesterId))
+            .limit(1);
+
+          // Get owner info
+          const [owner] = await db
+            .select({
+              id: users.id,
+              fullName: users.fullName,
+              email: users.email,
+              profilePictureUrl: users.profilePictureUrl,
+            })
+            .from(users)
+            .where(eq(users.id, swapOrder.ownerId))
+            .limit(1);
+
+          // Get requested book info
+          const [requestedBook] = await db
+            .select({
+              id: bookListings.id,
+              title: bookListings.title,
+              author: bookListings.author,
+              condition: bookListings.condition,
+              coverImageUrl: bookListings.primaryPhotoUrl,
+            })
+            .from(bookListings)
+            .where(eq(bookListings.id, swapOrder.requestedListingId))
+            .limit(1);
+
+          // Get offered book info (if exists)
+          let offeredBook = null;
+          if (swapOrder.offeredListingId) {
+            const [book] = await db
+              .select({
+                id: bookListings.id,
+                title: bookListings.title,
+                author: bookListings.author,
+                condition: bookListings.condition,
+                coverImageUrl: bookListings.primaryPhotoUrl,
+              })
+              .from(bookListings)
+              .where(eq(bookListings.id, swapOrder.offeredListingId))
+              .limit(1);
+            offeredBook = book || null;
+          }
+
+          // Get last message with sender info
+          const lastMessageResult = await db
+            .select({
+              content: messages.content,
+              createdAt: messages.createdAt,
+              isSystemMessage: messages.isSystemMessage,
+              senderId: messages.senderId,
+            })
             .from(messages)
-            .where(eq(messages.swapOrderId, order.id))
+            .where(eq(messages.swapOrderId, swapOrder.id))
             .orderBy(desc(messages.createdAt))
             .limit(1);
+
+          const lastMessage = lastMessageResult[0] || null;
 
           // Get unread count
           const unreadMessages = await db
@@ -345,33 +401,25 @@ export class MessageService {
             .from(messages)
             .where(
               and(
-                eq(messages.swapOrderId, order.id),
+                eq(messages.swapOrderId, swapOrder.id),
                 eq(messages.receiverId, userId),
                 eq(messages.isRead, false)
               )
             );
 
-          // Get the other party's info
-          const otherPartyId =
-            order.requesterId === userId
-              ? order.ownerId
-              : order.requesterId;
-
-          const [otherParty] = await db
-            .select({
-              id: users.id,
-              fullName: users.fullName,
-              profilePictureUrl: users.profilePictureUrl,
-            })
-            .from(users)
-            .where(eq(users.id, otherPartyId))
-            .limit(1);
-
           return {
-            order,
+            swapOrder: {
+              id: swapOrder.id,
+              orderNumber: swapOrder.orderNumber,
+              status: swapOrder.status,
+              createdAt: swapOrder.createdAt,
+              requester,
+              owner,
+              requestedBook,
+              offeredBook,
+            },
             lastMessage,
             unreadCount: unreadMessages.length,
-            otherParty,
           };
         })
       );

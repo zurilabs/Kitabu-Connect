@@ -272,7 +272,7 @@ export default function DeliveryConfirmation({
         )}
 
         {/* Cancel Order */}
-        {swapOrder.status !== "completed" && (
+        {swapOrder.status !== "completed" && swapOrder.status !== "cancelled" && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" className="w-full" size="sm">

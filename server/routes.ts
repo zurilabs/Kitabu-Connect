@@ -24,6 +24,8 @@ import favoritesRoutes from "./routes/favorites";
 import swapRoutes from "./routes/swaps";
 import swapOrderRoutes from "./routes/swapOrders";
 import notificationRoutes from "./routes/notifications";
+import cyclesRoutes from "./routes/cycles";
+import gamificationRoutes from "./routes/gamification";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -74,6 +76,16 @@ export async function registerRoutes(
   // NOTIFICATION ROUTES
   // ============================================
   app.use("/api/notifications", notificationRoutes);
+
+  // ============================================
+  // SWAP CYCLES ROUTES
+  // ============================================
+  app.use("/api/cycles", cyclesRoutes);
+
+  // ============================================
+  // GAMIFICATION ROUTES
+  // ============================================
+  app.use("/api/gamification", gamificationRoutes);
 
   // ============================================
   // PAYSTACK WEBHOOK

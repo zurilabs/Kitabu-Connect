@@ -10,7 +10,8 @@ import {
   LogOut,
   Heart,
   ArrowLeftRight,
-  MessageSquare
+  MessageSquare,
+  Users
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -75,7 +76,12 @@ export function Navbar() {
           </Link>
           <Link href="/swaps">
             <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/swaps') ? 'text-primary' : 'text-muted-foreground'}`}>
-              Swap Books
+              Swaps
+            </span>
+          </Link>
+          <Link href="/swap-cycles">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/swap-cycles') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Multi-Way
             </span>
           </Link>
           <Link href="/favorites">
@@ -186,6 +192,9 @@ export function Navbar() {
                     <>
                       <Link href="/swaps" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
                         Swaps
+                      </Link>
+                      <Link href="/swap-cycles" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Multi-Way Swaps
                       </Link>
                       <Link href="/conversations" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
                         Messages

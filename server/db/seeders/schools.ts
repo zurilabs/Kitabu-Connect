@@ -1,188 +1,101 @@
 import { db } from "../../db.ts";
 import { schools } from "../schema/index.ts";
 import { randomUUID } from "crypto";
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+interface SchoolFeature {
+  type: string;
+  id: number;
+  geometry: {
+    type: string;
+    coordinates: [number, number];
+  };
+  properties: {
+    OBJECTID: number;
+    CODE: number;
+    SCHOOL_NAM: string;
+    LEVEL: string;
+    Status: string;
+    County: string;
+    DISTRICT: string;
+    ZONE: string;
+    SUB_COUNTY: string;
+    Ward: string;
+    X_Coord: number;
+    Y_Coord: number;
+    Source: string;
+  };
+}
+
+interface SchoolGeoJSON {
+  type: string;
+  crs: any;
+  features: SchoolFeature[];
+}
 
 export async function seedSchools() {
-  await db.insert(schools).values([
-    // Thika Schools
-    {
-      id: randomUUID(),
-      name: "Thika High School",
-      location: "Thika Town, Kiambu County",
-      latitude: "-1.0332",
-      longitude: "37.0690",
-    },
-    {
-      id: randomUUID(),
-      name: "Thika Primary School",
-      location: "Thika Town, Kiambu County",
-      latitude: "-1.0369",
-      longitude: "37.0693",
-    },
-    {
-      id: randomUUID(),
-      name: "Mangu High School",
-      location: "Thika, Kiambu County",
-      latitude: "-1.0225",
-      longitude: "37.0845",
-    },
-    {
-      id: randomUUID(),
-      name: "St. Mary's Girls High School Thika",
-      location: "Thika, Kiambu County",
-      latitude: "-1.0415",
-      longitude: "37.0732",
-    },
-    {
-      id: randomUUID(),
-      name: "Kiandutu Primary School",
-      location: "Kiandutu, Thika",
-      latitude: "-1.0485",
-      longitude: "37.0658",
-    },
-    {
-      id: randomUUID(),
-      name: "Del Monte Kenya Primary School",
-      location: "Thika, Kiambu County",
-      latitude: "-1.0156",
-      longitude: "37.0512",
-    },
-    {
-      id: randomUUID(),
-      name: "Gatuanyaga Primary School",
-      location: "Gatuanyaga, Thika",
-      latitude: "-1.0542",
-      longitude: "37.0895",
-    },
-    {
-      id: randomUUID(),
-      name: "Highway Secondary School",
-      location: "Thika, Kiambu County",
-      latitude: "-1.0298",
-      longitude: "37.0745",
-    },
-    {
-      id: randomUUID(),
-      name: "Blue Valley Academy",
-      location: "Thika, Kiambu County",
-      latitude: "-1.0445",
-      longitude: "37.0712",
-    },
-    {
-      id: randomUUID(),
-      name: "Kenyatta Academy",
-      location: "Thika Town, Kiambu County",
-      latitude: "-1.0385",
-      longitude: "37.0668",
-    },
+  console.log("📚 Starting schools seeding from external_resource/schools.json...");
 
-    // Muranga Schools
-    {
-      id: randomUUID(),
-      name: "Murang'a High School",
-      location: "Murang'a Town, Murang'a County",
-      latitude: "-0.7210",
-      longitude: "37.1526",
-    },
-    {
-      id: randomUUID(),
-      name: "Kagumo High School",
-      location: "Kagumo, Murang'a County",
-      latitude: "-0.7845",
-      longitude: "37.1235",
-    },
-    {
-      id: randomUUID(),
-      name: "Bishop Gatimu Ngandu Girls High School",
-      location: "Murang'a Town, Murang'a County",
-      latitude: "-0.7165",
-      longitude: "37.1498",
-    },
-    {
-      id: randomUUID(),
-      name: "Muthithi Primary School",
-      location: "Muthithi, Murang'a County",
-      latitude: "-0.7325",
-      longitude: "37.1612",
-    },
-    {
-      id: randomUUID(),
-      name: "Karuri Girls High School",
-      location: "Karuri, Murang'a County",
-      latitude: "-0.6985",
-      longitude: "37.1345",
-    },
-    {
-      id: randomUUID(),
-      name: "Kenol Academy",
-      location: "Kenol, Murang'a County",
-      latitude: "-0.8542",
-      longitude: "37.1156",
-    },
-    {
-      id: randomUUID(),
-      name: "Mwirua Primary School",
-      location: "Mwirua, Murang'a County",
-      latitude: "-0.7458",
-      longitude: "37.1685",
-    },
-    {
-      id: randomUUID(),
-      name: "Mugoiri Secondary School",
-      location: "Mugoiri, Murang'a County",
-      latitude: "-0.6825",
-      longitude: "37.1425",
-    },
-    {
-      id: randomUUID(),
-      name: "Kandara Girls High School",
-      location: "Kandara, Murang'a County",
-      latitude: "-0.7912",
-      longitude: "37.0245",
-    },
-    {
-      id: randomUUID(),
-      name: "Kiru Boys High School",
-      location: "Kiru, Murang'a County",
-      latitude: "-0.6548",
-      longitude: "37.1785",
-    },
-    {
-      id: randomUUID(),
-      name: "Makuyu Primary School",
-      location: "Makuyu, Murang'a County",
-      latitude: "-0.7685",
-      longitude: "37.1845",
-    },
-    {
-      id: randomUUID(),
-      name: "Ichagaki Secondary School",
-      location: "Ichagaki, Murang'a County",
-      latitude: "-0.7125",
-      longitude: "37.1298",
-    },
-    {
-      id: randomUUID(),
-      name: "Gaichanjiru Primary School",
-      location: "Gaichanjiru, Murang'a County",
-      latitude: "-0.7398",
-      longitude: "37.1542",
-    },
-    {
-      id: randomUUID(),
-      name: "Nginda Girls Secondary School",
-      location: "Nginda, Murang'a County",
-      latitude: "-0.7542",
-      longitude: "37.1685",
-    },
-    {
-      id: randomUUID(),
-      name: "Mugoiri Girls High School",
-      location: "Mugoiri, Murang'a County",
-      latitude: "-0.6845",
-      longitude: "37.1412",
-    },
-  ]);
+  try {
+    // Read the GeoJSON file
+    const filePath = path.join(__dirname, "../../../external_resource/schools.json");
+    console.log(`📖 Reading file: ${filePath}`);
 
-  console.log("✅ Schools seeded successfully");
+    const fileContent = fs.readFileSync(filePath, "utf-8");
+    const geoData: SchoolGeoJSON = JSON.parse(fileContent);
+
+    console.log(`✅ Found ${geoData.features.length} schools to seed`);
+
+    // Process schools in batches for better performance
+    const batchSize = 1000;
+    let totalImported = 0;
+    let errors = 0;
+
+    for (let i = 0; i < geoData.features.length; i += batchSize) {
+      const batch = geoData.features.slice(i, i + batchSize);
+
+      const schoolData = batch.map((feature) => ({
+        id: randomUUID(),
+        code: feature.properties.CODE || null,
+        schoolName: feature.properties.SCHOOL_NAM,
+        level: feature.properties.LEVEL || null,
+        status: feature.properties.Status || null,
+        county: feature.properties.County || null,
+        district: feature.properties.DISTRICT || null,
+        zone: feature.properties.ZONE || null,
+        subCounty: feature.properties.SUB_COUNTY || null,
+        ward: feature.properties.Ward || null,
+        xCoord: feature.properties.X_Coord?.toString() || null,
+        yCoord: feature.properties.Y_Coord?.toString() || null,
+        source: feature.properties.Source || "Ministry of Education, 2016",
+      }));
+
+      try {
+        await db.insert(schools).values(schoolData);
+        totalImported += batch.length;
+
+        const progress = Math.round((totalImported / geoData.features.length) * 100);
+        console.log(`⏳ Progress: ${progress}% (${totalImported}/${geoData.features.length} schools)`);
+      } catch (error: any) {
+        console.error(`❌ Error seeding batch ${Math.floor(i / batchSize) + 1}:`, error.message);
+        errors += batch.length;
+      }
+    }
+
+    console.log("\n📊 Seeding Summary:");
+    console.log(`   Total schools in file: ${geoData.features.length}`);
+    console.log(`   Successfully seeded: ${totalImported}`);
+    console.log(`   Errors: ${errors}`);
+    console.log("\n✅ Schools seeded successfully from Kenya Ministry of Education data!");
+
+  } catch (error: any) {
+    console.error("❌ Fatal error during schools seeding:", error.message);
+    throw error;
+  }
 }
