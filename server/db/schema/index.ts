@@ -232,9 +232,19 @@ export const bookListings = mysqlTable("book_listings", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
 
-  soldAt: datetime("sold_at"), 
+  soldAt: datetime("sold_at"),
 expiresAt: datetime("expires_at"),
-});
+},
+(t) => ({
+  sellerIdx: index("idx_book_listings_seller").on(t.sellerId),
+  statusIdx: index("idx_book_listings_status").on(t.listingStatus),
+  typeIdx: index("idx_book_listings_type").on(t.listingType),
+  createdAtIdx: index("idx_book_listings_created_at").on(t.createdAt),
+  statusCreatedIdx: index("idx_book_listings_status_created").on(t.listingStatus, t.createdAt),
+  subjectIdx: index("idx_book_listings_subject").on(t.subject),
+  gradeIdx: index("idx_book_listings_grade").on(t.classGrade),
+})
+);
 
 /* ================================
    BOOK PHOTOS
@@ -251,7 +261,11 @@ export const bookPhotos = mysqlTable("book_photos", {
   displayOrder: int("display_order").default(0),
 
   uploadedAt: timestamp("uploaded_at").defaultNow(),
-});
+},
+(t) => ({
+  listingIdx: index("idx_book_photos_listing").on(t.listingId),
+})
+);
 
 /* ================================
    FAVORITES
