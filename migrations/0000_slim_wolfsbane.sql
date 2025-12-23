@@ -573,6 +573,14 @@ ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_user_id_us
 ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_transaction_id_transactions_id_fk` FOREIGN KEY (`transaction_id`) REFERENCES `transactions`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX `idx_condition_reports_cycle` ON `book_condition_reports` (`cycle_id`);--> statement-breakpoint
 CREATE INDEX `idx_condition_reports_participant` ON `book_condition_reports` (`participant_id`);--> statement-breakpoint
+CREATE INDEX `idx_book_listings_seller` ON `book_listings` (`seller_id`);--> statement-breakpoint
+CREATE INDEX `idx_book_listings_status` ON `book_listings` (`listing_status`);--> statement-breakpoint
+CREATE INDEX `idx_book_listings_type` ON `book_listings` (`listing_type`);--> statement-breakpoint
+CREATE INDEX `idx_book_listings_created_at` ON `book_listings` (`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_book_listings_status_created` ON `book_listings` (`listing_status`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_book_listings_subject` ON `book_listings` (`subject`);--> statement-breakpoint
+CREATE INDEX `idx_book_listings_grade` ON `book_listings` (`class_grade`);--> statement-breakpoint
+CREATE INDEX `idx_book_photos_listing` ON `book_photos` (`listing_id`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_cycle` ON `cycle_disputes` (`cycle_id`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_status` ON `cycle_disputes` (`status`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_reporter` ON `cycle_disputes` (`reporter_id`);--> statement-breakpoint

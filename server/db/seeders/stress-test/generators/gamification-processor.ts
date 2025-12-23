@@ -1,7 +1,7 @@
 /**
- * Gamification Processor
- *
- * Awards badges and processes achievements for all users
+ * Gamification Processor - SCALED DOWN VERSION
+ * * Awards badges and processes achievements for 200 users
+ * Adjusted logging intervals for better visibility
  */
 
 import { checkAndAwardBadges } from "../../../../services/gamification.service";
@@ -19,7 +19,7 @@ export class GamificationProcessor {
     users: GeneratedUser[],
     reliabilityUpdates: ReliabilityUpdate[]
   ): Promise<void> {
-    console.log('  🏆 Processing gamification and awarding badges...');
+    console.log('  🏆 Processing gamification for 200 users...');
 
     let processed = 0;
 
@@ -35,12 +35,13 @@ export class GamificationProcessor {
 
         processed++;
 
-        // Log progress every 200 users
-        if (processed % 200 === 0) {
+        // SCALED LOGGING: Log progress every 20 users instead of 200
+        // This ensures you see movement on your screen every few seconds
+        if (processed % 20 === 0 || processed === users.length) {
           console.log(`  ✓ Processed ${processed}/${users.length} users`);
         }
       } catch (error) {
-        console.error(`  ⚠️  Error processing gamification for user ${user.id}:`, error);
+        console.error(`  ⚠️  Error for user ${user.id}:`, error);
       }
     }
 
@@ -49,7 +50,7 @@ export class GamificationProcessor {
   }
 
   /**
-   * Get statistics
+   * Get statistics (Remains same logic)
    */
   getStatistics(): {
     totalBadgesAwarded: number;
@@ -57,7 +58,6 @@ export class GamificationProcessor {
     badgeDistribution: Record<string, number>;
   } {
     const badgeDistribution: Record<string, number> = {};
-
     this.badgeAwards.forEach((badges) => {
       badges.forEach((badge) => {
         badgeDistribution[badge] = (badgeDistribution[badge] || 0) + 1;
@@ -69,21 +69,6 @@ export class GamificationProcessor {
       usersWithBadges: this.badgeAwards.size,
       badgeDistribution,
     };
-  }
-
-  /**
-   * Get users by badge
-   */
-  getUsersByBadge(badgeId: string): string[] {
-    const users: string[] = [];
-
-    this.badgeAwards.forEach((badges, userId) => {
-      if (badges.includes(badgeId)) {
-        users.push(userId);
-      }
-    });
-
-    return users;
   }
 
   /**
@@ -100,8 +85,8 @@ export class GamificationProcessor {
       issues.push('No badges were awarded to any users');
     }
 
-    // Check if elite users got appropriate badges
-    // (This would require cross-referencing with reliability scores)
+    // Optional: Add a check for "Super Active" users specifically 
+    // since we expect them to have badges in a 200-user sample.
 
     return {
       verified: issues.length === 0,

@@ -1,14 +1,11 @@
 /**
- * Book Listing Generator
- *
- * Generates 5000+ book listings with intentional swap matches
- * Creates realistic swap cycles by design
+ * Book Listing Generator - SCALED DOWN VERSION
+ * Generates book listings with intentional swap matches and reporting stats
  */
 
-import crypto from "crypto";
 import { db } from "../../../../db";
 import { bookListings } from "../../../schema";
-import { STRESS_TEST_CONFIG, getListingsRange } from "../config/test-config";
+import { STRESS_TEST_CONFIG } from "../config/test-config";
 import {
   getRandomBookTitle,
   getRandomPublisher,
@@ -18,7 +15,6 @@ import {
   randomDateBetween,
 } from "../config/data-templates";
 import type { GeneratedUser } from "./user-generator";
-import type { SelectedSchool } from "./school-selector";
 
 export interface GeneratedListing {
   id: number;
@@ -32,11 +28,12 @@ export interface GeneratedListing {
   description: string;
   listingType: string;
   listingStatus: string;
-  willingToSwapFor: string; // Comma-separated subjects for swap matching
+  willingToSwapFor: string;
   schoolId: string;
   county: string;
   createdAt: Date;
-  matchGroup?: string; // For tracking intentional matches
+  matchGroup?: string;
+  matchType?: 'SAME_SCHOOL' | 'SAME_COUNTY' | 'CROSS_COUNTY'; // Added for stats
 }
 
 export class BookGenerator {
@@ -44,411 +41,214 @@ export class BookGenerator {
   private listingId: number = 1;
   private matchGroups: Map<string, GeneratedListing[]> = new Map();
 
-  /**
-   * Generate book listings for all users
-   */
   async generateListings(
     users: GeneratedUser[],
     usersBySchool: Map<string, GeneratedUser[]>
   ): Promise<GeneratedListing[]> {
-    console.log('  📚 Generating book listings with swap matches...');
+    console.log('  📚 Generating book listings for 200 users...');
+    this.listings = []; // Reset listings
 
-    // Group users by activity level
     const superActive = users.filter((u) => u.activityLevel === 'SUPER_ACTIVE');
     const moderate = users.filter((u) => u.activityLevel === 'MODERATE');
     const inactive = users.filter((u) => u.activityLevel === 'INACTIVE');
 
-    // Generate listings with intentional matches
+    // 1. Intentional Matches
     await this.generateSameSchoolMatches(usersBySchool);
     await this.generateSameCountyMatches(users);
     await this.generateCrossCountyMatches(users);
 
-    // Fill remaining quota with random listings
+    // 2. Fill remaining target count with random listings
     await this.generateRemainingListings(superActive, moderate, inactive);
 
-    console.log(`  ✓ Total listings generated: ${this.listings.length}`);
-    console.log(`  ✓ Match groups created: ${this.matchGroups.size}`);
-
+    console.log(`  ✓ Total listings: ${this.listings.length}`);
     return this.listings;
   }
 
   /**
-   * Generate same-school swap matches (highest priority, FREE cost)
+   * STATISTICS METHOD - Required by Orchestrator
    */
-  private async generateSameSchoolMatches(
-    usersBySchool: Map<string, GeneratedUser[]>
-  ): Promise<void> {
-    let matchGroupsCreated = 0;
-
-    // For each school with 10+ students, create 2-way and 3-way matches
-    for (const [schoolId, schoolUsers] of Array.from(usersBySchool.entries())) {
-      if (schoolUsers.length < 10) continue;
-
-      // Create multiple match groups per school
-      const matchGroupsForSchool = Math.min(5, Math.floor(schoolUsers.length / 4));
-
-      for (let i = 0; i < matchGroupsForSchool; i++) {
-        const cycleSize = Math.random() < 0.7 ? 2 : 3; // 70% 2-way, 30% 3-way
-        const participants = this.selectRandomUsers(schoolUsers, cycleSize);
-
-        if (participants.length === cycleSize) {
-          const matchGroupId = `SAME_SCHOOL_${schoolId}_${i}`;
-          this.createCycleMatch(participants, matchGroupId, 'same-school');
-          matchGroupsCreated++;
-        }
-      }
-    }
-
-    console.log(`  ✓ Same-school matches created: ${matchGroupsCreated} groups`);
-  }
-
-  /**
-   * Generate same-county swap matches (medium priority, KES 50-100 cost)
-   */
-  private async generateSameCountyMatches(users: GeneratedUser[]): Promise<void> {
-    const usersByCounty: Map<string, GeneratedUser[]> = new Map();
-
-    // Group users by county
-    users.forEach((user) => {
-      if (!usersByCounty.has(user.county)) {
-        usersByCounty.set(user.county, []);
-      }
-      usersByCounty.get(user.county)!.push(user);
-    });
-
-    let matchGroupsCreated = 0;
-
-    // Create county-level matches
-    for (const [county, countyUsers] of Array.from(usersByCounty.entries())) {
-      if (countyUsers.length < 20) continue;
-
-      const matchGroupsForCounty = Math.min(10, Math.floor(countyUsers.length / 10));
-
-      for (let i = 0; i < matchGroupsForCounty; i++) {
-        // Mix of 2-way, 3-way, and 4-way
-        const rand = Math.random();
-        const cycleSize = rand < 0.5 ? 2 : rand < 0.8 ? 3 : 4;
-
-        // Select users from DIFFERENT schools in same county
-        const participants = this.selectUsersDifferentSchools(countyUsers, cycleSize);
-
-        if (participants.length === cycleSize) {
-          const matchGroupId = `SAME_COUNTY_${county}_${i}`;
-          this.createCycleMatch(participants, matchGroupId, 'same-county');
-          matchGroupsCreated++;
-        }
-      }
-    }
-
-    console.log(`  ✓ Same-county matches created: ${matchGroupsCreated} groups`);
-  }
-
-  /**
-   * Generate cross-county swap matches (lower priority, KES 200-300 cost)
-   */
-  private async generateCrossCountyMatches(users: GeneratedUser[]): Promise<void> {
-    let matchGroupsCreated = 0;
-    const totalGroups = 20; // Create 20 cross-county match groups
-
-    for (let i = 0; i < totalGroups; i++) {
-      // Select users from different counties
-      const cycleSize = Math.random() < 0.3 ? 3 : Math.random() < 0.7 ? 4 : 5;
-      const participants = this.selectUsersDifferentCounties(users, cycleSize);
-
-      if (participants.length === cycleSize) {
-        const matchGroupId = `CROSS_COUNTY_${i}`;
-        this.createCycleMatch(participants, matchGroupId, 'cross-county');
-        matchGroupsCreated++;
-      }
-    }
-
-    console.log(`  ✓ Cross-county matches created: ${matchGroupsCreated} groups`);
-  }
-
-  /**
-   * Create a swap cycle match group
-   */
-  private createCycleMatch(
-    participants: GeneratedUser[],
-    matchGroupId: string,
-    matchType: string
-  ): void {
-    if (participants.length === 0) {
-      console.log(`  ⚠️  No participants for match group ${matchGroupId}, skipping...`);
-      return;
-    }
-
-    // Select subjects that will form a cycle
-    const subjects = this.selectCycleSubjects(participants.length, participants[0].childGrade);
-
-    // Create listings for each participant
-    const groupListings: GeneratedListing[] = [];
-
-    for (let i = 0; i < participants.length; i++) {
-      const user = participants[i];
-      const hasSubject = subjects[i];
-      const wantsSubject = subjects[(i + 1) % subjects.length]; // Cycle: A→B, B→C, C→A
-
-      const listing = this.createListing(
-        user,
-        hasSubject,
-        wantsSubject,
-        matchGroupId
-      );
-
-      groupListings.push(listing);
-      this.listings.push(listing);
-    }
-
-    this.matchGroups.set(matchGroupId, groupListings);
-  }
-
-  /**
-   * Select subjects that form a valid cycle
-   */
-  private selectCycleSubjects(count: number, grade: number): string[] {
-    const availableSubjects = getSubjectsForGrade(grade);
-    const selected: string[] = [];
-
-    // Randomly select unique subjects
-    while (selected.length < count) {
-      const subject = availableSubjects[Math.floor(Math.random() * availableSubjects.length)];
-      if (!selected.includes(subject)) {
-        selected.push(subject);
-      }
-    }
-
-    return selected;
-  }
-
-  /**
-   * Create individual book listing
-   */
-  private createListing(
-    user: GeneratedUser,
-    subject: string,
-    wantsSubject: string,
-    matchGroupId?: string
-  ): GeneratedListing {
-    const title = getRandomBookTitle(subject);
-    const publisher = getRandomPublisher();
-    const condition = this.getRandomCondition();
-    const description = `${getConditionDescription(condition)}. ${getRandomSwapReason()}.`;
-
-    // Create listing with backdated createdAt
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    const createdAt = randomDateBetween(oneMonthAgo, new Date());
-
-    return {
-      id: this.listingId++,
-      sellerId: user.id,
-      title,
-      author: 'Kenya Institute of Education',
-      publisher,
-      subject,
-      classGrade: this.gradeToString(user.childGrade),
-      condition,
-      description,
-      listingType: 'swap',
-      listingStatus: 'active',
-      willingToSwapFor: wantsSubject, // Single subject for clean matching
-      schoolId: user.schoolId,
-      county: user.county,
-      createdAt,
-      matchGroup: matchGroupId,
+  getStatistics() {
+    const byMatchType: Record<string, number> = {
+      'SAME_SCHOOL': 0,
+      'SAME_COUNTY': 0,
+      'CROSS_COUNTY': 0
     };
-  }
 
-  /**
-   * Generate remaining listings to reach target quota
-   */
-  private async generateRemainingListings(
-    superActive: GeneratedUser[],
-    moderate: GeneratedUser[],
-    inactive: GeneratedUser[]
-  ): Promise<void> {
-    const currentCount = this.listings.length;
-    const targetCount = STRESS_TEST_CONFIG.TARGET_LISTINGS;
-    const remaining = targetCount - currentCount;
-
-    if (remaining <= 0) return;
-
-    console.log(`  ✓ Generating ${remaining} additional random listings...`);
-
-    // Distribute remaining across activity levels
-    const superActiveRemaining = Math.floor(remaining * 0.4);
-    const moderateRemaining = Math.floor(remaining * 0.5);
-    const inactiveRemaining = remaining - superActiveRemaining - moderateRemaining;
-
-    this.generateRandomListings(superActive, superActiveRemaining);
-    this.generateRandomListings(moderate, moderateRemaining);
-    this.generateRandomListings(inactive, inactiveRemaining);
-  }
-
-  /**
-   * Generate random listings (may not match)
-   */
-  private generateRandomListings(users: GeneratedUser[], count: number): void {
-    if (users.length === 0) {
-      console.log(`  ⚠️  No users available for generating ${count} listings, skipping...`);
-      return;
-    }
-
-    for (let i = 0; i < count; i++) {
-      const user = users[i % users.length];
-      const subjects = getSubjectsForGrade(user.childGrade);
-      const hasSubject = subjects[Math.floor(Math.random() * subjects.length)];
-      const wantsSubject = subjects[Math.floor(Math.random() * subjects.length)];
-
-      const listing = this.createListing(user, hasSubject, wantsSubject);
-      this.listings.push(listing);
-    }
-  }
-
-  /**
-   * Convert numeric grade to string format
-   */
-  private gradeToString(grade: number): string {
-    if (grade >= 9 && grade <= 12) {
-      // Secondary: Form 1-4
-      return `Form ${grade - 8}`;
-    } else {
-      // Primary: Class 1-8
-      return `Class ${grade}`;
-    }
-  }
-
-  /**
-   * Select random users from list
-   */
-  private selectRandomUsers(users: GeneratedUser[], count: number): GeneratedUser[] {
-    const shuffled = [...users].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, count);
-  }
-
-  /**
-   * Select users from different schools
-   */
-  private selectUsersDifferentSchools(users: GeneratedUser[], count: number): GeneratedUser[] {
-    const selected: GeneratedUser[] = [];
-    const usedSchools = new Set<string>();
-
-    const shuffled = [...users].sort(() => Math.random() - 0.5);
-
-    for (const user of shuffled) {
-      if (!usedSchools.has(user.schoolId)) {
-        selected.push(user);
-        usedSchools.add(user.schoolId);
-
-        if (selected.length === count) break;
+    this.listings.forEach(l => {
+      if (l.matchType) {
+        byMatchType[l.matchType]++;
       }
-    }
-
-    return selected;
-  }
-
-  /**
-   * Select users from different counties
-   */
-  private selectUsersDifferentCounties(users: GeneratedUser[], count: number): GeneratedUser[] {
-    const selected: GeneratedUser[] = [];
-    const usedCounties = new Set<string>();
-
-    const shuffled = [...users].sort(() => Math.random() - 0.5);
-
-    for (const user of shuffled) {
-      if (!usedCounties.has(user.county)) {
-        selected.push(user);
-        usedCounties.add(user.county);
-
-        if (selected.length === count) break;
-      }
-    }
-
-    return selected;
-  }
-
-  /**
-   * Get random book condition
-   */
-  private getRandomCondition(): string {
-    const rand = Math.random();
-    const dist = STRESS_TEST_CONFIG.CONDITION_DISTRIBUTION;
-
-    if (rand < dist['Excellent']) return 'Excellent';
-    if (rand < dist['Excellent'] + dist['Very Good']) return 'Very Good';
-    if (rand < dist['Excellent'] + dist['Very Good'] + dist['Good']) return 'Good';
-    if (rand < 1 - dist['Poor']) return 'Fair';
-    return 'Poor';
-  }
-
-  /**
-   * Save listings to database in batches
-   */
-  async saveListingsToDatabase(): Promise<void> {
-    const batchSize = STRESS_TEST_CONFIG.LISTINGS_PER_BATCH;
-    const totalBatches = Math.ceil(this.listings.length / batchSize);
-
-    console.log(`  💾 Saving ${this.listings.length} listings in ${totalBatches} batches...`);
-
-    for (let i = 0; i < totalBatches; i++) {
-      const batch = this.listings.slice(i * batchSize, (i + 1) * batchSize);
-
-      const listingRecords = batch.map((listing) => ({
-        sellerId: listing.sellerId,
-        title: listing.title,
-        author: listing.author,
-        publisher: listing.publisher,
-        subject: listing.subject,
-        classGrade: listing.classGrade,
-        condition: listing.condition,
-        description: listing.description,
-        listingType: listing.listingType,
-        listingStatus: listing.listingStatus,
-        willingToSwapFor: listing.willingToSwapFor,
-        price: "0.00", // Swap listings have no price
-        createdAt: listing.createdAt,
-      }));
-
-      await db.insert(bookListings).values(listingRecords);
-
-      if ((i + 1) % 10 === 0 || i === totalBatches - 1) {
-        console.log(`  ✓ Batch ${i + 1}/${totalBatches} saved`);
-      }
-    }
-  }
-
-  /**
-   * Get statistics
-   */
-  getStatistics(): {
-    total: number;
-    matchGroups: number;
-    byMatchType: Record<string, number>;
-    bySubject: Record<string, number>;
-    byCondition: Record<string, number>;
-  } {
-    const byMatchType: Record<string, number> = {};
-    const bySubject: Record<string, number> = {};
-    const byCondition: Record<string, number> = {};
-
-    this.listings.forEach((listing) => {
-      if (listing.matchGroup) {
-        const type = listing.matchGroup.split('_')[0] + '_' + listing.matchGroup.split('_')[1];
-        byMatchType[type] = (byMatchType[type] || 0) + 1;
-      }
-
-      bySubject[listing.subject] = (bySubject[listing.subject] || 0) + 1;
-      byCondition[listing.condition] = (byCondition[listing.condition] || 0) + 1;
     });
 
     return {
       total: this.listings.length,
       matchGroups: this.matchGroups.size,
-      byMatchType,
-      bySubject,
-      byCondition,
+      byMatchType
     };
+  }
+
+  private async generateSameSchoolMatches(usersBySchool: Map<string, GeneratedUser[]>): Promise<void> {
+    for (const [schoolId, schoolUsers] of Array.from(usersBySchool.entries())) {
+      if (schoolUsers.length < 3) continue;
+      const matchGroupsForSchool = Math.min(2, Math.floor(schoolUsers.length / 3));
+
+      for (let i = 0; i < matchGroupsForSchool; i++) {
+        const participants = this.selectRandomUsers(schoolUsers, 2);
+        const matchGroupId = `SCHOOL_${schoolId}_${i}`;
+        this.createCycleMatch(participants, matchGroupId, 'SAME_SCHOOL');
+      }
+    }
+  }
+
+  private async generateSameCountyMatches(users: GeneratedUser[]): Promise<void> {
+    const usersByCounty = new Map<string, GeneratedUser[]>();
+    users.forEach(u => {
+      if (!usersByCounty.has(u.county)) usersByCounty.set(u.county, []);
+      usersByCounty.get(u.county)!.push(u);
+    });
+
+    for (const [county, countyUsers] of Array.from(usersByCounty.entries())) {
+      if (countyUsers.length < 5) continue;
+      const participants = this.selectUsersDifferentSchools(countyUsers, 2);
+      if (participants.length === 2) {
+        this.createCycleMatch(participants, `COUNTY_${county}_${participants[0].id.substring(0,4)}`, 'SAME_COUNTY');
+      }
+    }
+  }
+
+  private async generateCrossCountyMatches(users: GeneratedUser[]): Promise<void> {
+    for (let i = 0; i < 5; i++) {
+      const participants = this.selectUsersDifferentCounties(users, 2);
+      if (participants.length === 2) {
+        this.createCycleMatch(participants, `CROSS_${i}`, 'CROSS_COUNTY');
+      }
+    }
+  }
+
+  private createCycleMatch(participants: GeneratedUser[], matchGroupId: string, matchType: any): void {
+    const subjects = this.selectCycleSubjects(participants.length, participants[0].childGrade);
+    const groupListings: GeneratedListing[] = [];
+
+    for (let i = 0; i < participants.length; i++) {
+      const user = participants[i];
+      const hasSubject = subjects[i];
+      const wantsSubject = subjects[(i + 1) % subjects.length];
+      const listing = this.createListing(user, hasSubject, wantsSubject, matchGroupId);
+      listing.matchType = matchType; // Assign match type for stats
+      
+      groupListings.push(listing);
+      this.listings.push(listing);
+    }
+    this.matchGroups.set(matchGroupId, groupListings);
+  }
+
+  private createListing(user: GeneratedUser, subject: string, wantsSubject: string, matchGroupId?: string): GeneratedListing {
+    const condition = this.getRandomCondition();
+    return {
+      id: this.listingId++,
+      sellerId: user.id,
+      title: getRandomBookTitle(subject),
+      author: 'KIE / Various Authors',
+      publisher: getRandomPublisher(),
+      subject,
+      classGrade: user.childGrade >= 9 ? `Form ${user.childGrade - 8}` : `Class ${user.childGrade}`,
+      condition,
+      description: `${getConditionDescription(condition)}. ${getRandomSwapReason()}.`,
+      listingType: 'swap',
+      listingStatus: 'active',
+      willingToSwapFor: wantsSubject,
+      schoolId: user.schoolId,
+      county: user.county,
+      createdAt: randomDateBetween(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), new Date()),
+      matchGroup: matchGroupId,
+    };
+  }
+
+  private async generateRemainingListings(superActive: GeneratedUser[], moderate: GeneratedUser[], inactive: GeneratedUser[]): Promise<void> {
+    const remaining = STRESS_TEST_CONFIG.TARGET_LISTINGS - this.listings.length;
+    if (remaining <= 0) return;
+
+    this.generateRandomListings(superActive, Math.floor(remaining * 0.4));
+    this.generateRandomListings(moderate, Math.floor(remaining * 0.5));
+    this.generateRandomListings(inactive, Math.max(0, remaining - Math.floor(remaining * 0.9)));
+  }
+
+  private generateRandomListings(users: GeneratedUser[], count: number): void {
+    if (users.length === 0) return;
+    for (let i = 0; i < count; i++) {
+      const user = users[i % users.length];
+      const subjects = getSubjectsForGrade(user.childGrade);
+      this.listings.push(this.createListing(user, subjects[0], subjects[Math.min(1, subjects.length - 1)]));
+    }
+  }
+
+  private getRandomCondition(): string {
+    const rand = Math.random();
+    const dist = STRESS_TEST_CONFIG.CONDITION_DISTRIBUTION;
+    if (rand < dist['Excellent']) return 'Excellent';
+    if (rand < dist['Excellent'] + dist['Very Good']) return 'Very Good';
+    if (rand < dist['Excellent'] + dist['Very Good'] + dist['Good']) return 'Good';
+    if (rand < 0.9) return 'Fair';
+    return 'Poor';
+  }
+
+  async saveListingsToDatabase(): Promise<void> {
+    const batchSize = STRESS_TEST_CONFIG.LISTINGS_PER_BATCH || 50;
+    const totalBatches = Math.ceil(this.listings.length / batchSize);
+
+    for (let i = 0; i < totalBatches; i++) {
+      const batch = this.listings.slice(i * batchSize, (i + 1) * batchSize);
+      await db.insert(bookListings).values(batch.map(l => ({
+        sellerId: l.sellerId,
+        title: l.title,
+        author: l.author,
+        publisher: l.publisher,
+        subject: l.subject,
+        classGrade: l.classGrade,
+        condition: l.condition,
+        description: l.description,
+        listingType: l.listingType,
+        listingStatus: l.listingStatus,
+        willingToSwapFor: l.willingToSwapFor,
+        price: "0.00",
+        createdAt: l.createdAt,
+      })));
+    }
+  }
+
+  /* Utility Selection Methods */
+  private selectRandomUsers(users: GeneratedUser[], count: number) {
+    return [...users].sort(() => Math.random() - 0.5).slice(0, count);
+  }
+
+  private selectUsersDifferentSchools(users: GeneratedUser[], count: number) {
+    const selected: GeneratedUser[] = [];
+    const usedSchools = new Set<string>();
+    for (const u of [...users].sort(() => Math.random() - 0.5)) {
+      if (!usedSchools.has(u.schoolId)) {
+        selected.push(u);
+        usedSchools.add(u.schoolId);
+      }
+      if (selected.length === count) break;
+    }
+    return selected;
+  }
+
+  private selectUsersDifferentCounties(users: GeneratedUser[], count: number) {
+    const selected: GeneratedUser[] = [];
+    const usedCounties = new Set<string>();
+    for (const u of [...users].sort(() => Math.random() - 0.5)) {
+      if (!usedCounties.has(u.county)) {
+        selected.push(u);
+        usedCounties.add(u.county);
+      }
+      if (selected.length === count) break;
+    }
+    return selected;
+  }
+
+  private selectCycleSubjects(count: number, grade: number): string[] {
+    const available = getSubjectsForGrade(grade);
+    return [...available].sort(() => Math.random() - 0.5).slice(0, count);
   }
 }

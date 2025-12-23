@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "67ab38f0-c041-4d58-9102-73a5a54f1e4d",
+  "id": "f0728b21-bae2-4be3-ae78-7fd9bac65424",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_condition_reports": {
@@ -481,7 +481,58 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_book_listings_seller": {
+          "name": "idx_book_listings_seller",
+          "columns": [
+            "seller_id"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_status": {
+          "name": "idx_book_listings_status",
+          "columns": [
+            "listing_status"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_type": {
+          "name": "idx_book_listings_type",
+          "columns": [
+            "listing_type"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_created_at": {
+          "name": "idx_book_listings_created_at",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_status_created": {
+          "name": "idx_book_listings_status_created",
+          "columns": [
+            "listing_status",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_subject": {
+          "name": "idx_book_listings_subject",
+          "columns": [
+            "subject"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_grade": {
+          "name": "idx_book_listings_grade",
+          "columns": [
+            "class_grade"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "book_listings_seller_id_users_id_fk": {
           "name": "book_listings_seller_id_users_id_fk",
@@ -556,7 +607,15 @@
           "default": "(now())"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_book_photos_listing": {
+          "name": "idx_book_photos_listing",
+          "columns": [
+            "listing_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "book_photos_listing_id_book_listings_id_fk": {
           "name": "book_photos_listing_id_book_listings_id_fk",

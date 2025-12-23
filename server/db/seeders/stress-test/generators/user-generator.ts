@@ -1,13 +1,12 @@
 /**
- * User Generator
- *
- * Generates 2000 realistic Kenyan users with proper distribution
+ * User Generator - SCALED DOWN VERSION
+ * Generates 200 realistic Kenyan users distributed across selected schools
  */
 
 import crypto from "crypto";
 import { db } from "../../../../db";
 import { users, userReliabilityScores } from "../../../schema";
-import { STRESS_TEST_CONFIG, getUserCountByActivity } from "../config/test-config";
+import { STRESS_TEST_CONFIG } from "../config/test-config";
 import {
   generateFullName,
   generateEmail,
@@ -26,7 +25,7 @@ export interface GeneratedUser {
   role: string;
   onboardingCompleted: boolean;
   activityLevel: 'SUPER_ACTIVE' | 'MODERATE' | 'INACTIVE';
-  childGrade: number; // Changed from grade (string) to childGrade (number)
+  childGrade: number;
   county: string;
   createdAt: Date;
 }
@@ -34,17 +33,16 @@ export interface GeneratedUser {
 export class UserGenerator {
   private users: GeneratedUser[] = [];
   private usersBySchool: Map<string, GeneratedUser[]> = new Map();
-  private phoneNumbers: Set<string> = new Set(); // Track unique phone numbers
+  private phoneNumbers: Set<string> = new Set();
 
   /**
-   * Generate users based on school distribution
+   * Main entry point for user generation
    */
   async generateUsers(
     schoolsByCounty: Record<string, SelectedSchool[]>
   ): Promise<GeneratedUser[]> {
-    console.log('  👥 Generating users across counties...');
+    console.log('  👥 Generating users based on county distribution...');
 
-    // Generate users for each county based on distribution
     for (const [county, config] of Object.entries(STRESS_TEST_CONFIG.COUNTY_DISTRIBUTION)) {
       if (county === 'RURAL_MIX') {
         await this.generateRuralUsers(config.users, schoolsByCounty);
@@ -57,40 +55,29 @@ export class UserGenerator {
     return this.users;
   }
 
-  /**
-   * Generate users for a specific county
-   */
   private async generateCountyUsers(
     county: string,
     userCount: number,
     schools: SelectedSchool[]
   ): Promise<void> {
-    if (schools.length === 0) {
-      console.log(`  ⚠️  No schools found for ${county}, skipping users`);
-      return;
-    }
+    if (schools.length === 0 || userCount === 0) return;
 
-    // Distribute users across activity levels
+    // Proportional distribution based on config percentages
     const superActiveCount = Math.floor(userCount * STRESS_TEST_CONFIG.ACTIVITY_LEVELS.SUPER_ACTIVE.percentage);
     const moderateCount = Math.floor(userCount * STRESS_TEST_CONFIG.ACTIVITY_LEVELS.MODERATE.percentage);
     const inactiveCount = userCount - superActiveCount - moderateCount;
 
-    // Generate users
     await this.generateUserBatch(schools, superActiveCount, 'SUPER_ACTIVE', county);
     await this.generateUserBatch(schools, moderateCount, 'MODERATE', county);
     await this.generateUserBatch(schools, inactiveCount, 'INACTIVE', county);
 
-    console.log(`  ✓ ${county}: ${userCount} users (${schools.length} schools)`);
+    console.log(`  ✓ ${county}: ${userCount} users across ${schools.length} schools`);
   }
 
-  /**
-   * Generate rural users across multiple counties
-   */
   private async generateRuralUsers(
     userCount: number,
     schoolsByCounty: Record<string, SelectedSchool[]>
   ): Promise<void> {
-    // Get all rural schools (exclude major counties)
     const majorCounties = ['NAIROBI', 'MOMBASA', 'KIAMBU', 'NAKURU', 'KISUMU', 'UASIN GISHU', 'MACHAKOS', 'KAKAMEGA'];
     const ruralSchools: SelectedSchool[] = [];
 
@@ -102,7 +89,6 @@ export class UserGenerator {
 
     if (ruralSchools.length === 0) return;
 
-    // Distribute activity levels
     const superActiveCount = Math.floor(userCount * STRESS_TEST_CONFIG.ACTIVITY_LEVELS.SUPER_ACTIVE.percentage);
     const moderateCount = Math.floor(userCount * STRESS_TEST_CONFIG.ACTIVITY_LEVELS.MODERATE.percentage);
     const inactiveCount = userCount - superActiveCount - moderateCount;
@@ -110,28 +96,19 @@ export class UserGenerator {
     await this.generateUserBatch(ruralSchools, superActiveCount, 'SUPER_ACTIVE', 'RURAL');
     await this.generateUserBatch(ruralSchools, moderateCount, 'MODERATE', 'RURAL');
     await this.generateUserBatch(ruralSchools, inactiveCount, 'INACTIVE', 'RURAL');
-
-    console.log(`  ✓ Rural: ${userCount} users (${ruralSchools.length} schools)`);
   }
 
-  /**
-   * Generate batch of users
-   */
   private async generateUserBatch(
     schools: SelectedSchool[],
     count: number,
     activityLevel: 'SUPER_ACTIVE' | 'MODERATE' | 'INACTIVE',
     county: string
   ): Promise<void> {
-    // Distribute users evenly across schools
-    const usersPerSchool = Math.ceil(count / schools.length);
-
     for (let i = 0; i < count; i++) {
       const school = schools[i % schools.length];
       const user = this.createUser(school, activityLevel, county);
       this.users.push(user);
 
-      // Track users by school
       if (!this.usersBySchool.has(school.id)) {
         this.usersBySchool.set(school.id, []);
       }
@@ -139,36 +116,28 @@ export class UserGenerator {
     }
   }
 
-  /**
-   * Create individual user
-   */
   private createUser(
     school: SelectedSchool,
     activityLevel: 'SUPER_ACTIVE' | 'MODERATE' | 'INACTIVE',
     county: string
   ): GeneratedUser {
     const fullName = generateFullName();
-    const email = generateEmail(fullName);
-
-    // Generate unique phone number
     let phoneNumber = generateKenyanPhoneNumber();
+    
+    // Ensure uniqueness for the phone number set
     while (this.phoneNumbers.has(phoneNumber)) {
       phoneNumber = generateKenyanPhoneNumber();
     }
     this.phoneNumbers.add(phoneNumber);
 
-    // Assign child's grade based on school level
-    const childGrade = this.getRandomGrade(school.level);
-
-    // Create user with backdated createdAt (simulate gradual adoption over 2 months)
-    const twoMonthsAgo = new Date();
-    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-    const createdAt = randomDateBetween(twoMonthsAgo, new Date());
+    const childGrade = school.level.toUpperCase().includes('SECONDARY') 
+      ? Math.floor(Math.random() * 4) + 9 
+      : Math.floor(Math.random() * 8) + 1;
 
     return {
       id: crypto.randomUUID(),
       fullName,
-      email,
+      email: generateEmail(fullName),
       phoneNumber,
       schoolId: school.id,
       schoolName: school.name,
@@ -177,28 +146,15 @@ export class UserGenerator {
       activityLevel,
       childGrade,
       county,
-      createdAt,
+      createdAt: randomDateBetween(new Date(Date.now() - 60 * 24 * 60 * 60 * 1000), new Date()),
     };
   }
 
   /**
-   * Get random grade based on school level
-   */
-  private getRandomGrade(level: string): number {
-    if (level.toUpperCase().includes('SECONDARY')) {
-      // Secondary: Forms 1-4 → Grades 9-12
-      return Math.floor(Math.random() * 4) + 9;
-    } else {
-      // Primary: Grades 1-8
-      return Math.floor(Math.random() * 8) + 1;
-    }
-  }
-
-  /**
-   * Save users to database in batches
+   * Save users and their reliability scores
    */
   async saveUsersToDatabase(): Promise<void> {
-    const batchSize = STRESS_TEST_CONFIG.USERS_PER_BATCH;
+    const batchSize = STRESS_TEST_CONFIG.USERS_PER_BATCH; // 50
     const totalBatches = Math.ceil(this.users.length / batchSize);
 
     console.log(`  💾 Saving ${this.users.length} users in ${totalBatches} batches...`);
@@ -206,80 +162,55 @@ export class UserGenerator {
     for (let i = 0; i < totalBatches; i++) {
       const batch = this.users.slice(i * batchSize, (i + 1) * batchSize);
 
-      const userRecords = batch.map((user) => ({
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        phoneNumber: user.phoneNumber,
-        schoolId: user.schoolId,
-        schoolName: user.schoolName,
-        role: user.role,
-        childGrade: user.childGrade,
-        onboardingCompleted: user.onboardingCompleted,
-        createdAt: user.createdAt,
-      }));
+      // Insert User Profiles
+      await db.insert(users).values(batch.map(u => ({
+        id: u.id,
+        fullName: u.fullName,
+        email: u.email,
+        phoneNumber: u.phoneNumber,
+        schoolId: u.schoolId,
+        schoolName: u.schoolName,
+        role: u.role,
+        childGrade: u.childGrade,
+        onboardingCompleted: true,
+        createdAt: u.createdAt,
+      })));
 
-      await db.insert(users).values(userRecords);
+      // Initialize Reliability Scores (Base score of 50)
+      await db.insert(userReliabilityScores).values(batch.map(u => ({
+        userId: u.id,
+        reliabilityScore: "50.00",
+      })));
 
-      // Also create default reliability scores
-      const scoreRecords = batch.map((user) => ({
-        userId: user.id,
-        reliabilityScore: "50.00", // Default starting score
-      }));
-
-      await db.insert(userReliabilityScores).values(scoreRecords);
-
-      if ((i + 1) % 5 === 0 || i === totalBatches - 1) {
-        console.log(`  ✓ Batch ${i + 1}/${totalBatches} saved (${(i + 1) * batchSize} users)`);
-      }
+      console.log(`  ✓ Batch ${i + 1}/${totalBatches} saved`);
     }
   }
 
-  /**
-   * Get users by activity level
-   */
-  getUsersByActivity(level: 'SUPER_ACTIVE' | 'MODERATE' | 'INACTIVE'): GeneratedUser[] {
+  /* Getters and helper methods (Stay the same) */
+  getUsersByActivity(level: 'SUPER_ACTIVE' | 'MODERATE' | 'INACTIVE') {
     return this.users.filter((u) => u.activityLevel === level);
   }
+  getStatistics() {
+  const byActivity: Record<string, number> = { SUPER_ACTIVE: 0, MODERATE: 0, INACTIVE: 0 };
+  const byCounty: Record<string, number> = {};
+
+  this.users.forEach((user) => {
+    byActivity[user.activityLevel] = (byActivity[user.activityLevel] || 0) + 1;
+    byCounty[user.county] = (byCounty[user.county] || 0) + 1;
+  });
+
+  return {
+    total: this.users.length,
+    byActivity,
+    byCounty
+  };
+}
 
   /**
-   * Get users by school
-   */
-  getUsersBySchool(schoolId: string): GeneratedUser[] {
-    return this.usersBySchool.get(schoolId) || [];
-  }
-
-  /**
-   * Get random user
-   */
-  getRandomUser(): GeneratedUser {
-    return this.users[Math.floor(Math.random() * this.users.length)];
-  }
-
-  /**
-   * Get statistics
-   */
-  getStatistics(): {
-    total: number;
-    byActivity: Record<string, number>;
-    byCounty: Record<string, number>;
-    byGrade: Record<string, number>;
-  } {
-    const byActivity: Record<string, number> = {};
-    const byCounty: Record<string, number> = {};
-    const byGrade: Record<string, number> = {};
-
-    this.users.forEach((user) => {
-      byActivity[user.activityLevel] = (byActivity[user.activityLevel] || 0) + 1;
-      byCounty[user.county] = (byCounty[user.county] || 0) + 1;
-      byGrade[`Grade ${user.childGrade}`] = (byGrade[`Grade ${user.childGrade}`] || 0) + 1;
-    });
-
-    return {
-      total: this.users.length,
-      byActivity,
-      byCounty,
-      byGrade,
-    };
-  }
+ * Get users belonging to a specific school
+ */
+getUsersBySchool(schoolId: string): GeneratedUser[] {
+  // Logic to filter the generated users array by schoolId
+  return this.users.filter((user) => user.schoolId === schoolId);
+}
 }
