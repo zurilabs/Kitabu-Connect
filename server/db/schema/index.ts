@@ -853,11 +853,14 @@ export const verifyOTPSchema = z.object({
 export const completeOnboardingSchema = z.object({
   fullName: z.string().min(2),
   email: z.string().email(),
-  schoolId: z.string(),
-  schoolName: z.string(),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
-  childGrade: z.number().min(1).max(12),
+  children: z.array(z.object({
+    name: z.string().nullable().optional(),
+    grade: z.string().min(1, "Grade is required"),
+    schoolId: z.string().min(1, "School is required"),
+    schoolName: z.string().min(1, "School name is required"),
+  })).optional().default([]),
 });
 
 export const updateProfileSchema = z.object({
