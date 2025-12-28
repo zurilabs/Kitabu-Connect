@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { ChildrenManagement } from "@/components/profile/ChildrenManagement";
@@ -367,18 +368,19 @@ export default function Profile() {
   }
 
   return (
-    <div className="container px-4 py-8 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-display font-bold">Account Settings</h1>
-        <p className="text-muted-foreground">Manage your profile, preferences, and payment methods.</p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
+      <div className="container px-4 py-6 lg:py-10 max-w-6xl mx-auto">
+        {/* Profile Header Card */}
+        <Card className="mb-6 lg:mb-8 border-0 shadow-lg overflow-hidden">
+          {/* Background Pattern */}
+          <div className="h-24 lg:h-32 bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 relative overflow-hidden">
+            <div className="absolute inset-0 bg-grid-white/5"></div>
+          </div>
 
-      <div className="grid md:grid-cols-[280px,1fr] gap-8">
-        {/* Sidebar Nav */}
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
-              <div className="relative group">
+          <CardContent className="relative -mt-16 lg:-mt-20 px-6 lg:px-10 pb-8">
+            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6">
+              {/* Avatar */}
+              <div className="relative group shrink-0">
                 <input
                   type="file"
                   accept="image/*"
@@ -387,90 +389,144 @@ export default function Profile() {
                   id="profile-picture-upload"
                   disabled={isUploadingPicture}
                 />
-                <label htmlFor="profile-picture-upload" className="cursor-pointer">
-                  <Avatar className="h-24 w-24 border-4 border-background shadow-xl">
+                <label htmlFor="profile-picture-upload" className="cursor-pointer block">
+                  <Avatar className="h-28 w-28 lg:h-36 lg:w-36 border-4 border-background shadow-2xl ring-4 ring-primary/10">
                     {profilePicture ? (
                       <img src={profilePicture} alt="Profile" className="object-cover w-full h-full" />
                     ) : (
-                      <AvatarFallback className="text-2xl">{user?.fullName?.charAt(0) || "?"}</AvatarFallback>
+                      <AvatarFallback className="text-3xl lg:text-4xl bg-gradient-to-br from-primary/20 to-primary/10">
+                        {user?.fullName?.charAt(0) || "?"}
+                      </AvatarFallback>
                     )}
                   </Avatar>
-                  <div className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-1.5 rounded-full shadow-sm group-hover:scale-110 transition-transform">
+                  <div className="absolute bottom-2 right-2 bg-primary text-primary-foreground p-2.5 lg:p-3 rounded-full shadow-lg group-hover:scale-110 transition-all duration-200">
                     {isUploadingPicture ? (
-                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                      <div className="animate-spin h-5 w-5 lg:h-6 lg:w-6 border-2 border-white border-t-transparent rounded-full" />
                     ) : (
-                      <Camera className="w-4 h-4" />
+                      <Camera className="w-5 h-5 lg:w-6 lg:h-6" />
                     )}
                   </div>
                 </label>
               </div>
 
-              <div>
-                <h3 className="font-bold text-lg">{user?.fullName || "User"}</h3>
-                <div className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground mt-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
+              {/* User Info */}
+              <div className="flex-1 text-center sm:text-left min-w-0 pb-2">
+                <h1 className="font-bold text-2xl lg:text-3xl tracking-tight truncate">{user?.fullName || "User"}</h1>
+                <div className="flex items-center justify-center sm:justify-start gap-2 text-sm lg:text-base text-muted-foreground mt-2">
+                  <ShieldCheck className="w-5 h-5 text-green-600 shrink-0" />
                   <span>Verified Parent</span>
                 </div>
+                <p className="text-sm text-muted-foreground/80 mt-1">
+                  {user?.email}
+                </p>
               </div>
 
-              <div className="w-full pt-2">
-                <div className="grid grid-cols-2 gap-2 text-center text-sm">
-                  <div className="p-2 bg-muted/50 rounded-lg">
-                    <div className="font-bold text-lg">4.9</div>
-                    <div className="text-muted-foreground text-xs">Rating</div>
-                  </div>
-                  <div className="p-2 bg-muted/50 rounded-lg">
-                    <div className="font-bold text-lg">12</div>
-                    <div className="text-muted-foreground text-xs">Deals</div>
-                  </div>
+              {/* Stats */}
+              <div className="flex gap-4 lg:gap-6 pb-2">
+                <div className="text-center">
+                  <div className="font-bold text-3xl lg:text-4xl text-primary">4.9</div>
+                  <div className="text-muted-foreground text-xs lg:text-sm font-medium mt-1">Rating</div>
+                </div>
+                <Separator orientation="vertical" className="h-16" />
+                <div className="text-center">
+                  <div className="font-bold text-3xl lg:text-4xl text-primary">12</div>
+                  <div className="text-muted-foreground text-xs lg:text-sm font-medium mt-1">Deals</div>
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Mobile Navigation - Grid Layout */}
+        <div className="lg:hidden mb-6">
+          <Card className="border-0 shadow-md">
+            <CardContent className="p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={activeSection === "profile" ? "default" : "outline"}
+                  size="sm"
+                  className="justify-start font-medium"
+                  onClick={() => setActiveSection("profile")}
+                >
+                  <User className="mr-2 h-4 w-4" />
+                  <span className="text-xs sm:text-sm">Profile</span>
+                </Button>
+                <Button
+                  variant={activeSection === "children" ? "default" : "outline"}
+                  size="sm"
+                  className="justify-start font-medium"
+                  onClick={() => setActiveSection("children")}
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  <span className="text-xs sm:text-sm">Children</span>
+                </Button>
+                <Button
+                  variant={activeSection === "notifications" ? "default" : "outline"}
+                  size="sm"
+                  className="justify-start font-medium"
+                  onClick={() => setActiveSection("notifications")}
+                >
+                  <Bell className="mr-2 h-4 w-4" />
+                  <span className="text-xs sm:text-sm">Alerts</span>
+                </Button>
+                <Button
+                  variant={activeSection === "payment" ? "default" : "outline"}
+                  size="sm"
+                  className="justify-start font-medium"
+                  onClick={() => setActiveSection("payment")}
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  <span className="text-xs sm:text-sm">Payment</span>
+                </Button>
+              </div>
+              <Separator className="my-3" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={handleLogout}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span className="text-sm">Log out</span>
+              </Button>
             </CardContent>
           </Card>
-
-          <nav className="flex flex-col space-y-1">
-            <Button
-              variant="ghost"
-              className={`justify-start font-medium ${activeSection === "profile" ? "bg-secondary/50 text-secondary-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
-              onClick={() => setActiveSection("profile")}
-            >
-              <User className="mr-2 h-4 w-4" /> Profile Details
-            </Button>
-            <Button
-              variant="ghost"
-              className={`justify-start font-medium ${activeSection === "children" ? "bg-secondary/50 text-secondary-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
-              onClick={() => setActiveSection("children")}
-            >
-              <Users className="mr-2 h-4 w-4" /> My Children
-            </Button>
-            <Separator className="my-2" />
-            <Button
-              variant="ghost"
-              className={`justify-start font-medium ${activeSection === "notifications" ? "bg-secondary/50 text-secondary-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
-              onClick={() => setActiveSection("notifications")}
-            >
-              <Bell className="mr-2 h-4 w-4" /> Notifications
-            </Button>
-            <Button
-              variant="ghost"
-              className={`justify-start font-medium ${activeSection === "payment" ? "bg-secondary/50 text-secondary-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
-              onClick={() => setActiveSection("payment")}
-            >
-              <CreditCard className="mr-2 h-4 w-4" /> Payment Methods
-            </Button>
-            <Separator className="my-2" />
-            <Button
-              variant="ghost"
-              className="justify-start font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={handleLogout}
-            >
-              <LogOut className="mr-2 h-4 w-4" /> Log out
-            </Button>
-          </nav>
         </div>
 
-        {/* Main Content Area */}
-        <div className="space-y-6">
+        {/* Desktop Tabs Navigation */}
+        <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as typeof activeSection)} className="hidden lg:block">
+          <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
+            <TabsTrigger value="profile" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+              <User className="mr-2 h-4 w-4" />
+              Profile Details
+            </TabsTrigger>
+            <TabsTrigger value="children" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+              <Users className="mr-2 h-4 w-4" />
+              My Children
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+              <Bell className="mr-2 h-4 w-4" />
+              Notifications
+            </TabsTrigger>
+            <TabsTrigger value="payment" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+              <CreditCard className="mr-2 h-4 w-4" />
+              Payment Methods
+            </TabsTrigger>
+            <div className="ml-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={handleLogout}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </Button>
+            </div>
+          </TabsList>
+
+          {/* Main Content Area */}
+          <div className="mt-6">
           {/* Profile Details Section */}
           {activeSection === "profile" && (
           <Card>
@@ -883,6 +939,417 @@ export default function Profile() {
               </Button>
             </CardFooter>
           </Card>
+          )}
+          </div>
+        </Tabs>
+
+        {/* Mobile Content - Conditional Rendering */}
+        <div className="lg:hidden">
+          {activeSection === "profile" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>Update your personal details and school information.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="fullName"
+                      value={formData.name}
+                      className="pl-9"
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      className="pl-9"
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={formData.phone}
+                      className="pl-9 bg-muted"
+                      disabled
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Phone number cannot be changed. It's used for verification.</p>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex justify-end border-t px-6 py-4">
+              <Button onClick={handleSaveProfile} disabled={isLoading}>
+                {isLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardFooter>
+          </Card>
+          )}
+
+          {activeSection === "children" && (
+            <ChildrenManagement />
+          )}
+
+          {activeSection === "notifications" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Notifications</CardTitle>
+                <CardDescription>Manage how we communicate with you.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {isLoadingPreferences ? (
+                  <div className="space-y-4">
+                    {[...Array(7)].map((_, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <div className="space-y-2 flex-1">
+                          <div className="h-4 bg-muted animate-pulse rounded w-1/3"></div>
+                          <div className="h-3 bg-muted animate-pulse rounded w-2/3"></div>
+                        </div>
+                        <div className="h-6 w-11 bg-muted animate-pulse rounded-full"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Email Notifications</Label>
+                        <p className="text-xs text-muted-foreground">Receive updates about your listings and orders.</p>
+                      </div>
+                      <Switch
+                        checked={currentPreferences?.emailNotifications ?? true}
+                        onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, emailNotifications: c} : {
+                          emailNotifications: c,
+                          pushNotifications: true,
+                          smsNotifications: false,
+                          notifyOnNewMessages: true,
+                          notifyOnBookSold: true,
+                          notifyOnPriceDrops: true,
+                          notifyOnNewListings: false,
+                          preferredPaymentMethod: "mpesa",
+                          mpesaPhoneNumber: null,
+                          bankName: null,
+                          bankAccountNumber: null,
+                          bankAccountName: null,
+                          bankBranch: null,
+                          paypalEmail: null,
+                        })}
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Push Notifications</Label>
+                        <p className="text-xs text-muted-foreground">Get instant alerts on your device.</p>
+                      </div>
+                      <Switch
+                        checked={currentPreferences?.pushNotifications ?? true}
+                        onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, pushNotifications: c} : {
+                          emailNotifications: true,
+                          pushNotifications: c,
+                          smsNotifications: false,
+                          notifyOnNewMessages: true,
+                          notifyOnBookSold: true,
+                          notifyOnPriceDrops: true,
+                          notifyOnNewListings: false,
+                          preferredPaymentMethod: "mpesa",
+                          mpesaPhoneNumber: null,
+                          bankName: null,
+                          bankAccountNumber: null,
+                          bankAccountName: null,
+                          bankBranch: null,
+                          paypalEmail: null,
+                        })}
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">SMS Notifications</Label>
+                        <p className="text-xs text-muted-foreground">Receive text messages for important updates.</p>
+                      </div>
+                      <Switch
+                        checked={currentPreferences?.smsNotifications ?? false}
+                        onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, smsNotifications: c} : {
+                          emailNotifications: true,
+                          pushNotifications: true,
+                          smsNotifications: c,
+                          notifyOnNewMessages: true,
+                          notifyOnBookSold: true,
+                          notifyOnPriceDrops: true,
+                          notifyOnNewListings: false,
+                          preferredPaymentMethod: "mpesa",
+                          mpesaPhoneNumber: null,
+                          bankName: null,
+                          bankAccountNumber: null,
+                          bankAccountName: null,
+                          bankBranch: null,
+                          paypalEmail: null,
+                        })}
+                      />
+                    </div>
+                    <Separator />
+                    <div className="pt-2">
+                      <Label className="text-base mb-3 block">Notify me about:</Label>
+                      <div className="space-y-3 ml-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-normal">New messages</Label>
+                          <Switch
+                            checked={currentPreferences?.notifyOnNewMessages ?? true}
+                            onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, notifyOnNewMessages: c} : {
+                              emailNotifications: true,
+                              pushNotifications: true,
+                              smsNotifications: false,
+                              notifyOnNewMessages: c,
+                              notifyOnBookSold: true,
+                              notifyOnPriceDrops: true,
+                              notifyOnNewListings: false,
+                              preferredPaymentMethod: "mpesa",
+                              mpesaPhoneNumber: null,
+                              bankName: null,
+                              bankAccountNumber: null,
+                              bankAccountName: null,
+                              bankBranch: null,
+                              paypalEmail: null,
+                            })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-normal">When my book is sold</Label>
+                          <Switch
+                            checked={currentPreferences?.notifyOnBookSold ?? true}
+                            onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, notifyOnBookSold: c} : {
+                              emailNotifications: true,
+                              pushNotifications: true,
+                              smsNotifications: false,
+                              notifyOnNewMessages: true,
+                              notifyOnBookSold: c,
+                              notifyOnPriceDrops: true,
+                              notifyOnNewListings: false,
+                              preferredPaymentMethod: "mpesa",
+                              mpesaPhoneNumber: null,
+                              bankName: null,
+                              bankAccountNumber: null,
+                              bankAccountName: null,
+                              bankBranch: null,
+                              paypalEmail: null,
+                            })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-normal">Price drops on favorites</Label>
+                          <Switch
+                            checked={currentPreferences?.notifyOnPriceDrops ?? true}
+                            onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, notifyOnPriceDrops: c} : {
+                              emailNotifications: true,
+                              pushNotifications: true,
+                              smsNotifications: false,
+                              notifyOnNewMessages: true,
+                              notifyOnBookSold: true,
+                              notifyOnPriceDrops: c,
+                              notifyOnNewListings: false,
+                              preferredPaymentMethod: "mpesa",
+                              mpesaPhoneNumber: null,
+                              bankName: null,
+                              bankAccountNumber: null,
+                              bankAccountName: null,
+                              bankBranch: null,
+                              paypalEmail: null,
+                            })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-normal">New listings in my area</Label>
+                          <Switch
+                            checked={currentPreferences?.notifyOnNewListings ?? false}
+                            onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, notifyOnNewListings: c} : {
+                              emailNotifications: true,
+                              pushNotifications: true,
+                              smsNotifications: false,
+                              notifyOnNewMessages: true,
+                              notifyOnBookSold: true,
+                              notifyOnPriceDrops: true,
+                              notifyOnNewListings: c,
+                              preferredPaymentMethod: "mpesa",
+                              mpesaPhoneNumber: null,
+                              bankName: null,
+                              bankAccountNumber: null,
+                              bankAccountName: null,
+                              bankBranch: null,
+                              paypalEmail: null,
+                            })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+              <CardFooter className="flex justify-end border-t px-6 py-4">
+                <Button onClick={handleSaveNotifications} disabled={updateNotificationsMutation.isPending || isLoadingPreferences}>
+                  {updateNotificationsMutation.isPending ? "Saving..." : "Save Notification Preferences"}
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
+
+          {activeSection === "payment" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Methods</CardTitle>
+                <CardDescription>Choose how you want to receive payments when you sell books.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <Label>Preferred Payment Method</Label>
+                  <RadioGroup
+                    value={paymentData.preferredPaymentMethod}
+                    onValueChange={(value) => setPaymentData({...paymentData, preferredPaymentMethod: value})}
+                  >
+                    <div className="flex items-center space-x-2 border rounded-lg p-4">
+                      <RadioGroupItem value="mpesa" id="mpesa-mobile" />
+                      <Label htmlFor="mpesa-mobile" className="flex-1 cursor-pointer">
+                        <div className="flex items-center gap-3">
+                          <Phone className="w-5 h-5 text-green-600" />
+                          <div>
+                            <div className="font-medium">M-Pesa</div>
+                            <div className="text-xs text-muted-foreground">Instant mobile money transfer</div>
+                          </div>
+                        </div>
+                      </Label>
+                    </div>
+
+                    <div className="flex items-center space-x-2 border rounded-lg p-4">
+                      <RadioGroupItem value="bank" id="bank-mobile" />
+                      <Label htmlFor="bank-mobile" className="flex-1 cursor-pointer">
+                        <div className="flex items-center gap-3">
+                          <Building2 className="w-5 h-5 text-blue-600" />
+                          <div>
+                            <div className="font-medium">Bank Transfer</div>
+                            <div className="text-xs text-muted-foreground">Direct deposit to your bank account</div>
+                          </div>
+                        </div>
+                      </Label>
+                    </div>
+
+                    <div className="flex items-center space-x-2 border rounded-lg p-4">
+                      <RadioGroupItem value="paypal" id="paypal-mobile" />
+                      <Label htmlFor="paypal-mobile" className="flex-1 cursor-pointer">
+                        <div className="flex items-center gap-3">
+                          <Wallet className="w-5 h-5 text-blue-500" />
+                          <div>
+                            <div className="font-medium">PayPal</div>
+                            <div className="text-xs text-muted-foreground">International payments via PayPal</div>
+                          </div>
+                        </div>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {/* M-Pesa Details */}
+                {paymentData.preferredPaymentMethod === "mpesa" && (
+                  <div className="space-y-4 pt-4 border-t">
+                    <h4 className="font-medium">M-Pesa Details</h4>
+                    <div className="space-y-2">
+                      <Label htmlFor="mpesaPhone-mobile">M-Pesa Phone Number</Label>
+                      <Input
+                        id="mpesaPhone-mobile"
+                        type="tel"
+                        placeholder="e.g. 0712345678"
+                        value={paymentData.mpesaPhoneNumber}
+                        onChange={(e) => setPaymentData({...paymentData, mpesaPhoneNumber: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Bank Details */}
+                {paymentData.preferredPaymentMethod === "bank" && (
+                  <div className="space-y-4 pt-4 border-t">
+                    <h4 className="font-medium">Bank Account Details</h4>
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="bankName-mobile">Bank Name</Label>
+                        <Input
+                          id="bankName-mobile"
+                          placeholder="e.g. Equity Bank"
+                          value={paymentData.bankName}
+                          onChange={(e) => setPaymentData({...paymentData, bankName: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="accountName-mobile">Account Name</Label>
+                        <Input
+                          id="accountName-mobile"
+                          placeholder="Account holder name"
+                          value={paymentData.bankAccountName}
+                          onChange={(e) => setPaymentData({...paymentData, bankAccountName: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="accountNumber-mobile">Account Number</Label>
+                        <Input
+                          id="accountNumber-mobile"
+                          placeholder="Account number"
+                          value={paymentData.bankAccountNumber}
+                          onChange={(e) => setPaymentData({...paymentData, bankAccountNumber: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="branch-mobile">Branch</Label>
+                        <Input
+                          id="branch-mobile"
+                          placeholder="e.g. Westlands"
+                          value={paymentData.bankBranch}
+                          onChange={(e) => setPaymentData({...paymentData, bankBranch: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* PayPal Details */}
+                {paymentData.preferredPaymentMethod === "paypal" && (
+                  <div className="space-y-4 pt-4 border-t">
+                    <h4 className="font-medium">PayPal Details</h4>
+                    <div className="space-y-2">
+                      <Label htmlFor="paypalEmail-mobile">PayPal Email</Label>
+                      <Input
+                        id="paypalEmail-mobile"
+                        type="email"
+                        placeholder="your.email@example.com"
+                        value={paymentData.paypalEmail}
+                        onChange={(e) => setPaymentData({...paymentData, paypalEmail: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter className="flex justify-end border-t px-6 py-4">
+                <Button onClick={handleSavePayment} disabled={updatePaymentMutation.isPending}>
+                  {updatePaymentMutation.isPending ? "Saving..." : "Save Payment Method"}
+                </Button>
+              </CardFooter>
+            </Card>
           )}
         </div>
       </div>
