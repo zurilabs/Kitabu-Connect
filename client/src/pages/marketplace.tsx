@@ -18,7 +18,12 @@ import {
   Loader2,
   X,
   SlidersHorizontal,
-  ArrowUp
+  ArrowUp,
+  MapPin,
+  School as SchoolIcon,
+  TrendingDown,
+  ChevronDown,
+  RefreshCw
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -27,7 +32,7 @@ import { useActiveChild } from "@/contexts/ActiveChildContext";
 
 export default function Marketplace() {
   const { user } = useAuth();
-  const { activeChild, children } = useActiveChild();
+  const { activeChild, children, setActiveChild } = useActiveChild();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGrade, setSelectedGrade] = useState<string>("all");
   const [selectedSubject, setSelectedSubject] = useState<string>("all");
@@ -37,6 +42,11 @@ export default function Marketplace() {
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [sameSchoolOnly, setSameSchoolOnly] = useState(false);
+  const [showChildSelector, setShowChildSelector] = useState(false);
+  const [curriculum, setCurriculum] = useState<string>("all");
+  const [negotiableOnly, setNegotiableOnly] = useState(false);
+  const [maxDistance, setMaxDistance] = useState<number | null>(null);
 
   // Infinite scroll state
   const [page, setPage] = useState(1);
@@ -57,10 +67,25 @@ export default function Marketplace() {
     if (priceRange[0] > 0) params.append("minPrice", priceRange[0].toString());
     if (priceRange[1] < 10000) params.append("maxPrice", priceRange[1].toString());
     if (sortBy !== "newest") params.append("sortBy", sortBy);
+    if (sameSchoolOnly && activeChild?.schoolId) params.append("schoolId", activeChild.schoolId);
+    if (curriculum !== "all") params.append("curriculum", curriculum);
+    if (negotiableOnly) params.append("negotiable", "true");
+    if (maxDistance) {
+      params.append("maxDistance", maxDistance.toString());
+      // Prefer school-based distance (privacy-friendly)
+      if (activeChild?.schoolId) {
+        params.append("userSchoolId", activeChild.schoolId);
+      }
+      // Fallback to user coordinates if available
+      if (user?.latitude && user?.longitude) {
+        params.append("userLatitude", user.latitude.toString());
+        params.append("userLongitude", user.longitude.toString());
+      }
+    }
     params.append("page", page.toString());
     params.append("limit", "24");
     return params.toString();
-  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, page]);
+  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, sameSchoolOnly, activeChild, curriculum, negotiableOnly, maxDistance, user, page]);
 
   // Fetch books with React Query
   const { data, isLoading, isFetching } = useQuery({
@@ -93,7 +118,7 @@ export default function Marketplace() {
   useEffect(() => {
     setPage(1);
     setAllBooks([]);
-  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy]);
+  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, sameSchoolOnly, curriculum, negotiableOnly, maxDistance]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -149,6 +174,7 @@ export default function Marketplace() {
     { value: "newest", label: "Newest First" },
     { value: "price_low", label: "Price: Low to High" },
     { value: "price_high", label: "Price: High to Low" },
+    { value: "distance", label: "Nearest to Me", icon: <MapPin className="w-3 h-3" /> },
     { value: "popular", label: "Most Popular" },
   ];
 
@@ -191,34 +217,47 @@ export default function Marketplace() {
   const quickFilters = [
     {
       id: "my_grade",
-      label: activeChild ? `${activeChild.displayName}'s Grade` : "My Grade",
+      label: activeChild ? `${activeChild.grade}` : "My Grade",
+      icon: <BookOpen className="w-3 h-3" />,
       value: activeChild?.grade || null,
       onClick: () => activeChild?.grade && setSelectedGrade(activeChild.grade),
       active: activeChild && selectedGrade === activeChild.grade,
-      disabled: !activeChild, // Disabled when no active child
+      disabled: !activeChild,
+    },
+    {
+      id: "same_school",
+      label: activeChild?.schoolName ? activeChild.schoolName : "Same School",
+      icon: <SchoolIcon className="w-3 h-3" />,
+      value: "same_school",
+      onClick: () => setSameSchoolOnly(!sameSchoolOnly),
+      active: sameSchoolOnly,
+      disabled: !activeChild?.schoolId,
+    },
+    {
+      id: "within_5km",
+      label: "Within 5km",
+      icon: <MapPin className="w-3 h-3" />,
+      value: "5km",
+      onClick: () => setMaxDistance(maxDistance === 5 ? null : 5),
+      active: maxDistance === 5,
+      disabled: !(activeChild?.schoolId || (user?.latitude && user?.longitude)),
     },
     {
       id: "under_500",
       label: "Under KSh 500",
+      icon: <TrendingDown className="w-3 h-3" />,
       value: "under_500",
       onClick: () => setPriceRange([0, 500]),
-      active: priceRange[1] === 500,
+      active: priceRange[1] === 500 && priceRange[0] === 0,
       disabled: false,
     },
     {
       id: "swap",
       label: "Swap Only",
+      icon: <RefreshCw className="w-3 h-3" />,
       value: "swap",
-      onClick: () => setListingType("swap"),
+      onClick: () => setListingType(listingType === "swap" ? "all" : "swap"),
       active: listingType === "swap",
-      disabled: false,
-    },
-    {
-      id: "like_new",
-      label: "Like New",
-      value: "like_new",
-      onClick: () => setSelectedCondition("Like New"),
-      active: selectedCondition === "Like New",
       disabled: false,
     },
   ];
@@ -231,6 +270,10 @@ export default function Marketplace() {
     setListingType("all");
     setSortBy("newest");
     setPriceRange([0, 10000]);
+    setSameSchoolOnly(false);
+    setCurriculum("all");
+    setNegotiableOnly(false);
+    setMaxDistance(null);
   };
 
   const activeFilterCount = [
@@ -239,12 +282,89 @@ export default function Marketplace() {
     selectedCondition !== "all",
     listingType !== "all",
     priceRange[0] > 0 || priceRange[1] < 10000,
+    sameSchoolOnly,
+    curriculum !== "all",
+    negotiableOnly,
+    maxDistance !== null,
   ].filter(Boolean).length;
 
   return (
     <div className="min-h-screen bg-muted/10 pb-20">
+      {/* Child Selector Banner */}
+      {children.length > 0 && (
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 border-b sticky top-16 z-40">
+          <div className="container px-4 py-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <SchoolIcon className="w-4 h-4 text-primary" />
+                  <span className="text-muted-foreground">Shopping for:</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/20 hover:border-primary/40 bg-background/80"
+                  onClick={() => setShowChildSelector(!showChildSelector)}
+                >
+                  {activeChild ? (
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{activeChild.displayName}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-sm">{activeChild.grade}</span>
+                      {activeChild.schoolName && (
+                        <>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="text-xs text-muted-foreground max-w-[150px] truncate">{activeChild.schoolName}</span>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <span>Select a child</span>
+                  )}
+                  <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${showChildSelector ? "rotate-180" : ""}`} />
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {data?.pagination?.total && (
+                  <>
+                    <MapPin className="w-3 h-3" />
+                    <span>{data.pagination.total} books available</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Child Selector Dropdown */}
+            {showChildSelector && (
+              <div className="mt-3 p-3 bg-background rounded-lg border shadow-lg animate-in slide-in-from-top-2 duration-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {children.map((child) => (
+                    <Button
+                      key={child.id}
+                      variant={activeChild?.id === child.id ? "default" : "outline"}
+                      className="justify-start h-auto py-3 px-4"
+                      onClick={() => {
+                        setActiveChild(child);
+                        setShowChildSelector(false);
+                        // Auto-apply child's grade filter
+                        setSelectedGrade(child.grade);
+                      }}
+                    >
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="font-semibold">{child.displayName}</span>
+                        <span className="text-xs text-muted-foreground">{child.grade} · {child.schoolName || "No school"}</span>
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Sticky Filter Bar */}
-      <div className="bg-background border-b sticky top-16 z-30 shadow-sm">
+      <div className="bg-background border-b sticky top-28 z-30 shadow-sm">
         <div className="container px-4 py-4 space-y-4">
           {/* Search Bar */}
           <div className="flex flex-col md:flex-row gap-4">
@@ -259,13 +379,16 @@ export default function Marketplace() {
             </div>
             <div className="flex gap-2">
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px] h-10">
+                <SelectTrigger className="w-[200px] h-10">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
                   {sortOptions.map(option => (
                     <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                      <div className="flex items-center gap-2">
+                        {option.icon}
+                        <span>{option.label}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -287,14 +410,15 @@ export default function Marketplace() {
               <Badge
                 key={filter.id}
                 variant={filter.active ? "default" : "outline"}
-                className={`px-3 py-1.5 transition-colors ${
+                className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 ${
                   filter.disabled
                     ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer hover:bg-primary/90"
+                    : "cursor-pointer hover:bg-primary/90 hover:text-primary-foreground"
                 }`}
                 onClick={filter.disabled ? undefined : filter.onClick}
               >
-                {filter.label}
+                {filter.icon}
+                <span>{filter.label}</span>
               </Badge>
             ))}
             {activeFilterCount > 0 && (
@@ -381,6 +505,52 @@ export default function Marketplace() {
                 </Select>
               </div>
 
+              {/* Curriculum Filter */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Curriculum</label>
+                <Select value={curriculum} onValueChange={setCurriculum}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="All Curriculums" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Curriculums</SelectItem>
+                    <SelectItem value="CBC">CBC</SelectItem>
+                    <SelectItem value="8-4-4">8-4-4</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Distance Filter */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Distance {activeChild?.schoolId && "(from school)"}
+                </label>
+                <Select
+                  value={maxDistance?.toString() || "all"}
+                  onValueChange={(value) => setMaxDistance(value === "all" ? null : Number(value))}
+                  disabled={!(activeChild?.schoolId || (user?.latitude && user?.longitude))}
+                >
+                  <SelectTrigger className="h-10">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground" />
+                      <SelectValue placeholder="Any Distance" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Any Distance</SelectItem>
+                    <SelectItem value="5">Within 5 km</SelectItem>
+                    <SelectItem value="10">Within 10 km</SelectItem>
+                    <SelectItem value="25">Within 25 km</SelectItem>
+                    <SelectItem value="50">Within 50 km</SelectItem>
+                  </SelectContent>
+                </Select>
+                {!activeChild?.schoolId && !user?.latitude && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select a child or enable location to use distance filter
+                  </p>
+                )}
+              </div>
+
               {/* Price Range Filter */}
               <div className="md:col-span-2">
                 <label className="text-sm font-medium mb-2 block">
@@ -394,6 +564,20 @@ export default function Marketplace() {
                   onValueChange={(value) => setPriceRange(value as [number, number])}
                   className="mt-2"
                 />
+              </div>
+
+              {/* Negotiable Filter */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="negotiable"
+                  checked={negotiableOnly}
+                  onChange={(e) => setNegotiableOnly(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <label htmlFor="negotiable" className="text-sm font-medium cursor-pointer">
+                  Negotiable prices only
+                </label>
               </div>
             </div>
           )}
