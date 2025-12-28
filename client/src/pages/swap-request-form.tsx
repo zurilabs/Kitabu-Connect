@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BookPlaceholder } from "@/components/ui/book-placeholder";
 import { useToast } from "@/hooks/use-toast";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { ArrowLeft, ArrowLeftRight, Camera, Loader2 } from "lucide-react";
@@ -152,12 +153,23 @@ export default function SwapRequestForm() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="aspect-[3/4] rounded-lg overflow-hidden border">
-                <img
-                  src={requestedBook.primaryPhotoUrl || "/placeholder-book.png"}
-                  alt={requestedBook.title}
-                  className="w-full h-full object-cover"
-                />
+              <div className="aspect-[3/4] rounded-lg overflow-hidden border bg-gradient-to-br from-muted to-muted/50">
+                {requestedBook.primaryPhotoUrl &&
+                 requestedBook.primaryPhotoUrl !== "/placeholder-book.png" &&
+                 !requestedBook.primaryPhotoUrl.includes("placeholder") ? (
+                  <img
+                    src={requestedBook.primaryPhotoUrl}
+                    alt={requestedBook.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center p-4">
+                    <BookPlaceholder
+                      title={requestedBook.title}
+                      className="w-full h-full"
+                    />
+                  </div>
+                )}
               </div>
               <div>
                 <h3 className="font-semibold text-lg">{requestedBook.title}</h3>

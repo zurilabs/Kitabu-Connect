@@ -26,6 +26,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBell } from "./NotificationBell";
+import { ActiveChildSelector } from "./ActiveChildSelector";
 import { useState } from "react";
 
 export function Navbar() {
@@ -121,6 +122,7 @@ export function Navbar() {
 
         <div className="flex flex-1 items-center justify-end space-x-2">
           <div className="flex items-center gap-2">
+            {user && <ActiveChildSelector />}
             {user && <NotificationBell />}
             {user ? (
               <DropdownMenu>

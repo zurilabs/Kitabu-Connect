@@ -53,18 +53,40 @@ interface BookListing extends CreateBookListingData {
   }>;
 }
 
-export function useBookListing() {
+export function useBookListing(params?: {
+  page?: number;
+  limit?: number;
+  subject?: string;
+  classGrade?: string;
+  condition?: string;
+  listingType?: string;
+}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch all book listings
+  // Fetch all book listings with pagination
   const { data: listings, isLoading: isLoadingListings } = useQuery<{
     success: boolean;
     listings: BookListing[];
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasMore: boolean;
+    };
   }>({
-    queryKey: ["books"],
+    queryKey: ["books", params],
     queryFn: async () => {
-      const response = await fetch("/api/books", {
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append("page", params.page.toString());
+      if (params?.limit) queryParams.append("limit", params.limit.toString());
+      if (params?.subject) queryParams.append("subject", params.subject);
+      if (params?.classGrade) queryParams.append("classGrade", params.classGrade);
+      if (params?.condition) queryParams.append("condition", params.condition);
+      if (params?.listingType) queryParams.append("listingType", params.listingType);
+
+      const response = await fetch(`/api/books?${queryParams}`, {
         credentials: "include",
       });
 
@@ -223,6 +245,7 @@ export function useBookListing() {
 
   return {
     listings: listings?.listings || [],
+    pagination: listings?.pagination,
     isLoadingListings,
     myListings: myListings?.listings || [],
     isLoadingMyListings,
@@ -230,5 +253,39 @@ export function useBookListing() {
     createListing,
     updateListing,
     deleteListing,
+  };
+}
+
+// Optimized hook for homepage - only fetches recent books
+export function useRecentBooks(limit: number = 3) {
+  const { data, isLoading } = useQuery<{
+    success: boolean;
+    listings: BookListing[];
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasMore: boolean;
+    };
+  }>({
+    queryKey: ["books", "recent", limit],
+    queryFn: async () => {
+      const response = await fetch(`/api/books/recent?limit=${limit}`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch recent books");
+      }
+
+      return response.json();
+    },
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+
+  return {
+    recentBooks: data?.listings || [],
+    isLoading,
   };
 }

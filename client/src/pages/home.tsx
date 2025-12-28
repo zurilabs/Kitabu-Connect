@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { BookCard } from "@/components/ui/book-card";
@@ -6,21 +6,16 @@ import { SwapCalculator } from "@/components/ui/swap-calculator";
 import { ArrowRight, BookOpen, ShieldCheck, Users, Loader2 } from "lucide-react";
 import heroImage from "@assets/generated_images/students_exchanging_books_on_campus.png";
 import { useAuth } from "@/hooks/useAuth";
-import { useBookListing } from "@/hooks/useBookListing";
+import { useRecentBooks } from "@/hooks/useBookListing";
 
 export default function Home() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const { listings, isLoadingListings } = useBookListing();
+  const { recentBooks, isLoading: isLoadingListings } = useRecentBooks(8);
 
-  // Get the 3 most recent listings
+  // Transform to match BookCard expected format
   const featuredBooks = useMemo(() => {
-    const recentListings = listings
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 3);
-
-    // Transform to match BookCard expected format
-    return recentListings.map(book => ({
+    return recentBooks.map(book => ({
       id: book.id.toString(),
       title: book.title,
       author: book.author,
@@ -33,8 +28,11 @@ export default function Home() {
       image: book.primaryPhotoUrl || book.photos?.[0]?.photoUrl || "/placeholder-book.png",
       description: book.description || "",
       category: book.subject,
+      listingType: book.listingType,
+      willingToSwapFor: book.willingToSwapFor,
+      schoolName: book.seller?.schoolName,
     }));
-  }, [listings]);
+  }, [recentBooks]);
 
   const handleSellClick = (e: React.MouseEvent) => {
     if (!user) {
@@ -127,7 +125,7 @@ export default function Home() {
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
           ) : featuredBooks.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
               {featuredBooks.map((book) => (
                 <BookCard key={book.id} book={book} />
               ))}

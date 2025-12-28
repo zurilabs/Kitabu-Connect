@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { BookPlaceholder } from "@/components/ui/book-placeholder";
 import { useState, useEffect } from "react";
 import { Wallet, Package, Plus, Edit, Trash2, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -62,6 +63,9 @@ export default function Dashboard() {
       'refund': 'Refund',
       'escrow_hold': 'Escrow Hold',
       'escrow_release': 'Payment Received',
+      'swap_commitment': 'Swap Commitment Fee',
+      'swap_logistics': 'Swap Logistics Cost',
+      'swap_refund': 'Swap Refund',
     };
     return typeMap[type] || type;
   };
@@ -207,14 +211,21 @@ export default function Dashboard() {
                     >
                       <div className="flex items-start gap-4">
                         <div className="h-16 w-16 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
-                          {listing.primaryPhotoUrl ? (
+                          {listing.primaryPhotoUrl &&
+                           listing.primaryPhotoUrl !== "/placeholder-book.png" &&
+                           !listing.primaryPhotoUrl.includes("placeholder") ? (
                             <img
                               src={listing.primaryPhotoUrl}
                               alt={listing.title}
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <Package className="w-6 h-6 text-muted-foreground" />
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50 p-1">
+                              <BookPlaceholder
+                                title={listing.title}
+                                className="w-full h-full"
+                              />
+                            </div>
                           )}
                         </div>
                         <div className="flex-1">

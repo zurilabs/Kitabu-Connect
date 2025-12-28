@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "67ab38f0-c041-4d58-9102-73a5a54f1e4d",
+  "id": "92913277-d9d9-458a-b0f1-c878bc1baac6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_condition_reports": {
@@ -481,7 +481,103 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_book_listings_seller": {
+          "name": "idx_book_listings_seller",
+          "columns": [
+            "seller_id"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_status": {
+          "name": "idx_book_listings_status",
+          "columns": [
+            "listing_status"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_type": {
+          "name": "idx_book_listings_type",
+          "columns": [
+            "listing_type"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_created_at": {
+          "name": "idx_book_listings_created_at",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_status_created": {
+          "name": "idx_book_listings_status_created",
+          "columns": [
+            "listing_status",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_subject": {
+          "name": "idx_book_listings_subject",
+          "columns": [
+            "subject"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_grade": {
+          "name": "idx_book_listings_grade",
+          "columns": [
+            "class_grade"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_condition": {
+          "name": "idx_book_listings_condition",
+          "columns": [
+            "condition"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_price": {
+          "name": "idx_book_listings_price",
+          "columns": [
+            "price"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_views": {
+          "name": "idx_book_listings_views",
+          "columns": [
+            "views_count"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_status_type": {
+          "name": "idx_book_listings_status_type",
+          "columns": [
+            "listing_status",
+            "listing_type"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_grade_subject": {
+          "name": "idx_book_listings_grade_subject",
+          "columns": [
+            "class_grade",
+            "subject"
+          ],
+          "isUnique": false
+        },
+        "idx_book_listings_status_price": {
+          "name": "idx_book_listings_status_price",
+          "columns": [
+            "listing_status",
+            "price"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "book_listings_seller_id_users_id_fk": {
           "name": "book_listings_seller_id_users_id_fk",
@@ -556,7 +652,15 @@
           "default": "(now())"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_book_photos_listing": {
+          "name": "idx_book_photos_listing",
+          "columns": [
+            "listing_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "book_photos_listing_id_book_listings_id_fk": {
           "name": "book_photos_listing_id_book_listings_id_fk",
@@ -575,6 +679,112 @@
       "compositePrimaryKeys": {
         "book_photos_id": {
           "name": "book_photos_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "children": {
+      "name": "children",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "grade": {
+          "name": "grade",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "idx_children_parent": {
+          "name": "idx_children_parent",
+          "columns": [
+            "parent_id"
+          ],
+          "isUnique": false
+        },
+        "idx_children_order": {
+          "name": "idx_children_order",
+          "columns": [
+            "parent_id",
+            "display_order"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "children_parent_id_users_id_fk": {
+          "name": "children_parent_id_users_id_fk",
+          "tableFrom": "children",
+          "tableTo": "users",
+          "columnsFrom": [
+            "parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "children_id": {
+          "name": "children_id",
           "columns": [
             "id"
           ]

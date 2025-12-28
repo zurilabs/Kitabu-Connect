@@ -1,6 +1,7 @@
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BookPlaceholder } from "@/components/ui/book-placeholder";
 import { Book } from "@/lib/mockData";
 import { Link } from "wouter";
 import { MapPin, User, ArrowRight, ArrowLeftRight, School } from "lucide-react";
@@ -17,14 +18,30 @@ export function BookCard({ book }: BookCardProps) {
   const listingId = parseInt(book.id);
   const isFavorited = useIsFavorited(listingId);
 
+  // Check if book has a valid image
+  const hasValidImage = book.image &&
+    book.image !== "/placeholder-book.png" &&
+    !book.image.includes("placeholder");
+
   return (
     <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 border-border/50">
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-        <img
-          src={book.image}
-          alt={book.title}
-          className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
-        />
+        {hasValidImage ? (
+          <img
+            src={book.image}
+            alt={book.title}
+            loading="lazy"
+            decoding="async"
+            className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50">
+            <BookPlaceholder
+              title={book.title}
+              className="w-2/3 h-5/6 transition-transform duration-300 group-hover:scale-105"
+            />
+          </div>
+        )}
         {book.listingType === 'swap' && (
           <div className="absolute top-1.5 right-1.5">
             <Badge className="bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs px-2.5 py-0.5 flex items-center gap-1">

@@ -1,6 +1,6 @@
 import { db } from "../db.ts";
 import { bookListings, bookPhotos, users, type CreateBookListingInput, type UpdateBookListingInput } from "../db/schema/index.ts";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 
 class BookListingService {
   async createListing(sellerId: string, data: CreateBookListingInput) {
@@ -73,21 +73,32 @@ class BookListingService {
         .where(eq(bookListings.sellerId, sellerId))
         .orderBy(desc(bookListings.createdAt));
 
-      // Fetch photos for each listing
-      const listingsWithPhotos = await Promise.all(
-        listings.map(async (listing) => {
-          const photos = await db
+      // Get all listing IDs for batch photo query
+      const listingIds = listings.map(listing => listing.id);
+
+      // Fetch all photos in a single query (fixes N+1 problem)
+      const allPhotos = listingIds.length > 0
+        ? await db
             .select()
             .from(bookPhotos)
-            .where(eq(bookPhotos.listingId, listing.id))
-            .orderBy(bookPhotos.displayOrder);
+            .where(sql`${bookPhotos.listingId} IN (${sql.join(listingIds.map(id => sql`${id}`), sql`, `)})`)
+            .orderBy(bookPhotos.displayOrder)
+        : [];
 
-          return {
-            ...listing,
-            photos,
-          };
-        })
-      );
+      // Group photos by listing ID
+      const photosByListingId = allPhotos.reduce((acc, photo) => {
+        if (!acc[photo.listingId]) {
+          acc[photo.listingId] = [];
+        }
+        acc[photo.listingId].push(photo);
+        return acc;
+      }, {} as Record<number, typeof allPhotos>);
+
+      // Combine listings with their photos
+      const listingsWithPhotos = listings.map(listing => ({
+        ...listing,
+        photos: photosByListingId[listing.id] || [],
+      }));
 
       return { success: true, listings: listingsWithPhotos };
     } catch (error) {
@@ -108,9 +119,71 @@ class BookListingService {
     userLatitude?: number;
     userLongitude?: number;
     excludeUserId?: string; // Exclude listings from this user
+    sortBy?: string; // Sort field: newest, price_low, price_high, popular
+    page?: number;
+    limit?: number;
   }) {
     try {
-      // Join with users table to get seller info for school/location filtering
+      const page = filters?.page || 1;
+      const limit = filters?.limit || 20;
+      const offset = (page - 1) * limit;
+
+      // Build WHERE conditions for database-level filtering
+      const conditions = [
+        eq(bookListings.listingStatus, "active"),
+        sql`${bookListings.quantityAvailable} > 0`
+      ];
+
+      if (filters?.subject) {
+        conditions.push(eq(bookListings.subject, filters.subject));
+      }
+      if (filters?.classGrade) {
+        conditions.push(eq(bookListings.classGrade, filters.classGrade));
+      }
+      if (filters?.condition) {
+        conditions.push(eq(bookListings.condition, filters.condition));
+      }
+      if (filters?.listingType) {
+        conditions.push(eq(bookListings.listingType, filters.listingType));
+      }
+      if (filters?.minPrice !== undefined) {
+        conditions.push(sql`${bookListings.price} >= ${filters.minPrice}`);
+      }
+      if (filters?.maxPrice !== undefined) {
+        conditions.push(sql`${bookListings.price} <= ${filters.maxPrice}`);
+      }
+      if (filters?.excludeUserId) {
+        conditions.push(sql`${bookListings.sellerId} != ${filters.excludeUserId}`);
+      }
+
+      // Get total count for pagination
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(bookListings)
+        .innerJoin(users, eq(bookListings.sellerId, users.id))
+        .where(and(...conditions));
+
+      const totalCount = Number(countResult?.count || 0);
+
+      // Determine sort order
+      let orderByClause;
+      switch (filters?.sortBy) {
+        case 'price_low':
+          orderByClause = asc(bookListings.price);
+          break;
+        case 'price_high':
+          orderByClause = desc(bookListings.price);
+          break;
+        case 'popular':
+          orderByClause = desc(bookListings.viewsCount);
+          break;
+        case 'newest':
+        default:
+          orderByClause = desc(bookListings.createdAt);
+          break;
+      }
+
+      // Join with users table to get seller info - WITH LIMIT AND OFFSET
       const listingsWithSellers = await db
         .select({
           listing: bookListings,
@@ -125,73 +198,79 @@ class BookListingService {
         })
         .from(bookListings)
         .innerJoin(users, eq(bookListings.sellerId, users.id))
-        .where(eq(bookListings.listingStatus, "active"))
-        .orderBy(desc(bookListings.createdAt));
+        .where(and(...conditions))
+        .orderBy(orderByClause)
+        .limit(limit)
+        .offset(offset);
 
-      // Apply filters
-      let filteredListings = listingsWithSellers.filter(({ listing }) => {
-        // Always exclude books with 0 quantity (already swapped/sold)
-        return listing.quantityAvailable > 0;
-      });
+      // Apply client-side filters only for complex conditions (school, distance)
+      let filteredListings = listingsWithSellers;
 
-      if (filters) {
-        filteredListings = filteredListings.filter(({ listing, seller }) => {
-          // Exclude current user's listings
-          if (filters.excludeUserId && seller.id === filters.excludeUserId) return false;
+      if (filters?.schoolId) {
+        filteredListings = filteredListings.filter(({ seller }) => seller.schoolId === filters.schoolId);
+      }
 
-          if (filters.subject && listing.subject !== filters.subject) return false;
-          if (filters.classGrade && listing.classGrade !== filters.classGrade) return false;
-          if (filters.condition && listing.condition !== filters.condition) return false;
-          if (filters.minPrice && Number(listing.price) < filters.minPrice) return false;
-          if (filters.maxPrice && Number(listing.price) > filters.maxPrice) return false;
-          if (filters.listingType && listing.listingType !== filters.listingType) return false;
+      if (filters?.maxDistance && filters?.userLatitude && filters?.userLongitude) {
+        filteredListings = filteredListings.filter(({ seller }) => {
+          const sellerLat = seller.latitude ? Number(seller.latitude) : null;
+          const sellerLng = seller.longitude ? Number(seller.longitude) : null;
 
-          // School filter - show only listings from same school
-          if (filters.schoolId && seller.schoolId !== filters.schoolId) return false;
-
-          // Location/distance filter - calculate distance if both have coordinates
-          if (filters.maxDistance && filters.userLatitude && filters.userLongitude) {
-            const sellerLat = seller.latitude ? Number(seller.latitude) : null;
-            const sellerLng = seller.longitude ? Number(seller.longitude) : null;
-
-            if (sellerLat && sellerLng) {
-              const distance = this.calculateDistance(
-                filters.userLatitude,
-                filters.userLongitude,
-                sellerLat,
-                sellerLng
-              );
-
-              if (distance > filters.maxDistance) return false;
-            }
+          if (sellerLat && sellerLng) {
+            const distance = this.calculateDistance(
+              filters.userLatitude!,
+              filters.userLongitude!,
+              sellerLat,
+              sellerLng
+            );
+            return distance <= filters.maxDistance!;
           }
-
-          return true;
+          return false;
         });
       }
 
-      // Fetch photos for each listing
-      const listingsWithPhotos = await Promise.all(
-        filteredListings.map(async ({ listing, seller }) => {
-          const photos = await db
+      // Get all listing IDs for batch photo query
+      const listingIds = filteredListings.map(({ listing }) => listing.id);
+
+      // Fetch all photos in a single query (fixes N+1 problem)
+      const allPhotos = listingIds.length > 0
+        ? await db
             .select()
             .from(bookPhotos)
-            .where(eq(bookPhotos.listingId, listing.id))
-            .orderBy(bookPhotos.displayOrder);
+            .where(sql`${bookPhotos.listingId} IN (${sql.join(listingIds.map(id => sql`${id}`), sql`, `)})`)
+            .orderBy(bookPhotos.displayOrder)
+        : [];
 
-          return {
-            ...listing,
-            photos,
-            seller: {
-              id: seller.id,
-              fullName: seller.fullName,
-              schoolName: seller.schoolName,
-            }
-          };
-        })
-      );
+      // Group photos by listing ID
+      const photosByListingId = allPhotos.reduce((acc, photo) => {
+        if (!acc[photo.listingId]) {
+          acc[photo.listingId] = [];
+        }
+        acc[photo.listingId].push(photo);
+        return acc;
+      }, {} as Record<number, typeof allPhotos>);
 
-      return { success: true, listings: listingsWithPhotos };
+      // Combine listings with their photos
+      const listingsWithPhotos = filteredListings.map(({ listing, seller }) => ({
+        ...listing,
+        photos: photosByListingId[listing.id] || [],
+        seller: {
+          id: seller.id,
+          fullName: seller.fullName,
+          schoolName: seller.schoolName,
+        }
+      }));
+
+      return {
+        success: true,
+        listings: listingsWithPhotos,
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasMore: page < Math.ceil(totalCount / limit)
+        }
+      };
     } catch (error) {
       console.error("Error fetching all listings:", error);
       throw new Error("Failed to fetch all listings");
@@ -339,6 +418,25 @@ class BookListingService {
     excludeUserId?: string; // Exclude current user's listings
   }) {
     try {
+      // Build WHERE conditions for database-level filtering
+      const conditions = [
+        eq(bookListings.listingStatus, "active"),
+        eq(bookListings.listingType, "swap")
+      ];
+
+      if (filters?.subject) {
+        conditions.push(eq(bookListings.subject, filters.subject));
+      }
+      if (filters?.classGrade) {
+        conditions.push(eq(bookListings.classGrade, filters.classGrade));
+      }
+      if (filters?.condition) {
+        conditions.push(eq(bookListings.condition, filters.condition));
+      }
+      if (filters?.excludeUserId) {
+        conditions.push(sql`${bookListings.sellerId} != ${filters.excludeUserId}`);
+      }
+
       // Join with users table to get seller info
       const listingsWithSellers = await db
         .select({
@@ -352,32 +450,19 @@ class BookListingService {
         })
         .from(bookListings)
         .innerJoin(users, eq(bookListings.sellerId, users.id))
-        .where(
-          and(
-            eq(bookListings.listingStatus, "active"),
-            eq(bookListings.listingType, "swap")
-          )
-        )
+        .where(and(...conditions))
         .orderBy(desc(bookListings.createdAt));
 
-      // Apply filters
+      // Apply client-side filters for text search (title, author, school)
       let filteredListings = listingsWithSellers;
 
       if (filters) {
         filteredListings = listingsWithSellers.filter(({ listing, seller }) => {
-          // Exclude current user's listings
-          if (filters.excludeUserId && seller.id === filters.excludeUserId) return false;
-
           // Title search (case-insensitive, partial match)
           if (filters.title && !listing.title.toLowerCase().includes(filters.title.toLowerCase())) return false;
 
           // Author search (case-insensitive, partial match)
           if (filters.author && listing.author && !listing.author.toLowerCase().includes(filters.author.toLowerCase())) return false;
-
-          // Exact matches for these fields
-          if (filters.subject && listing.subject !== filters.subject) return false;
-          if (filters.classGrade && listing.classGrade !== filters.classGrade) return false;
-          if (filters.condition && listing.condition !== filters.condition) return false;
 
           // School filter - prioritize same school
           if (filters.schoolId && seller.schoolId !== filters.schoolId) return false;
@@ -386,26 +471,37 @@ class BookListingService {
         });
       }
 
-      // Fetch photos for each listing
-      const listingsWithPhotos = await Promise.all(
-        filteredListings.map(async ({ listing, seller }) => {
-          const photos = await db
+      // Get all listing IDs for batch photo query
+      const listingIds = filteredListings.map(({ listing }) => listing.id);
+
+      // Fetch all photos in a single query (fixes N+1 problem)
+      const allPhotos = listingIds.length > 0
+        ? await db
             .select()
             .from(bookPhotos)
-            .where(eq(bookPhotos.listingId, listing.id))
-            .orderBy(bookPhotos.displayOrder);
+            .where(sql`${bookPhotos.listingId} IN (${sql.join(listingIds.map(id => sql`${id}`), sql`, `)})`)
+            .orderBy(bookPhotos.displayOrder)
+        : [];
 
-          return {
-            ...listing,
-            photos,
-            seller: {
-              id: seller.id,
-              fullName: seller.fullName,
-              schoolName: seller.schoolName,
-            }
-          };
-        })
-      );
+      // Group photos by listing ID
+      const photosByListingId = allPhotos.reduce((acc, photo) => {
+        if (!acc[photo.listingId]) {
+          acc[photo.listingId] = [];
+        }
+        acc[photo.listingId].push(photo);
+        return acc;
+      }, {} as Record<number, typeof allPhotos>);
+
+      // Combine listings with their photos
+      const listingsWithPhotos = filteredListings.map(({ listing, seller }) => ({
+        ...listing,
+        photos: photosByListingId[listing.id] || [],
+        seller: {
+          id: seller.id,
+          fullName: seller.fullName,
+          schoolName: seller.schoolName,
+        }
+      }));
 
       return { success: true, listings: listingsWithPhotos };
     } catch (error) {

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { BookPlaceholder } from "@/components/ui/book-placeholder";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -52,6 +53,12 @@ export default function BookDetails() {
   const convenienceFee = bookPrice * 0.05; // 5% convenience fee
   const totalPrice = bookPrice + convenienceFee;
 
+  // Check if book has a valid image
+  const bookImage = book.primaryPhotoUrl || book.photos?.[0]?.photoUrl;
+  const hasValidImage = bookImage &&
+    bookImage !== "/placeholder-book.png" &&
+    !bookImage.includes("placeholder");
+
   const handleBuy = async () => {
     setIsProcessing(true);
 
@@ -95,11 +102,20 @@ export default function BookDetails() {
         {/* Left Column: Image & Info */}
         <div className="space-y-8">
           <div className="rounded-xl overflow-hidden border bg-muted aspect-[4/3] relative">
-            <img
-              src={book.primaryPhotoUrl || book.photos?.[0]?.photoUrl || "/placeholder-book.png"}
-              alt={book.title}
-              className="w-full h-full object-cover"
-            />
+            {hasValidImage ? (
+              <img
+                src={bookImage}
+                alt={book.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50">
+                <BookPlaceholder
+                  title={book.title}
+                  className="w-1/2 h-4/5"
+                />
+              </div>
+            )}
             {isSwap && (
               <div className="absolute top-3 right-3">
                 <Badge className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-3 py-1 flex items-center gap-1">

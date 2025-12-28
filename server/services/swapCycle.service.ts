@@ -98,6 +98,15 @@ export class CycleDetector {
   private adjacencyList: Map<string, SwapNode[]> = new Map();
   private allNodes: SwapNode[] = [];
   private userIdToNodes: Map<string, SwapNode[]> = new Map();
+  // Index books by title for fast lookup (lowercase for case-insensitive matching)
+  private bookTitleIndex: Map<string, SwapNode[]> = new Map();
+
+  /**
+   * Yield to event loop to prevent blocking
+   */
+  private async yieldToEventLoop(): Promise<void> {
+    return new Promise((resolve) => setImmediate(resolve));
+  }
 
   /**
    * Build swap graph from active book listings
@@ -110,6 +119,7 @@ export class CycleDetector {
     this.adjacencyList.clear();
     this.allNodes = [];
     this.userIdToNodes.clear();
+    this.bookTitleIndex.clear();
 
     // Get all active swap listings with user and school data
     const swapListings = await db
@@ -197,22 +207,44 @@ export class CycleDetector {
         this.userIdToNodes.set(user.id, []);
       }
       this.userIdToNodes.get(user.id)!.push(node);
+
+      // Index by book title (lowercase) for fast matching
+      const titleKey = node.hasBook.title.toLowerCase();
+      if (!this.bookTitleIndex.has(titleKey)) {
+        this.bookTitleIndex.set(titleKey, []);
+      }
+      this.bookTitleIndex.get(titleKey)!.push(node);
     }
 
-    // Build adjacency list (edges)
-    for (const node of this.allNodes) {
+    // Build adjacency list (edges) using hash map lookup instead of O(N²) filtering
+    // Yield every 50 nodes (balanced for both standalone and in-process execution)
+    for (let i = 0; i < this.allNodes.length; i++) {
+      const node = this.allNodes[i];
+
+      // Yield to event loop every 50 iterations
+      if (i > 0 && i % 50 === 0) {
+        await this.yieldToEventLoop();
+      }
+
       for (const wantedBook of node.wantsBooks) {
-        // Find all nodes that have this book
-        const matchingNodes = this.allNodes.filter((otherNode) => {
+        const wantedTitleLower = wantedBook.title.toLowerCase();
+        const matchingNodes: SwapNode[] = [];
+
+        // Use hash map lookup for exact matches (O(1) instead of O(N))
+        const exactMatches = this.bookTitleIndex.get(wantedTitleLower) || [];
+        matchingNodes.push(...exactMatches);
+
+        // For partial matches, only search through book title index keys (much smaller set)
+        for (const [indexedTitle, nodes] of this.bookTitleIndex.entries()) {
+          if (indexedTitle !== wantedTitleLower && indexedTitle.includes(wantedTitleLower)) {
+            matchingNodes.push(...nodes);
+          }
+        }
+
+        // Filter matching nodes for compatibility
+        for (const otherNode of matchingNodes) {
           // Skip self
-          if (otherNode.userId === node.userId) return false;
-
-          // Check if title matches (case-insensitive partial match)
-          const titleMatch = otherNode.hasBook.title
-            .toLowerCase()
-            .includes(wantedBook.title.toLowerCase());
-
-          if (!titleMatch) return false;
+          if (otherNode.userId === node.userId) continue;
 
           // Check book compatibility
           const compatible = areBooksCompatible(
@@ -224,7 +256,7 @@ export class CycleDetector {
             otherNode.hasBook.condition
           );
 
-          if (!compatible) return false;
+          if (!compatible) continue;
 
           // Check school level compatibility
           const levelCompatible = isBookCompatibleWithSchoolLevel(
@@ -232,16 +264,14 @@ export class CycleDetector {
             node.school.level
           );
 
-          return levelCompatible;
-        });
+          if (!levelCompatible) continue;
 
-        // Add edges
-        for (const matchNode of matchingNodes) {
+          // Add edge
           const key = `${node.userId}-${node.hasBook.id}`;
           if (!this.adjacencyList.has(key)) {
             this.adjacencyList.set(key, []);
           }
-          this.adjacencyList.get(key)!.push(matchNode);
+          this.adjacencyList.get(key)!.push(otherNode);
         }
       }
     }
@@ -264,10 +294,17 @@ export class CycleDetector {
     const globalVisited = new Set<string>();
 
     // Try starting DFS from each node
-    for (const startNode of this.allNodes) {
+    // Yield every 50 nodes (balanced for both standalone and in-process execution)
+    for (let i = 0; i < this.allNodes.length; i++) {
+      const startNode = this.allNodes[i];
       const nodeKey = `${startNode.userId}-${startNode.hasBook.id}`;
 
       if (globalVisited.has(nodeKey)) continue;
+
+      // Yield to event loop every 50 iterations
+      if (i > 0 && i % 50 === 0) {
+        await this.yieldToEventLoop();
+      }
 
       const path: SwapNode[] = [startNode];
       const pathUserIds = new Set<string>([startNode.userId]);
@@ -470,7 +507,14 @@ export class CycleDetector {
 
     let savedCount = 0;
 
-    for (const cycle of cycles) {
+    for (let i = 0; i < cycles.length; i++) {
+      const cycle = cycles[i];
+
+      // Yield every 10 cycles
+      if (i > 0 && i % 10 === 0) {
+        await this.yieldToEventLoop();
+      }
+
       try {
         const cycleId = crypto.randomUUID();
 

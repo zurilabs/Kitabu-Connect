@@ -100,6 +100,40 @@ export const otpCodes = mysqlTable(
 );
 
 /* ================================
+   CHILDREN
+================================ */
+export const children = mysqlTable(
+  "children",
+  {
+    id: int("id").primaryKey().autoincrement(),
+
+    parentId: varchar("parent_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    name: varchar("name", { length: 255 }), // Optional: "John" or null
+    grade: varchar("grade", { length: 50 }).notNull(), // "Grade 5", "Form 2"
+    displayOrder: int("display_order").notNull().default(0), // For manual reordering
+
+    // Future: For child sub-accounts
+    userId: varchar("user_id", { length: 36 }),
+
+    createdAt: timestamp("created_at")
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    parentIdx: index("idx_children_parent").on(t.parentId),
+    orderIdx: index("idx_children_order").on(t.parentId, t.displayOrder),
+  })
+);
+
+/* ================================
    SCHOOLS
 ================================ */
 export const schools = mysqlTable(
@@ -243,6 +277,13 @@ expiresAt: datetime("expires_at"),
   statusCreatedIdx: index("idx_book_listings_status_created").on(t.listingStatus, t.createdAt),
   subjectIdx: index("idx_book_listings_subject").on(t.subject),
   gradeIdx: index("idx_book_listings_grade").on(t.classGrade),
+  conditionIdx: index("idx_book_listings_condition").on(t.condition),
+  priceIdx: index("idx_book_listings_price").on(t.price),
+  viewsIdx: index("idx_book_listings_views").on(t.viewsCount),
+  // Composite indexes for common filter combinations
+  statusTypeIdx: index("idx_book_listings_status_type").on(t.listingStatus, t.listingType),
+  gradeSubjectIdx: index("idx_book_listings_grade_subject").on(t.classGrade, t.subject),
+  statusPriceIdx: index("idx_book_listings_status_price").on(t.listingStatus, t.price),
 })
 );
 
@@ -1423,3 +1464,29 @@ export type SwapCycle = typeof swapCycles.$inferSelect;
 export type CycleParticipant = typeof cycleParticipants.$inferSelect;
 export type DropPoint = typeof dropPoints.$inferSelect;
 export type UserReliabilityScore = typeof userReliabilityScores.$inferSelect;
+
+// Children Types
+export type Child = typeof children.$inferSelect;
+
+// Children Schemas
+export const createChildSchema = z.object({
+  name: z.string().min(1).max(255).nullable().optional(),
+  grade: z.string().min(1, "Grade is required"),
+});
+
+export const updateChildSchema = z.object({
+  name: z.string().min(1).max(255).nullable().optional(),
+  grade: z.string().optional(),
+  displayOrder: z.number().optional(),
+});
+
+export const reorderChildrenSchema = z.object({
+  childrenOrder: z.array(z.object({
+    id: z.number(),
+    displayOrder: z.number(),
+  })),
+});
+
+export type CreateChildInput = z.infer<typeof createChildSchema>;
+export type UpdateChildInput = z.infer<typeof updateChildSchema>;
+export type ReorderChildrenInput = z.infer<typeof reorderChildrenSchema>;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,11 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useSchools } from "@/hooks/useSchools";
+import { ChildrenManagement } from "@/components/profile/ChildrenManagement";
+import { SchoolCombobox } from "@/components/ui/school-combobox";
 import {
   User,
   MapPin,
@@ -46,14 +47,40 @@ interface UserPreferences {
 export default function Profile() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { user, logout, isLoading: isLoadingAuth } = useAuth();
-  const { schools, isLoadingSchools } = useSchools();
   const [isLoading, setIsLoading] = useState(false);
-  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
-  const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
+
+  // Fetch user preferences with React Query
+  const { data: preferencesData, isLoading: isLoadingPreferences } = useQuery({
+    queryKey: ["user-preferences"],
+    queryFn: async () => {
+      const response = await fetch("/api/preferences", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch preferences");
+      return response.json();
+    },
+    enabled: !!user, // Only fetch when user is logged in
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  const preferences = preferencesData?.preferences || null;
+
+  // Local preferences state for optimistic updates
+  const [localPreferences, setLocalPreferences] = useState<UserPreferences | null>(null);
+
+  // Sync local preferences with fetched data
+  useEffect(() => {
+    if (preferences && !localPreferences) {
+      setLocalPreferences(preferences);
+    }
+  }, [preferences, localPreferences]);
+
+  // Use local preferences if available, otherwise use fetched preferences
+  const currentPreferences = localPreferences || preferences;
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -71,7 +98,7 @@ export default function Profile() {
     schoolName: user?.schoolName || "",
   });
 
-  // Payment form state
+  // Payment form state - initialized from preferences
   const [paymentData, setPaymentData] = useState({
     preferredPaymentMethod: "mpesa",
     mpesaPhoneNumber: "",
@@ -96,39 +123,20 @@ export default function Profile() {
     }
   }, [user]);
 
-  // Fetch user preferences
+  // Update payment data when preferences load
   useEffect(() => {
-    const fetchPreferences = async () => {
-      try {
-        const response = await fetch("/api/preferences", {
-          credentials: "include",
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setPreferences(data.preferences);
-
-          if (data.preferences) {
-            setPaymentData({
-              preferredPaymentMethod: data.preferences.preferredPaymentMethod || "mpesa",
-              mpesaPhoneNumber: data.preferences.mpesaPhoneNumber || "",
-              bankName: data.preferences.bankName || "",
-              bankAccountNumber: data.preferences.bankAccountNumber || "",
-              bankAccountName: data.preferences.bankAccountName || "",
-              bankBranch: data.preferences.bankBranch || "",
-              paypalEmail: data.preferences.paypalEmail || "",
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch preferences:", error);
-      }
-    };
-
-    if (user) {
-      fetchPreferences();
+    if (currentPreferences) {
+      setPaymentData({
+        preferredPaymentMethod: currentPreferences.preferredPaymentMethod || "mpesa",
+        mpesaPhoneNumber: currentPreferences.mpesaPhoneNumber || "",
+        bankName: currentPreferences.bankName || "",
+        bankAccountNumber: currentPreferences.bankAccountNumber || "",
+        bankAccountName: currentPreferences.bankAccountName || "",
+        bankBranch: currentPreferences.bankBranch || "",
+        paypalEmail: currentPreferences.paypalEmail || "",
+      });
     }
-  }, [user]);
+  }, [currentPreferences]);
 
   const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -250,78 +258,84 @@ export default function Profile() {
     }
   };
 
-  const handleSaveNotifications = async () => {
-    if (!preferences) return;
-
-    setIsSavingNotifications(true);
-    try {
+  // Mutation for updating notifications
+  const updateNotificationsMutation = useMutation({
+    mutationFn: async (notificationData: any) => {
       const response = await fetch("/api/preferences/notifications", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          emailNotifications: preferences.emailNotifications,
-          pushNotifications: preferences.pushNotifications,
-          smsNotifications: preferences.smsNotifications,
-          notifyOnNewMessages: preferences.notifyOnNewMessages,
-          notifyOnBookSold: preferences.notifyOnBookSold,
-          notifyOnPriceDrops: preferences.notifyOnPriceDrops,
-          notifyOnNewListings: preferences.notifyOnNewListings,
-        }),
+        body: JSON.stringify(notificationData),
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || "Failed to update notifications");
       }
-
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-preferences"] });
       toast({
         title: "Notifications Updated",
         description: "Your notification preferences have been saved.",
       });
-    } catch (error) {
+    },
+    onError: (error: Error) => {
       toast({
         title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update notifications",
+        description: error.message,
         variant: "destructive",
       });
-    } finally {
-      setIsSavingNotifications(false);
-    }
+    },
+  });
+
+  const handleSaveNotifications = async () => {
+    if (!currentPreferences) return;
+
+    updateNotificationsMutation.mutate({
+      emailNotifications: currentPreferences.emailNotifications,
+      pushNotifications: currentPreferences.pushNotifications,
+      smsNotifications: currentPreferences.smsNotifications,
+      notifyOnNewMessages: currentPreferences.notifyOnNewMessages,
+      notifyOnBookSold: currentPreferences.notifyOnBookSold,
+      notifyOnPriceDrops: currentPreferences.notifyOnPriceDrops,
+      notifyOnNewListings: currentPreferences.notifyOnNewListings,
+    });
   };
 
-  const handleSavePayment = async () => {
-    setIsSavingPayment(true);
-    try {
+  // Mutation for updating payment preferences
+  const updatePaymentMutation = useMutation({
+    mutationFn: async (paymentInfo: any) => {
       const response = await fetch("/api/preferences/payment", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(paymentData),
+        body: JSON.stringify(paymentInfo),
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || "Failed to update payment method");
       }
-
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-preferences"] });
       toast({
         title: "Payment Method Updated",
         description: "Your payment preferences have been saved.",
       });
-    } catch (error) {
+    },
+    onError: (error: Error) => {
       toast({
         title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update payment method",
+        description: error.message,
         variant: "destructive",
       });
-    } finally {
-      setIsSavingPayment(false);
-    }
+    },
+  });
+
+  const handleSavePayment = async () => {
+    updatePaymentMutation.mutate(paymentData);
   };
 
   const handleLogout = async () => {
@@ -460,31 +474,17 @@ export default function Profile() {
 
                 <div className="space-y-2">
                   <Label htmlFor="school">School</Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground z-10" />
-                    <Select
-                      value={formData.schoolId}
-                      onValueChange={(value) => {
-                        const school = schools.find(s => s.id === value);
-                        setFormData({
-                          ...formData,
-                          schoolId: value,
-                          schoolName: school?.name || ""
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="pl-9">
-                        <SelectValue placeholder={isLoadingSchools ? "Loading schools..." : "Select school"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {schools.map((school) => (
-                          <SelectItem key={school.id} value={school.id}>
-                            {school.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <SchoolCombobox
+                    value={formData.schoolId}
+                    onChange={(schoolId, schoolName) => {
+                      setFormData({
+                        ...formData,
+                        schoolId,
+                        schoolName,
+                      });
+                    }}
+                    placeholder="Select school"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -524,6 +524,9 @@ export default function Profile() {
             </CardFooter>
           </Card>
 
+          {/* Children Management */}
+          <ChildrenManagement />
+
           {/* Notifications */}
           <Card>
             <CardHeader>
@@ -531,14 +534,28 @@ export default function Profile() {
               <CardDescription>Manage how we communicate with you.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isLoadingPreferences ? (
+                <div className="space-y-4">
+                  {[...Array(7)].map((_, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="space-y-2 flex-1">
+                        <div className="h-4 bg-muted animate-pulse rounded w-1/3"></div>
+                        <div className="h-3 bg-muted animate-pulse rounded w-2/3"></div>
+                      </div>
+                      <div className="h-6 w-11 bg-muted animate-pulse rounded-full"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label className="text-base">Email Notifications</Label>
                   <p className="text-xs text-muted-foreground">Receive updates about your listings and orders.</p>
                 </div>
                 <Switch
-                  checked={preferences?.emailNotifications ?? true}
-                  onCheckedChange={(c) => setPreferences(prev => prev ? {...prev, emailNotifications: c} : {
+                  checked={currentPreferences?.emailNotifications ?? true}
+                  onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, emailNotifications: c} : {
                     emailNotifications: c,
                     pushNotifications: true,
                     smsNotifications: false,
@@ -563,8 +580,8 @@ export default function Profile() {
                   <p className="text-xs text-muted-foreground">Get instant alerts on your device.</p>
                 </div>
                 <Switch
-                  checked={preferences?.pushNotifications ?? true}
-                  onCheckedChange={(c) => setPreferences(prev => prev ? {...prev, pushNotifications: c} : {
+                  checked={currentPreferences?.pushNotifications ?? true}
+                  onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, pushNotifications: c} : {
                     emailNotifications: true,
                     pushNotifications: c,
                     smsNotifications: false,
@@ -589,8 +606,8 @@ export default function Profile() {
                   <p className="text-xs text-muted-foreground">Receive text messages for important updates.</p>
                 </div>
                 <Switch
-                  checked={preferences?.smsNotifications ?? false}
-                  onCheckedChange={(c) => setPreferences(prev => prev ? {...prev, smsNotifications: c} : {
+                  checked={currentPreferences?.smsNotifications ?? false}
+                  onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, smsNotifications: c} : {
                     emailNotifications: true,
                     pushNotifications: true,
                     smsNotifications: c,
@@ -615,8 +632,8 @@ export default function Profile() {
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-normal">New messages</Label>
                     <Switch
-                      checked={preferences?.notifyOnNewMessages ?? true}
-                      onCheckedChange={(c) => setPreferences(prev => prev ? {...prev, notifyOnNewMessages: c} : {
+                      checked={currentPreferences?.notifyOnNewMessages ?? true}
+                      onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, notifyOnNewMessages: c} : {
                         emailNotifications: true,
                         pushNotifications: true,
                         smsNotifications: false,
@@ -637,8 +654,8 @@ export default function Profile() {
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-normal">When my book is sold</Label>
                     <Switch
-                      checked={preferences?.notifyOnBookSold ?? true}
-                      onCheckedChange={(c) => setPreferences(prev => prev ? {...prev, notifyOnBookSold: c} : {
+                      checked={currentPreferences?.notifyOnBookSold ?? true}
+                      onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, notifyOnBookSold: c} : {
                         emailNotifications: true,
                         pushNotifications: true,
                         smsNotifications: false,
@@ -659,8 +676,8 @@ export default function Profile() {
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-normal">Price drops on favorites</Label>
                     <Switch
-                      checked={preferences?.notifyOnPriceDrops ?? true}
-                      onCheckedChange={(c) => setPreferences(prev => prev ? {...prev, notifyOnPriceDrops: c} : {
+                      checked={currentPreferences?.notifyOnPriceDrops ?? true}
+                      onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, notifyOnPriceDrops: c} : {
                         emailNotifications: true,
                         pushNotifications: true,
                         smsNotifications: false,
@@ -681,8 +698,8 @@ export default function Profile() {
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-normal">New listings in my area</Label>
                     <Switch
-                      checked={preferences?.notifyOnNewListings ?? false}
-                      onCheckedChange={(c) => setPreferences(prev => prev ? {...prev, notifyOnNewListings: c} : {
+                      checked={currentPreferences?.notifyOnNewListings ?? false}
+                      onCheckedChange={(c) => setLocalPreferences(prev => prev ? {...prev, notifyOnNewListings: c} : {
                         emailNotifications: true,
                         pushNotifications: true,
                         smsNotifications: false,
@@ -702,10 +719,12 @@ export default function Profile() {
                   </div>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
             <CardFooter className="flex justify-end border-t px-6 py-4">
-              <Button onClick={handleSaveNotifications} disabled={isSavingNotifications}>
-                {isSavingNotifications ? "Saving..." : "Save Notification Preferences"}
+              <Button onClick={handleSaveNotifications} disabled={updateNotificationsMutation.isPending || isLoadingPreferences}>
+                {updateNotificationsMutation.isPending ? "Saving..." : "Save Notification Preferences"}
               </Button>
             </CardFooter>
           </Card>
@@ -846,8 +865,8 @@ export default function Profile() {
               )}
             </CardContent>
             <CardFooter className="flex justify-end border-t px-6 py-4">
-              <Button onClick={handleSavePayment} disabled={isSavingPayment}>
-                {isSavingPayment ? "Saving..." : "Save Payment Method"}
+              <Button onClick={handleSavePayment} disabled={updatePaymentMutation.isPending}>
+                {updatePaymentMutation.isPending ? "Saving..." : "Save Payment Method"}
               </Button>
             </CardFooter>
           </Card>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { BookCard } from "@/components/ui/book-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,18 +16,17 @@ import {
   Filter,
   BookOpen,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
   X,
-  SlidersHorizontal,
-  ArrowUp
+  SlidersHorizontal
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useBookListing } from "@/hooks/useBookListing";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useAuth } from "@/hooks/useAuth";
-import { useActiveChild } from "@/contexts/ActiveChildContext";
 
 export default function Marketplace() {
   const { user } = useAuth();
-  const { activeChild, children } = useActiveChild();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGrade, setSelectedGrade] = useState<string>("all");
   const [selectedSubject, setSelectedSubject] = useState<string>("all");
@@ -36,97 +35,25 @@ export default function Marketplace() {
   const [sortBy, setSortBy] = useState<string>("newest");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-
-  // Infinite scroll state
   const [page, setPage] = useState(1);
-  const [allBooks, setAllBooks] = useState<any[]>([]);
-  const [hasMore, setHasMore] = useState(true);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  // Debounce search term
+  // Debounce search term to avoid too many API calls
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  // Build filter params
-  const filterParams = useMemo(() => {
-    const params = new URLSearchParams();
-    if (selectedSubject !== "all") params.append("subject", selectedSubject);
-    if (selectedGrade !== "all") params.append("classGrade", selectedGrade);
-    if (selectedCondition !== "all") params.append("condition", selectedCondition);
-    if (listingType !== "all") params.append("listingType", listingType);
-    if (priceRange[0] > 0) params.append("minPrice", priceRange[0].toString());
-    if (priceRange[1] < 10000) params.append("maxPrice", priceRange[1].toString());
-    if (sortBy !== "newest") params.append("sortBy", sortBy);
-    params.append("page", page.toString());
-    params.append("limit", "24");
-    return params.toString();
-  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, page]);
-
-  // Fetch books with React Query
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["marketplace-books", filterParams],
-    queryFn: async () => {
-      const response = await fetch(`/api/books?${filterParams}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch books");
-      return response.json();
-    },
-    staleTime: 1000 * 60, // 1 minute
+  // Use pagination - fetch filtered results from backend (searches entire database)
+  const { listings, pagination, isLoadingListings } = useBookListing({
+    page,
+    limit: 24,
+    subject: selectedSubject !== "all" ? selectedSubject : undefined,
+    classGrade: selectedGrade !== "all" ? selectedGrade : undefined,
+    condition: selectedCondition !== "all" ? selectedCondition : undefined,
+    listingType: listingType !== "all" ? listingType : undefined,
+    minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
+    maxPrice: priceRange[1] < 10000 ? priceRange[1] : undefined,
+    sortBy: sortBy !== "newest" ? sortBy : undefined,
   });
 
-  // Update accumulated books when new data arrives
-  useEffect(() => {
-    if (data?.listings) {
-      if (page === 1) {
-        // Reset books on filter change
-        setAllBooks(data.listings);
-      } else {
-        // Append new books for pagination
-        setAllBooks(prev => [...prev, ...data.listings]);
-      }
-      setHasMore(data.pagination?.hasMore || false);
-    }
-  }, [data, page]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1);
-    setAllBooks([]);
-  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy]);
-
-  // Infinite scroll observer
-  useEffect(() => {
-    if (!loadMoreRef.current || !hasMore || isLoading) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isFetching) {
-          setPage(prev => prev + 1);
-        }
-      },
-      { threshold: 0.5 }
-    );
-
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [hasMore, isLoading, isFetching]);
-
-  // Show/hide scroll to top button
-  useEffect(() => {
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 400);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Scroll to top function
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  // Grade options
+  // Grade options (Kenyan education system)
   const grades = useMemo(() => [
     "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6",
     "Grade 7", "Grade 8", "Grade 9",
@@ -152,11 +79,16 @@ export default function Marketplace() {
     { value: "popular", label: "Most Popular" },
   ];
 
-  // Client-side search filter
-  const filteredBooks = useMemo(() => {
-    if (!debouncedSearchTerm) return allBooks;
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy]);
 
-    return allBooks.filter(book => {
+  // Client-side search filter (only for current page)
+  const filteredBooks = useMemo(() => {
+    if (!debouncedSearchTerm) return listings;
+
+    return listings.filter(book => {
       const searchLower = debouncedSearchTerm.toLowerCase();
       return (
         book.title.toLowerCase().includes(searchLower) ||
@@ -164,9 +96,9 @@ export default function Marketplace() {
         (book.isbn && book.isbn.toLowerCase().includes(searchLower))
       );
     });
-  }, [allBooks, debouncedSearchTerm]);
+  }, [listings, debouncedSearchTerm]);
 
-  // Transform books
+  // Transform book listings to match BookCard expected format
   const transformedBooks = useMemo(() => {
     return filteredBooks.map(book => ({
       id: book.id.toString(),
@@ -187,39 +119,31 @@ export default function Marketplace() {
     }));
   }, [filteredBooks]);
 
-  // Quick filter chips - use active child's grade if available
+  // Quick filter chips
   const quickFilters = [
     {
-      id: "my_grade",
-      label: activeChild ? `${activeChild.displayName}'s Grade` : "My Grade",
-      value: activeChild?.grade || null,
-      onClick: () => activeChild?.grade && setSelectedGrade(activeChild.grade),
-      active: activeChild && selectedGrade === activeChild.grade,
-      disabled: !activeChild, // Disabled when no active child
+      label: "My Grade",
+      value: user?.childGrade ? `Grade ${user.childGrade}` : null,
+      onClick: () => user?.childGrade && setSelectedGrade(`Grade ${user.childGrade}`),
+      active: user?.childGrade && selectedGrade === `Grade ${user.childGrade}`,
     },
     {
-      id: "under_500",
       label: "Under KSh 500",
       value: "under_500",
       onClick: () => setPriceRange([0, 500]),
       active: priceRange[1] === 500,
-      disabled: false,
     },
     {
-      id: "swap",
       label: "Swap Only",
       value: "swap",
       onClick: () => setListingType("swap"),
       active: listingType === "swap",
-      disabled: false,
     },
     {
-      id: "like_new",
       label: "Like New",
       value: "like_new",
       onClick: () => setSelectedCondition("Like New"),
       active: selectedCondition === "Like New",
-      disabled: false,
     },
   ];
 
@@ -240,6 +164,14 @@ export default function Marketplace() {
     listingType !== "all",
     priceRange[0] > 0 || priceRange[1] < 10000,
   ].filter(Boolean).length;
+
+  const handlePrevPage = () => {
+    if (page > 1) setPage(page - 1);
+  };
+
+  const handleNextPage = () => {
+    if (pagination?.hasMore) setPage(page + 1);
+  };
 
   return (
     <div className="min-h-screen bg-muted/10 pb-20">
@@ -283,20 +215,18 @@ export default function Marketplace() {
 
           {/* Quick Filter Chips */}
           <div className="flex flex-wrap gap-2">
-            {quickFilters.map((filter) => (
-              <Badge
-                key={filter.id}
-                variant={filter.active ? "default" : "outline"}
-                className={`px-3 py-1.5 transition-colors ${
-                  filter.disabled
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer hover:bg-primary/90"
-                }`}
-                onClick={filter.disabled ? undefined : filter.onClick}
-              >
-                {filter.label}
-              </Badge>
-            ))}
+            {quickFilters.map((filter) =>
+              filter.value ? (
+                <Badge
+                  key={filter.value}
+                  variant={filter.active ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/90 transition-colors px-3 py-1.5"
+                  onClick={filter.onClick}
+                >
+                  {filter.label}
+                </Badge>
+              ) : null
+            )}
             {activeFilterCount > 0 && (
               <Badge
                 variant="secondary"
@@ -405,13 +335,24 @@ export default function Marketplace() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold font-display">All Listings</h1>
           <span className="text-muted-foreground text-sm">
-            {data?.pagination && (
-              <span>{data.pagination.total} books found</span>
+            {isLoadingListings ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading...
+              </span>
+            ) : (
+              <>
+                {pagination && (
+                  <span>
+                    Page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+                  </span>
+                )}
+              </>
             )}
           </span>
         </div>
 
-        {isLoading && allBooks.length === 0 ? (
+        {isLoadingListings ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
@@ -419,25 +360,59 @@ export default function Marketplace() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
               {transformedBooks.map((book) => (
-                <BookCard key={`${book.id}-${book.sellerId}`} book={book} />
+                <BookCard key={book.id} book={book} />
               ))}
             </div>
 
-            {/* Infinite Scroll Trigger */}
-            {hasMore && (
-              <div ref={loadMoreRef} className="mt-8 flex items-center justify-center py-8">
-                {isFetching && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Loading more books...</span>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Pagination Controls */}
+            {pagination && pagination.totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrevPage}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Previous
+                </Button>
 
-            {!hasMore && allBooks.length > 0 && (
-              <div className="mt-8 text-center text-muted-foreground text-sm py-8">
-                You've reached the end. No more books to show.
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (page <= 3) {
+                      pageNum = i + 1;
+                    } else if (page >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = page - 2 + i;
+                    }
+
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={page === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setPage(pageNum)}
+                        className="w-10"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={!pagination.hasMore}
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
               </div>
             )}
           </>
@@ -449,17 +424,6 @@ export default function Marketplace() {
           </div>
         )}
       </div>
-
-      {/* Scroll to Top Button */}
-      {showScrollTop && (
-        <Button
-          onClick={scrollToTop}
-          size="icon"
-          className="fixed bottom-8 right-8 rounded-full shadow-lg z-40 h-12 w-12"
-        >
-          <ArrowUp className="w-5 h-5" />
-        </Button>
-      )}
     </div>
   );
 }

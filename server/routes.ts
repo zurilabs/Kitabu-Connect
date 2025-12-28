@@ -14,9 +14,11 @@ import {
   schools,
   publishers,
   users,
+  bookListings,
+  bookPhotos,
 } from "server/db/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { fromZodError } from "zod-validation-error";
 import uploadRoutes from "./routes/upload";
 import walletRoutes from "./routes/wallet";
@@ -26,6 +28,7 @@ import swapOrderRoutes from "./routes/swapOrders";
 import notificationRoutes from "./routes/notifications";
 import cyclesRoutes from "./routes/cycles";
 import gamificationRoutes from "./routes/gamification";
+import childrenRoutes from "./routes/children";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -86,6 +89,11 @@ export async function registerRoutes(
   // GAMIFICATION ROUTES
   // ============================================
   app.use("/api/gamification", gamificationRoutes);
+
+  // ============================================
+  // CHILDREN ROUTES
+  // ============================================
+  app.use("/api/children", childrenRoutes);
 
   // ============================================
   // PAYSTACK WEBHOOK
@@ -283,6 +291,32 @@ export async function registerRoutes(
       return res.status(200).json({ schools: allSchools });
     } catch (error) {
       console.error("[Route] schools error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Search schools (optimized for autocomplete)
+  app.get("/api/schools/search", async (req, res) => {
+    try {
+      const { q, limit = "10" } = req.query;
+
+      if (!q || typeof q !== "string") {
+        return res.status(200).json({ schools: [] });
+      }
+
+      const searchTerm = `%${q.toLowerCase()}%`;
+      const limitNum = Math.min(parseInt(limit as string) || 10, 50); // Max 50 results
+
+      // Search schools by name (case-insensitive)
+      const results = await db
+        .select()
+        .from(schools)
+        .where(sql`LOWER(${schools.name}) LIKE ${searchTerm}`)
+        .limit(limitNum);
+
+      return res.status(200).json({ schools: results });
+    } catch (error) {
+      console.error("[Route] schools/search error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -626,7 +660,10 @@ export async function registerRoutes(
         maxPrice,
         listingType,
         sameSchoolOnly,
-        maxDistance
+        maxDistance,
+        sortBy,
+        page,
+        limit
       } = req.query;
 
       // Get current user's info if authenticated (optional)
@@ -657,12 +694,216 @@ export async function registerRoutes(
         userLatitude: currentUser?.latitude ? Number(currentUser.latitude) : undefined,
         userLongitude: currentUser?.longitude ? Number(currentUser.longitude) : undefined,
         excludeUserId: currentUser?.id, // Exclude current user's own listings
+        sortBy: sortBy as string | undefined,
+        page: page ? Number(page) : 1,
+        limit: limit ? Number(limit) : 20,
       };
+
+      // Add caching headers - cache for 1 minute for marketplace data
+      res.set({
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=30',
+      });
 
       const result = await bookListingService.getAllListings(filters);
       return res.status(200).json(result);
     } catch (error) {
       console.error("[Route] books error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Get personalized books for homepage (optimized with diversity)
+  app.get("/api/books/recent", async (req, res) => {
+    try {
+      const limit = req.query.limit ? Number(req.query.limit) : 8;
+
+      // No caching - we want fresh results on every visit
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      });
+
+      // Get current user for personalization (if authenticated)
+      let currentUser = null;
+      if (req.session?.userId) {
+        const userResults = await db
+          .select({
+            childGrade: users.childGrade,
+            schoolId: users.schoolId,
+          })
+          .from(users)
+          .where(eq(users.id, req.session.userId))
+          .limit(1);
+
+        currentUser = userResults[0] || null;
+      }
+
+      // Fetch candidate pool (last 7 days, up to 100 books)
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const candidatePool = await db
+        .select({
+          listing: bookListings,
+          seller: {
+            id: users.id,
+            fullName: users.fullName,
+            schoolName: users.schoolName,
+          }
+        })
+        .from(bookListings)
+        .innerJoin(users, eq(bookListings.sellerId, users.id))
+        .where(
+          and(
+            eq(bookListings.listingStatus, "active"),
+            sql`${bookListings.quantityAvailable} > 0`,
+            sql`${bookListings.createdAt} >= ${sevenDaysAgo}`
+          )
+        )
+        .orderBy(desc(bookListings.createdAt))
+        .limit(100);
+
+      if (candidatePool.length === 0) {
+        return res.status(200).json({
+          success: true,
+          listings: [],
+          pagination: { page: 1, limit, total: 0, totalPages: 0, hasMore: false }
+        });
+      }
+
+      // Smart selection algorithm with diversity
+      const selectedListings: typeof candidatePool = [];
+      const usedSubjects = new Set<string>();
+      const usedGrades = new Set<string>();
+      const usedSellers = new Set<string>();
+
+      // Score each book based on personalization
+      const scoredBooks = candidatePool.map(({ listing, seller }) => {
+        let score = 100; // Base score
+
+        // Personalization bonus (if user is logged in)
+        if (currentUser) {
+          // Match user's child grade
+          if (currentUser.childGrade && listing.classGrade) {
+            const userGrade = currentUser.childGrade;
+            const bookGrade = parseInt(listing.classGrade.replace(/\D/g, '')) || 0;
+
+            // Exact match: +50 points
+            if (userGrade === bookGrade) {
+              score += 50;
+            }
+            // Close match (±2 grades): +25 points
+            else if (Math.abs(userGrade - bookGrade) <= 2) {
+              score += 25;
+            }
+          }
+
+          // Same school: +30 points (convenience for pickup)
+          if (currentUser.schoolId && currentUser.schoolId === seller.schoolName) {
+            score += 30;
+          }
+        }
+
+        // Recency bonus (exponential decay - newer = higher score)
+        const ageInDays = (Date.now() - new Date(listing.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+        const recencyScore = Math.max(0, 50 * Math.exp(-ageInDays / 2)); // Decays over ~2 days
+        score += recencyScore;
+
+        // Random factor to ensure variety on each visit (±20 points)
+        score += Math.random() * 40 - 20;
+
+        return { listing, seller, score };
+      });
+
+      // Sort by score (highest first)
+      scoredBooks.sort((a, b) => b.score - a.score);
+
+      // Select books with diversity constraints
+      for (const { listing, seller } of scoredBooks) {
+        if (selectedListings.length >= limit) break;
+
+        const subject = listing.subject || "unknown";
+        const grade = listing.classGrade || "unknown";
+        const sellerId = seller.id;
+
+        // Check diversity constraints
+        const isDifferentSubject = !usedSubjects.has(subject);
+        const isDifferentGrade = !usedGrades.has(grade);
+        const isDifferentSeller = !usedSellers.has(sellerId);
+
+        // For first 3 books, enforce all diversity rules
+        if (selectedListings.length < limit) {
+          // Accept if meets diversity criteria OR we're running out of options
+          const meetsMinimumDiversity =
+            (isDifferentSubject || usedSubjects.size < 3) &&
+            (isDifferentGrade || usedGrades.size < 3) &&
+            (isDifferentSeller || usedSellers.size < 3);
+
+          if (meetsMinimumDiversity) {
+            selectedListings.push({ listing, seller });
+            usedSubjects.add(subject);
+            usedGrades.add(grade);
+            usedSellers.add(sellerId);
+          }
+        }
+      }
+
+      // If we still don't have enough books, relax diversity rules and take top-scored
+      if (selectedListings.length < limit) {
+        for (const { listing, seller } of scoredBooks) {
+          if (selectedListings.length >= limit) break;
+
+          // Avoid duplicates
+          const alreadySelected = selectedListings.some(s => s.listing.id === listing.id);
+          if (!alreadySelected) {
+            selectedListings.push({ listing, seller });
+          }
+        }
+      }
+
+      // Get listing IDs for batch photo query
+      const listingIds = selectedListings.map(({ listing }) => listing.id);
+
+      // Fetch all photos in one query
+      const allPhotos = listingIds.length > 0
+        ? await db
+            .select()
+            .from(bookPhotos)
+            .where(sql`${bookPhotos.listingId} IN (${sql.join(listingIds.map(id => sql`${id}`), sql`, `)})`)
+            .orderBy(bookPhotos.displayOrder)
+        : [];
+
+      // Group photos by listing ID
+      const photosByListingId = allPhotos.reduce((acc, photo) => {
+        if (!acc[photo.listingId]) {
+          acc[photo.listingId] = [];
+        }
+        acc[photo.listingId].push(photo);
+        return acc;
+      }, {} as Record<number, typeof allPhotos>);
+
+      // Combine listings with photos
+      const listingsWithPhotos = selectedListings.map(({ listing, seller }) => ({
+        ...listing,
+        photos: photosByListingId[listing.id] || [],
+        seller: {
+          id: seller.id,
+          fullName: seller.fullName,
+          schoolName: seller.schoolName,
+        }
+      }));
+
+      return res.status(200).json({
+        success: true,
+        listings: listingsWithPhotos,
+        personalized: !!currentUser,
+        pagination: {
+          page: 1,
+          limit: limit,
+          total: listingsWithPhotos.length,
+          totalPages: 1,
+          hasMore: false
+        }
+      });
+    } catch (error) {
+      console.error("[Route] recent-books error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });
