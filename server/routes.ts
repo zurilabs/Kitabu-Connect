@@ -311,7 +311,7 @@ export async function registerRoutes(
       const results = await db
         .select()
         .from(schools)
-        .where(sql`LOWER(${schools.name}) LIKE ${searchTerm}`)
+        .where(sql`LOWER(${schools.schoolName}) LIKE ${searchTerm}`)
         .limit(limitNum);
 
       return res.status(200).json({ schools: results });
