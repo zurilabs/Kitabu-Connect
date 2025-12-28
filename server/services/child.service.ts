@@ -67,6 +67,8 @@ class ChildService {
         parentId,
         name: data.name || null,
         grade: data.grade,
+        schoolId: data.schoolId || null,
+        schoolName: data.schoolName || null,
         displayOrder: maxOrder + 1,
       });
 
@@ -109,6 +111,8 @@ class ChildService {
         .set({
           name: data.name !== undefined ? data.name : existingChild.name,
           grade: data.grade || existingChild.grade,
+          schoolId: data.schoolId !== undefined ? data.schoolId : existingChild.schoolId,
+          schoolName: data.schoolName !== undefined ? data.schoolName : existingChild.schoolName,
           displayOrder: data.displayOrder !== undefined ? data.displayOrder : existingChild.displayOrder,
         })
         .where(eq(children.id, childId));

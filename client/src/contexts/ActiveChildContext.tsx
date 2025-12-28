@@ -8,6 +8,8 @@ export interface Child {
   grade: string;
   displayOrder: number;
   displayName: string; // Computed: name or "Child N"
+  schoolId: string | null;
+  schoolName: string | null;
   userId: string | null;
   createdAt: string;
   updatedAt: string;

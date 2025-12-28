@@ -19,12 +19,13 @@ import {
 
 interface School {
   id: string;
-  name: string;
+  schoolName: string;
 }
 
 interface SchoolComboboxProps {
   value: string;
   onChange: (schoolId: string, schoolName: string) => void;
+  initialSchoolName?: string;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -33,13 +34,14 @@ interface SchoolComboboxProps {
 export function SchoolCombobox({
   value,
   onChange,
+  initialSchoolName = "",
   placeholder = "Select school",
   className,
   disabled = false,
 }: SchoolComboboxProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSchoolName, setSelectedSchoolName] = useState("");
+  const [selectedSchoolName, setSelectedSchoolName] = useState(initialSchoolName);
 
   // Debounce search query
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
@@ -76,9 +78,16 @@ export function SchoolCombobox({
 
   const schools = data?.schools || [];
 
-  // Get current school name if we have a value
+  // Update selected school name when initialSchoolName changes
   useEffect(() => {
-    if (value && !selectedSchoolName) {
+    if (initialSchoolName) {
+      setSelectedSchoolName(initialSchoolName);
+    }
+  }, [initialSchoolName]);
+
+  // Get current school name if we have a value but no name
+  useEffect(() => {
+    if (value && !selectedSchoolName && !initialSchoolName) {
       // Fetch the specific school to get its name
       fetch(`/api/schools/search?q=${encodeURIComponent(value)}&limit=1`, {
         credentials: "include",
@@ -87,18 +96,18 @@ export function SchoolCombobox({
         .then((data) => {
           const school = data.schools?.[0];
           if (school && school.id === value) {
-            setSelectedSchoolName(school.name);
+            setSelectedSchoolName(school.schoolName);
           }
         })
         .catch(() => {
           // Ignore errors
         });
     }
-  }, [value, selectedSchoolName]);
+  }, [value, selectedSchoolName, initialSchoolName]);
 
   const handleSelect = (school: School) => {
-    onChange(school.id, school.name);
-    setSelectedSchoolName(school.name);
+    onChange(school.id, school.schoolName);
+    setSelectedSchoolName(school.schoolName);
     setOpen(false);
     setSearchQuery("");
   };
@@ -159,7 +168,7 @@ export function SchoolCombobox({
                     />
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span>{school.name}</span>
+                      <span>{school.schoolName}</span>
                     </div>
                   </CommandItem>
                 ))}

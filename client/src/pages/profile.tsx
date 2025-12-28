@@ -12,10 +12,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { ChildrenManagement } from "@/components/profile/ChildrenManagement";
-import { SchoolCombobox } from "@/components/ui/school-combobox";
 import {
   User,
-  MapPin,
+  Users,
   Mail,
   Phone,
   ShieldCheck,
@@ -24,7 +23,7 @@ import {
   LogOut,
   Camera,
   Wallet,
-  Building2
+  Building2,
 } from "lucide-react";
 
 interface UserPreferences {
@@ -52,6 +51,7 @@ export default function Profile() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<"profile" | "children" | "notifications" | "payment">("profile");
 
   // Fetch user preferences with React Query
   const { data: preferencesData, isLoading: isLoadingPreferences } = useQuery({
@@ -429,13 +429,33 @@ export default function Profile() {
           </Card>
 
           <nav className="flex flex-col space-y-1">
-            <Button variant="ghost" className="justify-start font-medium bg-secondary/50 text-secondary-foreground">
+            <Button
+              variant="ghost"
+              className={`justify-start font-medium ${activeSection === "profile" ? "bg-secondary/50 text-secondary-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
+              onClick={() => setActiveSection("profile")}
+            >
               <User className="mr-2 h-4 w-4" /> Profile Details
             </Button>
-            <Button variant="ghost" className="justify-start font-medium text-muted-foreground hover:bg-muted/50">
+            <Button
+              variant="ghost"
+              className={`justify-start font-medium ${activeSection === "children" ? "bg-secondary/50 text-secondary-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
+              onClick={() => setActiveSection("children")}
+            >
+              <Users className="mr-2 h-4 w-4" /> My Children
+            </Button>
+            <Separator className="my-2" />
+            <Button
+              variant="ghost"
+              className={`justify-start font-medium ${activeSection === "notifications" ? "bg-secondary/50 text-secondary-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
+              onClick={() => setActiveSection("notifications")}
+            >
               <Bell className="mr-2 h-4 w-4" /> Notifications
             </Button>
-            <Button variant="ghost" className="justify-start font-medium text-muted-foreground hover:bg-muted/50">
+            <Button
+              variant="ghost"
+              className={`justify-start font-medium ${activeSection === "payment" ? "bg-secondary/50 text-secondary-foreground" : "text-muted-foreground hover:bg-muted/50"}`}
+              onClick={() => setActiveSection("payment")}
+            >
               <CreditCard className="mr-2 h-4 w-4" /> Payment Methods
             </Button>
             <Separator className="my-2" />
@@ -451,7 +471,8 @@ export default function Profile() {
 
         {/* Main Content Area */}
         <div className="space-y-6">
-          {/* Personal Information */}
+          {/* Profile Details Section */}
+          {activeSection === "profile" && (
           <Card>
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
@@ -472,20 +493,6 @@ export default function Profile() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="school">School</Label>
-                  <SchoolCombobox
-                    value={formData.schoolId}
-                    onChange={(schoolId, schoolName) => {
-                      setFormData({
-                        ...formData,
-                        schoolId,
-                        schoolName,
-                      });
-                    }}
-                    placeholder="Select school"
-                  />
-                </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
@@ -523,11 +530,15 @@ export default function Profile() {
               </Button>
             </CardFooter>
           </Card>
+          )}
 
-          {/* Children Management */}
-          <ChildrenManagement />
+          {/* Children Management Section */}
+          {activeSection === "children" && (
+            <ChildrenManagement />
+          )}
 
-          {/* Notifications */}
+          {/* Notifications Section */}
+          {activeSection === "notifications" && (
           <Card>
             <CardHeader>
               <CardTitle>Notifications</CardTitle>
@@ -728,8 +739,10 @@ export default function Profile() {
               </Button>
             </CardFooter>
           </Card>
+          )}
 
-          {/* Payment Methods */}
+          {/* Payment Methods Section */}
+          {activeSection === "payment" && (
           <Card>
             <CardHeader>
               <CardTitle>Payment Methods</CardTitle>
@@ -870,6 +883,7 @@ export default function Profile() {
               </Button>
             </CardFooter>
           </Card>
+          )}
         </div>
       </div>
     </div>
