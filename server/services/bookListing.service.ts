@@ -1,5 +1,5 @@
 import { db } from "../db.ts";
-import { bookListings, bookPhotos, users, type CreateBookListingInput, type UpdateBookListingInput } from "../db/schema/index.ts";
+import { bookListings, bookPhotos, users, schools, type CreateBookListingInput, type UpdateBookListingInput } from "../db/schema/index.ts";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 
 class BookListingService {
@@ -118,8 +118,13 @@ class BookListingService {
     maxDistance?: number;
     userLatitude?: number;
     userLongitude?: number;
+    userSchoolId?: string; // For school-based distance calculation
     excludeUserId?: string; // Exclude listings from this user
-    sortBy?: string; // Sort field: newest, price_low, price_high, popular
+    sortBy?: string; // Sort field: newest, price_low, price_high, popular, distance
+    curriculum?: string; // Filter by curriculum (e.g., "CBC", "8-4-4")
+    negotiable?: boolean; // Filter for negotiable prices only
+    county?: string; // Filter by county from schools table
+    district?: string; // Filter by district from schools table
     page?: number;
     limit?: number;
   }) {
@@ -155,6 +160,12 @@ class BookListingService {
       if (filters?.excludeUserId) {
         conditions.push(sql`${bookListings.sellerId} != ${filters.excludeUserId}`);
       }
+      if (filters?.curriculum) {
+        conditions.push(eq(bookListings.curriculum, filters.curriculum));
+      }
+      if (filters?.negotiable !== undefined) {
+        conditions.push(eq(bookListings.negotiable, filters.negotiable));
+      }
 
       // Get total count for pagination
       const [countResult] = await db
@@ -183,8 +194,10 @@ class BookListingService {
           break;
       }
 
-      // Join with users table to get seller info - WITH LIMIT AND OFFSET
-      const listingsWithSellers = await db
+      // Conditionally join with schools table if geographic filtering or distance calculation is needed
+      const needsSchoolJoin = filters?.county || filters?.district || filters?.maxDistance;
+
+      let query = db
         .select({
           listing: bookListings,
           seller: {
@@ -194,36 +207,101 @@ class BookListingService {
             schoolName: users.schoolName,
             latitude: users.latitude,
             longitude: users.longitude,
-          }
+          },
+          ...(needsSchoolJoin && {
+            school: {
+              county: schools.county,
+              district: schools.district,
+              xCoord: schools.xCoord,
+              yCoord: schools.yCoord,
+            }
+          })
         })
         .from(bookListings)
-        .innerJoin(users, eq(bookListings.sellerId, users.id))
+        .innerJoin(users, eq(bookListings.sellerId, users.id));
+
+      // Add school join if needed for geographic filtering or distance calculation
+      if (needsSchoolJoin) {
+        query = query.leftJoin(schools, eq(users.schoolId, schools.id)) as any;
+      }
+
+      const listingsWithSellers = await query
         .where(and(...conditions))
         .orderBy(orderByClause)
         .limit(limit)
         .offset(offset);
 
-      // Apply client-side filters only for complex conditions (school, distance)
+      // Apply client-side filters only for complex conditions (school, distance, county, district)
       let filteredListings = listingsWithSellers;
 
       if (filters?.schoolId) {
         filteredListings = filteredListings.filter(({ seller }) => seller.schoolId === filters.schoolId);
       }
 
-      if (filters?.maxDistance && filters?.userLatitude && filters?.userLongitude) {
-        filteredListings = filteredListings.filter(({ seller }) => {
-          const sellerLat = seller.latitude ? Number(seller.latitude) : null;
-          const sellerLng = seller.longitude ? Number(seller.longitude) : null;
+      if (filters?.county && needsSchoolJoin) {
+        filteredListings = filteredListings.filter((item: any) =>
+          item.school?.county === filters.county
+        );
+      }
 
-          if (sellerLat && sellerLng) {
+      if (filters?.district && needsSchoolJoin) {
+        filteredListings = filteredListings.filter((item: any) =>
+          item.school?.district === filters.district
+        );
+      }
+
+      // Hybrid distance filtering: School-first, then user coordinates
+      if (filters?.maxDistance) {
+        // Fetch user's school coordinates if userSchoolId is provided
+        let userSchoolLat: number | null = null;
+        let userSchoolLng: number | null = null;
+
+        if (filters.userSchoolId) {
+          const [userSchool] = await db
+            .select({ xCoord: schools.xCoord, yCoord: schools.yCoord })
+            .from(schools)
+            .where(eq(schools.id, filters.userSchoolId))
+            .limit(1);
+
+          if (userSchool?.yCoord && userSchool?.xCoord) {
+            userSchoolLat = Number(userSchool.yCoord);
+            userSchoolLng = Number(userSchool.xCoord);
+          }
+        }
+
+        filteredListings = filteredListings.filter((item: any) => {
+          const { seller, school } = item;
+
+          // Try school-to-school distance first (most privacy-friendly)
+          if (userSchoolLat && userSchoolLng && school?.yCoord && school?.xCoord) {
+            const schoolLat = Number(school.yCoord);
+            const schoolLng = Number(school.xCoord);
             const distance = this.calculateDistance(
-              filters.userLatitude!,
-              filters.userLongitude!,
-              sellerLat,
-              sellerLng
+              userSchoolLat,
+              userSchoolLng,
+              schoolLat,
+              schoolLng
             );
             return distance <= filters.maxDistance!;
           }
+
+          // Fallback to user-to-seller coordinates if school coordinates unavailable
+          if (filters.userLatitude && filters.userLongitude) {
+            const sellerLat = seller.latitude ? Number(seller.latitude) : null;
+            const sellerLng = seller.longitude ? Number(seller.longitude) : null;
+
+            if (sellerLat && sellerLng) {
+              const distance = this.calculateDistance(
+                filters.userLatitude,
+                filters.userLongitude,
+                sellerLat,
+                sellerLng
+              );
+              return distance <= filters.maxDistance;
+            }
+          }
+
+          // If no coordinates available, exclude from distance filter
           return false;
         });
       }
