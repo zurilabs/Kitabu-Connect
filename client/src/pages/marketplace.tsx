@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { Link } from "wouter";
 import {
   Select,
   SelectContent,
@@ -53,6 +54,11 @@ export default function Marketplace() {
   const [allBooks, setAllBooks] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Smart sticky filter bar state
+  const [filterBarSticky, setFilterBarSticky] = useState(false);
+  const [lastScrollY, setLastScrollY] = useState(0);
+  const filterBarRef = useRef<HTMLDivElement>(null);
 
   // Debounce search term
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
@@ -179,14 +185,40 @@ export default function Marketplace() {
     return () => clearTimeout(timeoutId);
   }, [hasMore, isLoading, isFetching, page]);
 
-  // Show/hide scroll to top button
+  // Smart sticky filter bar + scroll to top button
   useEffect(() => {
     const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 400);
+      const currentScrollY = window.scrollY;
+      const scrollingUp = currentScrollY < lastScrollY;
+      const scrollingDown = currentScrollY > lastScrollY;
+
+      // Make filter bar sticky when scrolling up and past threshold
+      // Remove sticky when scrolling down or at top
+      if (scrollingUp && currentScrollY > 150) {
+        setFilterBarSticky(true);
+      } else if (scrollingDown || currentScrollY < 100) {
+        setFilterBarSticky(false);
+      }
+
+      setLastScrollY(currentScrollY);
+      setShowScrollTop(currentScrollY > 400);
     };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+
+    // Throttle for performance
+    let ticking = false;
+    const throttledScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          handleScroll();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", throttledScroll, { passive: true });
+    return () => window.removeEventListener("scroll", throttledScroll);
+  }, [lastScrollY]);
 
   // Scroll to top function
   const scrollToTop = () => {
@@ -334,7 +366,7 @@ export default function Marketplace() {
     <div className="min-h-screen bg-muted/10 pb-20">
       {/* Child Selector Banner */}
       {children.length > 0 && (
-        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 border-b sticky top-16 z-40">
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 border-b sticky top-0 z-40">
           <div className="container px-4 lg:px-8 py-3">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
@@ -405,19 +437,57 @@ export default function Marketplace() {
         </div>
       )}
 
-      {/* Sticky Filter Bar */}
-      <div className="bg-background border-b sticky top-28 z-30 shadow-sm">
-        <div className="container px-4 lg:px-8 py-4 space-y-4">
+      {/* Smart Sticky Filter Bar */}
+      <>
+        {/* Placeholder to prevent content jump when filter bar becomes fixed */}
+        {filterBarSticky && <div className="h-[140px]" />}
+
+        <div
+          ref={filterBarRef}
+          className={`bg-background border-b transition-all duration-300 ${
+            filterBarSticky
+              ? 'fixed top-0 left-0 right-0 z-40 shadow-lg animate-in slide-in-from-top-2'
+              : 'relative'
+          }`}
+        >
+          <div className="container px-4 lg:px-8 py-4 space-y-4">
           {/* Search Bar */}
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by title, author, or ISBN..."
-                className="pl-9 h-10"
+                className={`pl-9 h-10 ${searchTerm ? 'pr-20' : 'pr-4'} ${debouncedSearchTerm ? 'ring-2 ring-primary/20' : ''}`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setSearchTerm('');
+                  }
+                }}
               />
+              {/* Search State Indicators */}
+              {searchTerm && (
+                <div className="absolute right-3 top-2.5 flex items-center gap-2">
+                  {searchTerm !== debouncedSearchTerm && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 w-5 p-0 hover:bg-muted"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+              {/* Search Results Count */}
+              {debouncedSearchTerm && (
+                <div className="absolute -bottom-6 left-0 text-xs text-muted-foreground">
+                  Found {transformedBooks.length} {transformedBooks.length === 1 ? 'book' : 'books'} matching "{debouncedSearchTerm}"
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Select value={sortBy} onValueChange={setSortBy}>
@@ -438,10 +508,15 @@ export default function Marketplace() {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10"
+                className="h-10 w-10 relative"
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               >
                 <SlidersHorizontal className="w-4 h-4" />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium">
+                    {activeFilterCount}
+                  </span>
+                )}
               </Button>
             </div>
           </div>
@@ -623,16 +698,105 @@ export default function Marketplace() {
               </div>
             </div>
           )}
+          </div>
         </div>
-      </div>
+      </>
 
       {/* Results Section */}
       <div className="container px-4 lg:px-8 py-8">
+        {/* Active Filters Summary */}
+        {(activeFilterCount > 0 || debouncedSearchTerm) && (
+          <div className="mb-6 p-4 bg-primary/5 border border-primary/10 rounded-lg">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium">Active filters:</span>
+                {debouncedSearchTerm && (
+                  <Badge variant="secondary" className="gap-1">
+                    Search: "{debouncedSearchTerm}"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      onClick={() => setSearchTerm('')}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                {selectedGrade !== "all" && (
+                  <Badge variant="secondary" className="gap-1">
+                    {selectedGrade}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      onClick={() => setSelectedGrade("all")}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                {selectedSubject !== "all" && (
+                  <Badge variant="secondary" className="gap-1">
+                    {selectedSubject}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      onClick={() => setSelectedSubject("all")}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                {listingType !== "all" && (
+                  <Badge variant="secondary" className="gap-1">
+                    {listingType === "swap" ? "Swap only" : "For sale"}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      onClick={() => setListingType("all")}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                {maxDistance && (
+                  <Badge variant="secondary" className="gap-1">
+                    Within {maxDistance}km
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      onClick={() => setMaxDistance(null)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={clearAllFilters}
+              >
+                Clear all
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold font-display">All Listings</h1>
+          <h1 className="text-2xl font-bold font-display">
+            {debouncedSearchTerm ? 'Search Results' : 'All Listings'}
+          </h1>
           <span className="text-muted-foreground text-sm">
-            {data?.pagination && (
-              <span>{data.pagination.total} books found</span>
+            {transformedBooks.length > 0 && (
+              <span>
+                Showing {transformedBooks.length} of {data?.pagination?.total || 0} books
+              </span>
             )}
           </span>
         </div>
@@ -665,10 +829,42 @@ export default function Marketplace() {
             </div>
           </>
         ) : (
-          <div className="text-center py-20 bg-muted/20 rounded-xl border border-dashed">
-            <h3 className="text-lg font-medium">No books found</h3>
-            <p className="text-muted-foreground mb-4">Try adjusting your filters or search terms.</p>
-            <Button variant="outline" onClick={clearAllFilters}>Clear Filters</Button>
+          <div className="text-center py-20 bg-muted/20 rounded-xl border border-dashed max-w-2xl mx-auto">
+            <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+            <h3 className="text-lg font-medium mb-2">
+              {debouncedSearchTerm ? `No books found for "${debouncedSearchTerm}"` : 'No books found'}
+            </h3>
+            <p className="text-muted-foreground mb-6 text-sm">
+              {debouncedSearchTerm
+                ? "Try searching with different keywords or check your spelling"
+                : "Try adjusting your filters to see more results"}
+            </p>
+
+            {/* Helpful suggestions */}
+            <div className="space-y-3 mb-6">
+              <p className="text-sm font-medium text-muted-foreground">Suggestions:</p>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                {debouncedSearchTerm && <li>• Check your spelling or try different keywords</li>}
+                {selectedSubject !== "all" && <li>• Try browsing other subjects</li>}
+                {selectedGrade !== "all" && <li>• Expand your search to other grade levels</li>}
+                {maxDistance && <li>• Increase your distance range</li>}
+                {activeFilterCount > 0 && <li>• Remove some filters to see more books</li>}
+                {!debouncedSearchTerm && activeFilterCount === 0 && (
+                  <li>• Be the first to list books in this category</li>
+                )}
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-center gap-3">
+              {activeFilterCount > 0 && (
+                <Button variant="outline" onClick={clearAllFilters}>
+                  Clear All Filters
+                </Button>
+              )}
+              <Button asChild>
+                <Link href="/sell">List Your Books</Link>
+              </Button>
+            </div>
           </div>
         )}
       </div>

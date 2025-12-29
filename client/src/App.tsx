@@ -35,28 +35,30 @@ function Router() {
   return (
     <div className="min-h-screen bg-background font-sans antialiased">
       {!shouldHideNavbar && <Navbar />}
-      <Switch>
-        <Route path="/login" component={Login} />
-        <Route path="/signup" component={Signup} />
-        <Route path="/forgot-password" component={ForgotPassword} />
-        <Route path="/onboarding" component={Onboarding} />
-        <Route path="/sell" component={SellBook} />
-        <Route path="/edit-book/:id" component={EditBook} />
-        <Route path="/swaps/new" component={SwapRequestForm} />
-        <Route path="/swaps" component={SwapsPage} />
-        <Route path="/swap-cycles/:id" component={SwapCycleDetail} />
-        <Route path="/swap-cycles" component={SwapCyclesPage} />
-        <Route path="/orders/:id/messages" component={SwapOrderDetail} />
-        <Route path="/conversations" component={Conversations} />
-        <Route path="/notifications" component={Notifications} />
-        <Route path="/" component={Home} />
-        <Route path="/marketplace" component={Marketplace} />
-        <Route path="/favorites" component={Favorites} />
-        <Route path="/book/:id" component={BookDetails} />
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/profile" component={Profile} />
-        <Route component={NotFound} />
-      </Switch>
+      <main className={!shouldHideNavbar ? "pt-16" : ""}>
+        <Switch>
+          <Route path="/login" component={Login} />
+          <Route path="/signup" component={Signup} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/onboarding" component={Onboarding} />
+          <Route path="/sell" component={SellBook} />
+          <Route path="/edit-book/:id" component={EditBook} />
+          <Route path="/swaps/new" component={SwapRequestForm} />
+          <Route path="/swaps" component={SwapsPage} />
+          <Route path="/swap-cycles/:id" component={SwapCycleDetail} />
+          <Route path="/swap-cycles" component={SwapCyclesPage} />
+          <Route path="/orders/:id/messages" component={SwapOrderDetail} />
+          <Route path="/conversations" component={Conversations} />
+          <Route path="/notifications" component={Notifications} />
+          <Route path="/" component={Home} />
+          <Route path="/marketplace" component={Marketplace} />
+          <Route path="/favorites" component={Favorites} />
+          <Route path="/book/:id" component={BookDetails} />
+          <Route path="/dashboard" component={Dashboard} />
+          <Route path="/profile" component={Profile} />
+          <Route component={NotFound} />
+        </Switch>
+      </main>
     </div>
   );
 }
