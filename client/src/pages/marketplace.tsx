@@ -103,12 +103,23 @@ export default function Marketplace() {
   // Update accumulated books when new data arrives
   useEffect(() => {
     if (data?.listings) {
+      console.log('[Marketplace] Data received:', {
+        page,
+        newBooks: data.listings.length,
+        pagination: data.pagination,
+        hasMore: data.pagination?.hasMore
+      });
+
       if (page === 1) {
         // Reset books on filter change
         setAllBooks(data.listings);
       } else {
         // Append new books for pagination
-        setAllBooks(prev => [...prev, ...data.listings]);
+        setAllBooks(prev => {
+          const combined = [...prev, ...data.listings];
+          console.log('[Marketplace] Combined books:', combined.length);
+          return combined;
+        });
       }
       setHasMore(data.pagination?.hasMore || false);
     }
@@ -122,20 +133,51 @@ export default function Marketplace() {
 
   // Infinite scroll observer
   useEffect(() => {
-    if (!loadMoreRef.current || !hasMore || isLoading) return;
+    // Use a small timeout to ensure the ref is attached after render
+    const timeoutId = setTimeout(() => {
+      console.log('[Marketplace] Observer check:', {
+        hasRef: !!loadMoreRef.current,
+        hasMore,
+        isLoading,
+        isFetching,
+        page
+      });
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isFetching) {
-          setPage(prev => prev + 1);
+      if (!loadMoreRef.current || !hasMore || isLoading) return;
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          console.log('[Marketplace] Observer triggered:', {
+            isIntersecting: entries[0].isIntersecting,
+            hasMore,
+            isFetching,
+            page
+          });
+
+          if (entries[0].isIntersecting && hasMore && !isFetching) {
+            console.log('[Marketplace] Loading more books...', { currentPage: page, nextPage: page + 1 });
+            setPage(prev => prev + 1);
+          }
+        },
+        {
+          threshold: 0.1,
+          rootMargin: '100px' // Trigger 100px before the element is visible
         }
-      },
-      { threshold: 0.5 }
-    );
+      );
 
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [hasMore, isLoading, isFetching]);
+      console.log('[Marketplace] Observer attached to element');
+      observer.observe(loadMoreRef.current);
+
+      // Cleanup function to disconnect observer when dependencies change
+      return () => {
+        console.log('[Marketplace] Observer disconnected');
+        observer.disconnect();
+      };
+    }, 100); // Small delay to ensure DOM is ready
+
+    // Cleanup timeout if effect re-runs
+    return () => clearTimeout(timeoutId);
+  }, [hasMore, isLoading, isFetching, page]);
 
   // Show/hide scroll to top button
   useEffect(() => {
@@ -293,7 +335,7 @@ export default function Marketplace() {
       {/* Child Selector Banner */}
       {children.length > 0 && (
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 border-b sticky top-16 z-40">
-          <div className="container px-4 py-3">
+          <div className="container px-4 lg:px-8 py-3">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -365,7 +407,7 @@ export default function Marketplace() {
 
       {/* Sticky Filter Bar */}
       <div className="bg-background border-b sticky top-28 z-30 shadow-sm">
-        <div className="container px-4 py-4 space-y-4">
+        <div className="container px-4 lg:px-8 py-4 space-y-4">
           {/* Search Bar */}
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
@@ -585,7 +627,7 @@ export default function Marketplace() {
       </div>
 
       {/* Results Section */}
-      <div className="container px-4 py-8">
+      <div className="container px-4 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold font-display">All Listings</h1>
           <span className="text-muted-foreground text-sm">
@@ -601,29 +643,26 @@ export default function Marketplace() {
           </div>
         ) : transformedBooks.length > 0 ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {transformedBooks.map((book) => (
                 <BookCard key={`${book.id}-${book.sellerId}`} book={book} />
               ))}
             </div>
 
-            {/* Infinite Scroll Trigger */}
-            {hasMore && (
-              <div ref={loadMoreRef} className="mt-8 flex items-center justify-center py-8">
-                {isFetching && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Loading more books...</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!hasMore && allBooks.length > 0 && (
-              <div className="mt-8 text-center text-muted-foreground text-sm py-8">
-                You've reached the end. No more books to show.
-              </div>
-            )}
+            {/* Infinite Scroll Trigger - Always render but conditionally show */}
+            <div ref={loadMoreRef} className="mt-8 flex items-center justify-center py-8">
+              {hasMore && isFetching && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading more books...</span>
+                </div>
+              )}
+              {!hasMore && allBooks.length > 0 && (
+                <div className="text-center text-muted-foreground text-sm">
+                  You've reached the end. No more books to show.
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <div className="text-center py-20 bg-muted/20 rounded-xl border border-dashed">

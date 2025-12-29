@@ -193,7 +193,7 @@ export default function Notifications() {
   const displayNotifications = activeTab === "all" ? notifications : unreadNotifications;
 
   return (
-    <div className="container max-w-4xl py-8 px-4">
+    <div className="container max-w-4xl mx-auto py-8 px-4">
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>

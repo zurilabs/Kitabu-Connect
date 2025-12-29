@@ -133,7 +133,7 @@ export default function SwapRequestForm() {
   }
 
   return (
-    <div className="container px-4 py-8 max-w-4xl">
+    <div className="container px-4 py-8 max-w-4xl mx-auto">
       <Button
         variant="ghost"
         className="mb-6 pl-0 hover:pl-2 transition-all"

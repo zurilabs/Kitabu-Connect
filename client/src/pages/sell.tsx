@@ -300,7 +300,7 @@ export default function SellBook() {
   return (
     <div className="min-h-screen bg-muted/10 pb-20">
       <div className="bg-primary pb-24 pt-12 text-primary-foreground">
-        <div className="container px-4">
+        <div className="container max-w-7xl mx-auto px-4">
           <Button variant="ghost" className="text-white hover:text-white/80 hover:bg-white/10 pl-0 mb-6" asChild>
             <Link href="/">
               <ArrowLeft className="mr-2 w-4 h-4" /> Back Home
@@ -315,7 +315,7 @@ export default function SellBook() {
         </div>
       </div>
 
-      <div className="container px-4 -mt-16">
+      <div className="container max-w-7xl mx-auto px-4 -mt-16">
         <div className="grid lg:grid-cols-[2fr,1fr] gap-8">
           {/* Main Form Area */}
           <Card className="shadow-xl border-none">

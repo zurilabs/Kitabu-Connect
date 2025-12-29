@@ -45,7 +45,7 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
       <section className="relative pt-12 pb-20 lg:pt-20 lg:pb-28 overflow-hidden">
-        <div className="container px-4 md:px-6">
+        <div className="container px-4 md:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6 animate-in slide-in-from-left duration-700">
               <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
@@ -107,7 +107,7 @@ export default function Home() {
 
       {/* Featured Section */}
       <section className="py-20 bg-muted/30">
-        <div className="container px-4 md:px-6">
+        <div className="container px-4 md:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-10">
             <div>
               <h2 className="text-3xl font-display font-bold tracking-tight mb-2">Fresh on the Shelf</h2>
@@ -152,7 +152,7 @@ export default function Home() {
 
       {/* How it Works */}
       <section className="py-20">
-        <div className="container px-4 md:px-6">
+        <div className="container px-4 md:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl font-display font-bold tracking-tight mb-4">Safe & Simple P2P Trading</h2>
             <p className="text-muted-foreground text-lg">

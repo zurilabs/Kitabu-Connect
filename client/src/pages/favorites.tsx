@@ -41,7 +41,7 @@ export default function Favorites() {
     <div className="min-h-screen bg-muted/10 pb-20">
       {/* Header */}
       <div className="bg-background border-b">
-        <div className="container px-4 py-6">
+        <div className="container max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Heart className="w-6 h-6 text-primary fill-current" />
@@ -57,7 +57,7 @@ export default function Favorites() {
       </div>
 
       {/* Content */}
-      <div className="container px-4 py-8">
+      <div className="container max-w-7xl mx-auto px-4 py-8">
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="p-4 bg-muted rounded-full mb-4">
