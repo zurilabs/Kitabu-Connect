@@ -9,7 +9,7 @@ import Home from "@/pages/home";
 import Marketplace from "@/pages/marketplace";
 import BookDetails from "@/pages/book-details";
 import Dashboard from "@/pages/dashboard";
-import OnboardingNew from "@/pages/onboarding-new";
+import Onboarding from "@/pages/onboarding";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import ForgotPassword from "@/pages/forgot-password";
@@ -39,7 +39,7 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/signup" component={Signup} />
         <Route path="/forgot-password" component={ForgotPassword} />
-        <Route path="/onboarding" component={OnboardingNew} />
+        <Route path="/onboarding" component={Onboarding} />
         <Route path="/sell" component={SellBook} />
         <Route path="/edit-book/:id" component={EditBook} />
         <Route path="/swaps/new" component={SwapRequestForm} />
