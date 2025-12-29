@@ -48,40 +48,42 @@ export default function Home() {
         <div className="container px-4 md:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6 animate-in slide-in-from-left duration-700">
-              <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                New: Escrow Protection Added
+              <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary/10 text-primary hover:bg-primary/20">
+                Save Up to 70% on School Books
               </div>
               <h1 className="text-4xl font-display font-bold tracking-tight sm:text-6xl text-foreground">
-                The Trust-Based <br />
-                <span className="text-primary">Textbook Marketplace</span>
+                Kenya's School Book <br />
+                <span className="text-primary">Sharing Community</span>
               </h1>
               <p className="text-xl text-muted-foreground max-w-[600px]">
-                Buy, sell, and swap textbooks with parents close to 
-                your location. 
-                Secure payments, verified handshakes, and zero stress.
+                Buy used textbooks at half price, sell books your child outgrew, or swap grade-to-grade with verified parents from your school.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button size="lg" className="h-12 px-8 text-base" asChild>
                   <Link href="/marketplace">
-                    Find Books
+                    Browse Books
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 px-8 text-base" asChild>
                   <Link href="/sell" onClick={handleSellClick}>
-                    Sell a Book
+                    List Your Books
                   </Link>
                 </Button>
               </div>
-              
-              <div className="pt-4 flex items-center gap-6 text-sm text-muted-foreground">
+
+              <div className="pt-4 flex flex-wrap items-center gap-4 sm:gap-6 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-primary" />
-                  <span>Escrow Protected</span>
+                  <span>Safe Escrow</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-primary" />
-                  <span>Campus Verified</span>
+                  <span>School Verified</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-primary" />
+                  <span>Smart Swaps</span>
                 </div>
               </div>
             </div>
@@ -110,8 +112,8 @@ export default function Home() {
         <div className="container px-4 md:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-10">
             <div>
-              <h2 className="text-3xl font-display font-bold tracking-tight mb-2">Fresh on the Shelf</h2>
-              <p className="text-muted-foreground">Recently listed textbooks from your campus.</p>
+              <h2 className="text-3xl font-display font-bold tracking-tight mb-2">Recently Listed Books</h2>
+              <p className="text-muted-foreground">Quality textbooks from parents across Kenya. Save money, support families.</p>
             </div>
             <Button variant="ghost" className="hidden sm:flex" asChild>
               <Link href="/marketplace">
@@ -154,9 +156,9 @@ export default function Home() {
       <section className="py-20">
         <div className="container px-4 md:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl font-display font-bold tracking-tight mb-4">Safe & Simple P2P Trading</h2>
+            <h2 className="text-3xl font-display font-bold tracking-tight mb-4">Save Up to 70% on School Books</h2>
             <p className="text-muted-foreground text-lg">
-              We've removed the risk from peer-to-peer trading. Your money is held safe until you have the book in hand.
+              Buy, sell, or swap textbooks with verified parents from your school community. Safe payments, smart matching.
             </p>
           </div>
 
@@ -164,18 +166,21 @@ export default function Home() {
             {[
               {
                 icon: BookOpen,
-                title: "1. Find or List",
-                desc: "Search for the books you need by ISBN or course code, or list your own in seconds."
+                title: "Search or List Books",
+                subtitle: "Find What Your Child Needs",
+                desc: "Search by grade, subject, or ISBN. List books your child has outgrown. Our smart system matches you with parents who have what you need."
               },
               {
                 icon: ShieldCheck,
-                title: "2. Secure Payment",
-                desc: "Pay through the app. We hold the funds in escrow. The seller doesn't get paid until you confirm."
+                title: "Buy, Sell, or Swap",
+                subtitle: "Choose Your Method",
+                desc: "Buy used books at 50-70% off retail • Sell books and earn money back • Swap grade-to-grade—our system finds multi-way matches automatically"
               },
               {
                 icon: Users,
-                title: "3. Meet & Exchange",
-                desc: "Meet on campus. Check the book. Scan the QR code to release funds instantly."
+                title: "Meet & Exchange Safely",
+                subtitle: "School-Verified & Secure",
+                desc: "Meet parents from your school or nearby. Funds held in escrow until you confirm the book. For swaps, coordinate pickup with matched parents."
               }
             ].map((step, i) => (
               <div key={i} className="relative p-6 rounded-2xl bg-card border shadow-sm hover:shadow-md transition-shadow">
@@ -183,7 +188,8 @@ export default function Home() {
                   <step.icon className="w-6 h-6" />
                 </div>
                 <h3 className="text-xl font-bold mb-2">{step.title}</h3>
-                <p className="text-muted-foreground">{step.desc}</p>
+                <p className="text-sm font-medium text-primary mb-2">{step.subtitle}</p>
+                <p className="text-muted-foreground text-sm leading-relaxed">{step.desc}</p>
               </div>
             ))}
           </div>

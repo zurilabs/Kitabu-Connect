@@ -1,5 +1,5 @@
 import { db } from "../db.ts";
-import { bookListings, bookPhotos, users, schools, type CreateBookListingInput, type UpdateBookListingInput } from "../db/schema/index.ts";
+import { bookListings, bookPhotos, users, schools, children, type CreateBookListingInput, type UpdateBookListingInput } from "../db/schema/index.ts";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 
 class BookListingService {
@@ -108,6 +108,7 @@ class BookListingService {
   }
 
   async getAllListings(filters?: {
+    searchTerm?: string; // Search by title, author, ISBN
     subject?: string;
     classGrade?: string;
     condition?: string;
@@ -120,13 +121,15 @@ class BookListingService {
     userLongitude?: number;
     userSchoolId?: string; // For school-based distance calculation
     excludeUserId?: string; // Exclude listings from this user
-    sortBy?: string; // Sort field: newest, price_low, price_high, popular, distance
+    sortBy?: string; // Sort field: newest, price_low, price_high, popular, distance, personalized
     curriculum?: string; // Filter by curriculum (e.g., "CBC", "8-4-4")
     negotiable?: boolean; // Filter for negotiable prices only
     county?: string; // Filter by county from schools table
     district?: string; // Filter by district from schools table
     page?: number;
     limit?: number;
+    userId?: string; // For personalization
+    personalizedMode?: boolean; // Enable personalization
   }) {
     try {
       const page = filters?.page || 1;
@@ -138,6 +141,19 @@ class BookListingService {
         eq(bookListings.listingStatus, "active"),
         sql`${bookListings.quantityAvailable} > 0`
       ];
+
+      // Search term - search across title, author, ISBN, publisher
+      if (filters?.searchTerm) {
+        const searchPattern = `%${filters.searchTerm.toLowerCase()}%`;
+        conditions.push(
+          sql`(
+            LOWER(${bookListings.title}) LIKE ${searchPattern} OR
+            LOWER(${bookListings.author}) LIKE ${searchPattern} OR
+            LOWER(${bookListings.isbn}) LIKE ${searchPattern} OR
+            LOWER(${bookListings.publisher}) LIKE ${searchPattern}
+          )`
+        );
+      }
 
       if (filters?.subject) {
         conditions.push(eq(bookListings.subject, filters.subject));
@@ -167,6 +183,9 @@ class BookListingService {
         conditions.push(eq(bookListings.negotiable, filters.negotiable));
       }
 
+      console.log('[BookListingService] getAllListings conditions count:', conditions.length);
+      console.log('[BookListingService] Filters:', JSON.stringify(filters, null, 2));
+
       // Get total count for pagination
       const [countResult] = await db
         .select({ count: sql<number>`count(*)` })
@@ -175,6 +194,7 @@ class BookListingService {
         .where(and(...conditions));
 
       const totalCount = Number(countResult?.count || 0);
+      console.log('[BookListingService] Total count:', totalCount);
 
       // Determine sort order
       let orderByClause;
@@ -338,9 +358,16 @@ class BookListingService {
         }
       }));
 
+      // Apply personalization scoring if enabled
+      let finalListings = listingsWithPhotos;
+      if (filters?.personalizedMode && filters?.userId) {
+        console.log('[BookListingService] Applying personalization for user:', filters.userId);
+        finalListings = await this.applyPersonalization(listingsWithPhotos, filters.userId);
+      }
+
       return {
         success: true,
-        listings: listingsWithPhotos,
+        listings: finalListings,
         pagination: {
           page,
           limit,
@@ -353,6 +380,199 @@ class BookListingService {
       console.error("Error fetching all listings:", error);
       throw new Error("Failed to fetch all listings");
     }
+  }
+
+  /**
+   * Apply personalization scoring to book listings for single-child parent
+   * Filters to show only relevant grades (current ± 1) and sorts by relevance
+   */
+  private async applyPersonalization(listings: any[], userId: string): Promise<any[]> {
+    try {
+      // Fetch user context (children information)
+      const userContext = await this.getUserContext(userId);
+
+      if (!userContext || userContext.childrenCount === 0) {
+        console.log('[Personalization] No children found for user, returning unpersonalized results');
+        return listings;
+      }
+
+      console.log('[Personalization] User context:', {
+        childrenCount: userContext.childrenCount,
+        activeChildGrade: userContext.activeChild?.grade,
+        schoolIds: userContext.schoolIds
+      });
+
+      // Filter to only relevant grades (current grade ± 1)
+      const relevantListings = listings.filter(listing => {
+        const listingGrade = listing.classGrade;
+        const childGrade = userContext.activeChild?.grade;
+
+        if (!childGrade || !listingGrade) {
+          return false; // Exclude if grade information is missing
+        }
+
+        // Include if exact match or adjacent grade
+        return childGrade === listingGrade || this.isAdjacentGrade(listingGrade, childGrade);
+      });
+
+      console.log('[Personalization] Filtered listings:', {
+        original: listings.length,
+        relevant: relevantListings.length,
+        childGrade: userContext.activeChild?.grade
+      });
+
+      // Calculate relevance score for each relevant listing
+      const scoredListings = relevantListings.map(listing => {
+        const score = this.calculateRelevanceScore(listing, userContext);
+        return {
+          ...listing,
+          _relevanceScore: score
+        };
+      });
+
+      // Sort by relevance score (highest first)
+      scoredListings.sort((a, b) => b._relevanceScore - a._relevanceScore);
+
+      // Remove score from final output (internal use only)
+      return scoredListings.map(({ _relevanceScore, ...listing }) => listing);
+    } catch (error) {
+      console.error('[Personalization] Error applying personalization:', error);
+      // If personalization fails, return original listings
+      return listings;
+    }
+  }
+
+  /**
+   * Get user context for personalization
+   */
+  private async getUserContext(userId: string) {
+    try {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!user) {
+        return null;
+      }
+
+      // Fetch children for this parent
+      const childrenList = await db
+        .select()
+        .from(children)
+        .where(eq(children.parentId, userId))
+        .orderBy(asc(children.displayOrder));
+
+      // Determine active child (first child if not specified)
+      const activeChild = childrenList[0] || null;
+
+      return {
+        user,
+        children: childrenList,
+        childrenCount: childrenList.length,
+        activeChild,
+        grades: childrenList.map(c => c.grade),
+        schoolIds: Array.from(new Set(childrenList.map(c => c.schoolId).filter(Boolean))),
+      };
+    } catch (error) {
+      console.error('[Personalization] Error fetching user context:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Calculate relevance score for a book listing
+   * Score range: 0-100
+   * - Grade match: 70 points (exact) or 35 points (adjacent)
+   * - School match: 15 points (same school) or 7 points (same county)
+   * - Recency: 10 points (newer is better)
+   * - Popularity: 5 points (more views is better)
+   */
+  private calculateRelevanceScore(listing: any, userContext: any): number {
+    let score = 0;
+
+    // 1. Grade matching (0-70 points) - Most important for single child
+    if (userContext.activeChild) {
+      const childGrade = userContext.activeChild.grade;
+      const listingGrade = listing.classGrade;
+
+      if (childGrade === listingGrade) {
+        // Exact grade match - highest priority
+        score += 70;
+      } else if (this.isAdjacentGrade(listingGrade, childGrade)) {
+        // Adjacent grade (next or previous) - planning ahead or swap-backs
+        score += 35;
+      }
+    }
+
+    // 2. School matching (0-15 points)
+    if (userContext.schoolIds.length > 0 && listing.seller?.schoolId) {
+      if (userContext.schoolIds.includes(listing.seller.schoolId)) {
+        // Same school - trust and convenience
+        score += 15;
+      }
+      // Note: County matching would require additional school data lookup
+    }
+
+    // 3. Recency (0-10 points) - Newer listings are more relevant
+    if (listing.createdAt) {
+      const daysOld = this.getDaysSinceCreated(listing.createdAt);
+      // Linear decay: 10 points for today, 0 points after 20 days
+      score += Math.max(0, 10 - (daysOld * 0.5));
+    }
+
+    // 4. Popularity (0-5 points) - Social proof
+    if (listing.viewsCount) {
+      // Normalize views: cap at 100 views = 5 points
+      const normalizedViews = Math.min(listing.viewsCount / 100, 1);
+      score += normalizedViews * 5;
+    }
+
+    return Math.round(score * 100) / 100; // Round to 2 decimal places
+  }
+
+  /**
+   * Check if a grade is adjacent to the child's current grade
+   * Adjacent means +1 or -1 from current grade
+   */
+  private isAdjacentGrade(listingGrade: string, childGrade: string): boolean {
+    // Extract numeric part from grade strings (e.g., "Grade 5" -> 5, "Form 2" -> 2)
+    const extractNumber = (grade: string): number | null => {
+      const match = grade.match(/\d+/);
+      return match ? parseInt(match[0], 10) : null;
+    };
+
+    const listingNum = extractNumber(listingGrade);
+    const childNum = extractNumber(childGrade);
+
+    if (listingNum === null || childNum === null) {
+      return false;
+    }
+
+    // Check if grades are within system (Grade 1-8 or Form 1-4)
+    const isGradeSystem = childGrade.toLowerCase().includes('grade');
+    const isFormSystem = childGrade.toLowerCase().includes('form');
+
+    if (listingGrade.toLowerCase().includes('grade') !== isGradeSystem &&
+        listingGrade.toLowerCase().includes('form') !== isFormSystem) {
+      // Different systems (Grade vs Form)
+      return false;
+    }
+
+    // Adjacent if difference is exactly 1
+    return Math.abs(listingNum - childNum) === 1;
+  }
+
+  /**
+   * Calculate days since listing was created
+   */
+  private getDaysSinceCreated(createdAt: Date | string): number {
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffMs = now.getTime() - created.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    return Math.floor(diffDays);
   }
 
   /**

@@ -66,6 +66,7 @@ export default function Marketplace() {
   // Build filter params
   const filterParams = useMemo(() => {
     const params = new URLSearchParams();
+    if (debouncedSearchTerm) params.append("searchTerm", debouncedSearchTerm);
     if (selectedSubject !== "all") params.append("subject", selectedSubject);
     if (selectedGrade !== "all") params.append("classGrade", selectedGrade);
     if (selectedCondition !== "all") params.append("condition", selectedCondition);
@@ -91,7 +92,7 @@ export default function Marketplace() {
     params.append("page", page.toString());
     params.append("limit", "24");
     return params.toString();
-  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, sameSchoolOnly, activeChild, curriculum, negotiableOnly, maxDistance, user, page]);
+  }, [debouncedSearchTerm, selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, sameSchoolOnly, activeChild, curriculum, negotiableOnly, maxDistance, user, page]);
 
   // Fetch books with React Query
   const { data, isLoading, isFetching } = useQuery({
@@ -108,6 +109,13 @@ export default function Marketplace() {
 
   // Update accumulated books when new data arrives
   useEffect(() => {
+    console.log('[Marketplace] useEffect triggered:', {
+      hasData: !!data,
+      hasListings: !!data?.listings,
+      listingsLength: data?.listings?.length,
+      page
+    });
+
     if (data?.listings) {
       console.log('[Marketplace] Data received:', {
         page,
@@ -118,6 +126,7 @@ export default function Marketplace() {
 
       if (page === 1) {
         // Reset books on filter change
+        console.log('[Marketplace] Setting allBooks (page 1):', data.listings.length);
         setAllBooks(data.listings);
       } else {
         // Append new books for pagination
@@ -128,14 +137,16 @@ export default function Marketplace() {
         });
       }
       setHasMore(data.pagination?.hasMore || false);
+    } else {
+      console.log('[Marketplace] No data or listings to process');
     }
   }, [data, page]);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters change (including search term)
   useEffect(() => {
     setPage(1);
     setAllBooks([]);
-  }, [selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, sameSchoolOnly, curriculum, negotiableOnly, maxDistance]);
+  }, [debouncedSearchTerm, selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, sameSchoolOnly, curriculum, negotiableOnly, maxDistance]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -252,23 +263,13 @@ export default function Marketplace() {
     { value: "popular", label: "Most Popular" },
   ];
 
-  // Client-side search filter
-  const filteredBooks = useMemo(() => {
-    if (!debouncedSearchTerm) return allBooks;
-
-    return allBooks.filter(book => {
-      const searchLower = debouncedSearchTerm.toLowerCase();
-      return (
-        book.title.toLowerCase().includes(searchLower) ||
-        book.author?.toLowerCase().includes(searchLower) ||
-        (book.isbn && book.isbn.toLowerCase().includes(searchLower))
-      );
-    });
-  }, [allBooks, debouncedSearchTerm]);
-
-  // Transform books
+  // Transform books (server-side search already applied)
   const transformedBooks = useMemo(() => {
-    return filteredBooks.map(book => ({
+    console.log('[Marketplace] Transforming books:', {
+      allBooksLength: allBooks.length,
+      firstBook: allBooks[0]
+    });
+    const transformed = allBooks.map(book => ({
       id: book.id.toString(),
       title: book.title,
       author: book.author,
@@ -285,7 +286,12 @@ export default function Marketplace() {
       willingToSwapFor: book.willingToSwapFor,
       schoolName: book.seller?.schoolName,
     }));
-  }, [filteredBooks]);
+    console.log('[Marketplace] Transformed books:', {
+      transformedLength: transformed.length,
+      firstTransformed: transformed[0]
+    });
+    return transformed;
+  }, [allBooks]);
 
   // Quick filter chips - use active child's grade if available
   const quickFilters = [
@@ -788,17 +794,27 @@ export default function Marketplace() {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold font-display">
-            {debouncedSearchTerm ? 'Search Results' : 'All Listings'}
-          </h1>
-          <span className="text-muted-foreground text-sm">
-            {transformedBooks.length > 0 && (
-              <span>
-                Showing {transformedBooks.length} of {data?.pagination?.total || 0} books
-              </span>
-            )}
-          </span>
+        <div className="flex flex-col gap-3 mb-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold font-display">
+              {debouncedSearchTerm ? 'Search Results' : activeChild ? `Books for ${activeChild.displayName}` : 'All Listings'}
+            </h1>
+            <span className="text-muted-foreground text-sm">
+              {transformedBooks.length > 0 && (
+                <span>
+                  Showing {transformedBooks.length} of {data?.pagination?.total || 0} books
+                </span>
+              )}
+            </span>
+          </div>
+
+          {/* Personalization Indicator */}
+          {activeChild && children.length > 0 && !debouncedSearchTerm && selectedGrade === "all" && (
+            <Badge variant="secondary" className="w-fit bg-primary/10 text-primary border-primary/20">
+              <BookOpen className="w-3 h-3 mr-1.5" />
+              Personalized for {activeChild.grade}
+            </Badge>
+          )}
         </div>
 
         {isLoading && allBooks.length === 0 ? (

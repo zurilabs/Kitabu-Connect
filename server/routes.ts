@@ -653,6 +653,7 @@ export async function registerRoutes(
   app.get("/api/books", async (req, res) => {
     try {
       const {
+        searchTerm,
         subject,
         classGrade,
         condition,
@@ -663,7 +664,8 @@ export async function registerRoutes(
         maxDistance,
         sortBy,
         page,
-        limit
+        limit,
+        personalized // NEW: Frontend can request personalized results
       } = req.query;
 
       // Get current user's info if authenticated (optional)
@@ -682,7 +684,11 @@ export async function registerRoutes(
         }
       }
 
+      // Enable personalization by default for authenticated users (can be disabled via query param)
+      const enablePersonalization = currentUser && personalized !== 'false';
+
       const filters = {
+        searchTerm: searchTerm as string | undefined,
         subject: subject as string | undefined,
         classGrade: classGrade as string | undefined,
         condition: condition as string | undefined,
@@ -697,7 +703,11 @@ export async function registerRoutes(
         sortBy: sortBy as string | undefined,
         page: page ? Number(page) : 1,
         limit: limit ? Number(limit) : 20,
+        userId: currentUser?.id, // NEW: Pass user ID for personalization
+        personalizedMode: enablePersonalization, // NEW: Enable personalization
       };
+
+      console.log('[Route] /api/books filters:', JSON.stringify(filters, null, 2));
 
       // Add caching headers - cache for 1 minute for marketplace data
       res.set({
@@ -705,6 +715,11 @@ export async function registerRoutes(
       });
 
       const result = await bookListingService.getAllListings(filters);
+      console.log('[Route] /api/books result:', {
+        success: result.success,
+        listingsCount: result.listings?.length || 0,
+        pagination: result.pagination
+      });
       return res.status(200).json(result);
     } catch (error) {
       console.error("[Route] books error:", error);
