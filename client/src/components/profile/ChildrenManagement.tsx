@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SchoolCombobox } from "@/components/ui/school-combobox";
 import { useActiveChild, type Child } from "@/contexts/ActiveChildContext";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, GripVertical, Users } from "lucide-react";
@@ -23,16 +24,21 @@ export function ChildrenManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
-  const [childForm, setChildForm] = useState({ name: "", grade: "" });
+  const [childForm, setChildForm] = useState({ name: "", grade: "", schoolId: "", schoolName: "" });
 
   // Create child mutation
   const createChild = useMutation({
-    mutationFn: async (data: { name: string | null; grade: string }) => {
+    mutationFn: async (data: { name: string | null; grade: string; schoolId: string | null; schoolName: string | null }) => {
       const response = await fetch("/api/children", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: data.name || null, grade: data.grade }),
+        body: JSON.stringify({
+          name: data.name || null,
+          grade: data.grade,
+          schoolId: data.schoolId || null,
+          schoolName: data.schoolName || null,
+        }),
       });
       if (!response.ok) throw new Error("Failed to create child");
       return response.json();
@@ -41,7 +47,7 @@ export function ChildrenManagement() {
       toast({ title: "Child Added", description: "Successfully added child to your profile" });
       refetchChildren();
       setIsAddDialogOpen(false);
-      setChildForm({ name: "", grade: "" });
+      setChildForm({ name: "", grade: "", schoolId: "", schoolName: "" });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -95,12 +101,22 @@ export function ChildrenManagement() {
       toast({ title: "Missing Grade", description: "Please select a grade", variant: "destructive" });
       return;
     }
-    createChild.mutate({ name: childForm.name || null, grade: childForm.grade });
+    createChild.mutate({
+      name: childForm.name || null,
+      grade: childForm.grade,
+      schoolId: childForm.schoolId || null,
+      schoolName: childForm.schoolName || null,
+    });
   };
 
   const handleEditChild = (child: Child) => {
     setEditingChild(child);
-    setChildForm({ name: child.name || "", grade: child.grade });
+    setChildForm({
+      name: child.name || "",
+      grade: child.grade,
+      schoolId: child.schoolId || "",
+      schoolName: child.schoolName || "",
+    });
     setIsEditDialogOpen(true);
   };
 
@@ -108,7 +124,12 @@ export function ChildrenManagement() {
     if (!editingChild) return;
     updateChild.mutate({
       id: editingChild.id,
-      data: { name: childForm.name || null, grade: childForm.grade },
+      data: {
+        name: childForm.name || null,
+        grade: childForm.grade,
+        schoolId: childForm.schoolId || null,
+        schoolName: childForm.schoolName || null,
+      },
     });
   };
 
@@ -163,6 +184,9 @@ export function ChildrenManagement() {
                     <div>
                       <div className="font-medium">{child.displayName}</div>
                       <div className="text-sm text-muted-foreground">{child.grade}</div>
+                      {child.schoolName && (
+                        <div className="text-xs text-muted-foreground">{child.schoolName}</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -226,6 +250,23 @@ export function ChildrenManagement() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="child-school">School (Optional)</Label>
+              <SchoolCombobox
+                value={childForm.schoolId}
+                onChange={(schoolId, schoolName) => {
+                  setChildForm({
+                    ...childForm,
+                    schoolId,
+                    schoolName,
+                  });
+                }}
+                placeholder="Select school"
+              />
+              <p className="text-xs text-muted-foreground">
+                Select the school this child attends
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -269,6 +310,24 @@ export function ChildrenManagement() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-child-school">School (Optional)</Label>
+              <SchoolCombobox
+                value={childForm.schoolId}
+                initialSchoolName={childForm.schoolName}
+                onChange={(schoolId, schoolName) => {
+                  setChildForm({
+                    ...childForm,
+                    schoolId,
+                    schoolName,
+                  });
+                }}
+                placeholder="Select school"
+              />
+              <p className="text-xs text-muted-foreground">
+                Select the school this child attends
+              </p>
             </div>
           </div>
           <DialogFooter>

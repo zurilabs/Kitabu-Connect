@@ -115,6 +115,10 @@ export const children = mysqlTable(
     grade: varchar("grade", { length: 50 }).notNull(), // "Grade 5", "Form 2"
     displayOrder: int("display_order").notNull().default(0), // For manual reordering
 
+    // School information for this child
+    schoolId: varchar("school_id", { length: 36 }),
+    schoolName: text("school_name"),
+
     // Future: For child sub-accounts
     userId: varchar("user_id", { length: 36 }),
 
@@ -130,6 +134,7 @@ export const children = mysqlTable(
   (t) => ({
     parentIdx: index("idx_children_parent").on(t.parentId),
     orderIdx: index("idx_children_order").on(t.parentId, t.displayOrder),
+    schoolIdx: index("idx_children_school").on(t.schoolId),
   })
 );
 
@@ -1472,11 +1477,15 @@ export type Child = typeof children.$inferSelect;
 export const createChildSchema = z.object({
   name: z.string().min(1).max(255).nullable().optional(),
   grade: z.string().min(1, "Grade is required"),
+  schoolId: z.string().optional().nullable(),
+  schoolName: z.string().optional().nullable(),
 });
 
 export const updateChildSchema = z.object({
   name: z.string().min(1).max(255).nullable().optional(),
   grade: z.string().optional(),
+  schoolId: z.string().optional().nullable(),
+  schoolName: z.string().optional().nullable(),
   displayOrder: z.number().optional(),
 });
 
