@@ -93,7 +93,7 @@ export default function BookDetails() {
   };
 
   return (
-    <div className="container px-4 py-8 max-w-5xl">
+    <div className="container px-4 py-8 max-w-5xl mx-auto">
       <Button variant="ghost" className="mb-6 pl-0 hover:pl-2 transition-all" onClick={() => window.history.back()}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Marketplace
       </Button>

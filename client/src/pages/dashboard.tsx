@@ -78,10 +78,10 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="container px-4 py-8 max-w-6xl">
-      <div className="flex flex-col md:flex-row gap-8 mb-8">
+    <div className="container px-4 py-8 max-w-7xl mx-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Profile Summary */}
-        <Card className="w-full md:w-1/3">
+        <Card className="lg:col-span-1">
           <CardHeader className="flex flex-row items-center gap-4 pb-2">
             <Avatar className="h-16 w-16">
               <AvatarFallback className="bg-primary text-primary-foreground text-xl">
@@ -126,7 +126,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 w-full md:w-2/3">
+        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Active Listings</CardTitle>

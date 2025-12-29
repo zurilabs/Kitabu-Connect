@@ -176,7 +176,7 @@ export default function SwapCyclesPage() {
   }
 
   return (
-    <div className="container px-4 py-8 max-w-6xl">
+    <div className="container px-4 py-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-start justify-between">

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { BookPlaceholder } from "@/components/ui/book-placeholder";
 import { Book } from "@/lib/mockData";
 import { Link } from "wouter";
-import { MapPin, User, ArrowRight, ArrowLeftRight, School } from "lucide-react";
+import { MapPin, User, ArrowRight, ArrowLeftRight, School, ShieldCheck, TrendingDown } from "lucide-react";
 import { generateBookSlug } from "@/lib/utils";
 import { FavoriteButton } from "@/components/books/FavoriteButton";
 import { useIsFavorited } from "@/hooks/use-favorites";
@@ -22,6 +22,11 @@ export function BookCard({ book }: BookCardProps) {
   const hasValidImage = book.image &&
     book.image !== "/placeholder-book.png" &&
     !book.image.includes("placeholder");
+
+  // Calculate savings (estimate retail as 2.5x selling price for used books)
+  const estimatedRetailPrice = book.listingType !== 'swap' ? book.price * 2.5 : 0;
+  const savings = book.listingType !== 'swap' ? estimatedRetailPrice - book.price : 0;
+  const savingsPercentage = book.listingType !== 'swap' ? Math.round((savings / estimatedRetailPrice) * 100) : 0;
 
   return (
     <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 border-border/50">
@@ -73,13 +78,17 @@ export function BookCard({ book }: BookCardProps) {
         </h3>
         <p className="text-xs text-muted-foreground mb-2 truncate">{book.author}</p>
 
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+        <div className="flex items-center gap-2 text-xs mb-2 flex-wrap">
           {book.schoolName && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 text-muted-foreground">
               <School className="w-3 h-3" />
-              <span className="text-xs truncate">{book.schoolName}</span>
+              <span className="truncate max-w-[140px]" title={book.schoolName}>{book.schoolName}</span>
             </div>
           )}
+          <div className="flex items-center gap-1 text-green-600">
+            <ShieldCheck className="w-3 h-3" />
+            <span className="text-xs font-medium">Verified Parent</span>
+          </div>
         </div>
 
         {book.listingType === 'swap' ? (
@@ -87,8 +96,17 @@ export function BookCard({ book }: BookCardProps) {
             Looking to swap
           </div>
         ) : (
-          <div className="font-bold text-lg text-primary">
-            KSh {book.price.toLocaleString()}
+          <div className="space-y-1">
+            <div className="font-bold text-lg text-primary">
+              KSh {book.price.toLocaleString()}
+            </div>
+            {savingsPercentage > 0 && (
+              <div className="flex items-center gap-1 text-xs">
+                <TrendingDown className="w-3 h-3 text-green-600" />
+                <span className="text-green-600 font-medium">Save {savingsPercentage}%</span>
+                <span className="text-muted-foreground line-through">KSh {estimatedRetailPrice.toLocaleString()}</span>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

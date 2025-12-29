@@ -354,7 +354,7 @@ export default function SwapsPage() {
   const outgoingSwaps = swapData?.outgoing || [];
 
   return (
-    <div className="container px-4 py-8 max-w-6xl">
+    <div className="container px-4 py-8 max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <ArrowLeftRight className="w-8 h-8 text-blue-600" />
