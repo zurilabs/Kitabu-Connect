@@ -100,7 +100,7 @@ export default function PurchaseOrderPayment({
           Complete Your Purchase
         </CardTitle>
         <CardDescription className="text-orange-700 dark:text-orange-300">
-          Pay for your book to proceed with the order.
+          Pay for your book to proceed with the order. Already paid? Wait a moment for verification or refresh the page.
         </CardDescription>
       </CardHeader>
       <CardContent>

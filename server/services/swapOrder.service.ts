@@ -6,6 +6,7 @@ import {
   users,
   escrowAccounts,
   transactions,
+  walletTransactions,
   type CreateSwapOrderInput,
   type CreatePurchaseOrderInput,
   type UpdateSwapOrderInput,
@@ -481,29 +482,40 @@ export class SwapOrderService {
         };
       }
 
+      const isPurchase = swapOrder.orderType === "purchase";
+
+      // Both purchase and swap orders now use datetime for meetupTime
+      const meetupTimeValue = new Date(data.meetupTime);
+
       // Update the swap order
       await db
         .update(swapOrders)
         .set({
           requirementsSubmitted: true,
           meetupLocation: data.meetupLocation,
-          meetupTime: new Date(data.meetupTime),
+          meetupTime: meetupTimeValue,
         })
         .where(eq(swapOrders.id, swapOrderId));
 
-      // Send system message
+      // Send system message (same format for both purchase and swap)
+      const systemMessage = `📋 Meetup details submitted!\n\n📍 Meetup Location: ${data.meetupLocation}\n📅 Meetup Time: ${meetupTimeValue.toLocaleString()}\n\n${data.additionalNotes ? `📝 Notes: ${data.additionalNotes}` : ""}`;
+
       await messageService.sendSystemMessage(
         swapOrderId,
-        `📋 Requirements submitted!\n\nMeetup Location: ${data.meetupLocation}\nMeetup Time: ${new Date(data.meetupTime).toLocaleString()}\n\n${data.additionalNotes ? `Notes: ${data.additionalNotes}` : ""}`,
+        systemMessage,
         "requirement"
       );
 
       // Notify owner
+      const notificationMessage = isPurchase
+        ? "The buyer has submitted meetup details. Please review and approve to proceed."
+        : "The requester has submitted meetup details. Please review and approve.";
+
       await notificationService.createNotification({
         userId: swapOrder.ownerId,
         type: "swap_accepted",
-        title: "Requirements Submitted",
-        message: "The requester has submitted meetup details. Please review and approve.",
+        title: "Meetup Details Submitted",
+        message: notificationMessage,
         relatedSwapRequestId: swapOrder.swapRequestId,
         actionUrl: `/orders/${swapOrderId}/messages`,
       });
@@ -560,29 +572,43 @@ export class SwapOrderService {
         };
       }
 
-      // Update the swap order to awaiting payment
+      const isPurchase = swapOrder.orderType === "purchase";
+
+      // For purchases, buyer already paid - move to in_progress
+      // For swaps, move to awaiting_payment for commitment fees
+      const newStatus = isPurchase ? "in_progress" : "awaiting_payment";
+
+      // Update the swap order
       await db
         .update(swapOrders)
         .set({
           requirementsApproved: true,
-          status: "awaiting_payment",
+          status: newStatus,
           startedAt: new Date(),
         })
         .where(eq(swapOrders.id, swapOrderId));
 
-      // Send system message about commitment fees
+      // Send different messages for purchases vs swaps
+      const systemMessage = isPurchase
+        ? "✅ Delivery details approved! The seller can now prepare and dispatch your book. You will be notified once the book is on its way."
+        : "✅ Requirements approved! Both parties need to pay a commitment fee of KES 50 to proceed. This fee will be refunded when the swap is completed successfully.";
+
       await messageService.sendSystemMessage(
         swapOrderId,
-        "✅ Requirements approved! Both parties need to pay a commitment fee of KES 50 to proceed. This fee will be refunded when the swap is completed successfully.",
+        systemMessage,
         "system"
       );
 
       // Notify requester
+      const notificationMessage = isPurchase
+        ? "The seller approved your delivery details. Your book will be dispatched soon!"
+        : "The owner approved the meetup details. Your swap is now in progress!";
+
       await notificationService.createNotification({
         userId: swapOrder.requesterId,
         type: "swap_accepted",
         title: "Requirements Approved! ✅",
-        message: "The owner approved the meetup details. Your swap is now in progress!",
+        message: notificationMessage,
         relatedSwapRequestId: swapOrder.swapRequestId,
         actionUrl: `/orders/${swapOrderId}/messages`,
       });
@@ -728,7 +754,7 @@ export class SwapOrderService {
         const userName = isRequester ? "Requester" : "Owner";
         await messageService.sendSystemMessage(
           swapOrderId,
-          `💳 ${userName} has paid their commitment fee. Waiting for the other party to pay.`,
+          `💳 ${userName} has paid their KES 50 commitment fee. Waiting for the other party to pay their fee before the swap can proceed.`,
           "system"
         );
       }
@@ -1118,7 +1144,18 @@ export class SwapOrderService {
 
             // Credit seller - create a "sale" transaction
             if (purchaseTransaction) {
-              const saleTransactionResult = await db.insert(transactions).values({
+              // Get current seller balance BEFORE crediting
+              const [sellerUser] = await db
+                .select()
+                .from(users)
+                .where(eq(users.id, swapOrder.ownerId))
+                .limit(1);
+
+              const currentBalance = parseFloat(sellerUser.walletBalance || "0");
+              const newBalance = currentBalance + bookPrice;
+
+              // Create sale transaction
+              const [saleTransactionResult] = await db.insert(transactions).values({
                 userId: swapOrder.ownerId,
                 type: "sale",
                 status: "completed",
@@ -1135,36 +1172,27 @@ export class SwapOrderService {
                   buyerId: swapOrder.requesterId,
                 }),
                 completedAt: new Date(),
-              });
+              }).$returningId();
 
               // Update seller's wallet balance
-              await db.execute(sql`
-                UPDATE users
-                SET wallet_balance = wallet_balance + ${bookPrice}
-                WHERE id = ${swapOrder.ownerId}
-              `);
+              await db
+                .update(users)
+                .set({
+                  walletBalance: newBalance.toFixed(2),
+                })
+                .where(eq(users.id, swapOrder.ownerId));
 
-              // Record wallet transaction for seller
-              const [sellerUser] = await db
-                .select()
-                .from(users)
-                .where(eq(users.id, swapOrder.ownerId))
-                .limit(1);
+              // Record wallet transaction for seller (credit)
+              await db.insert(walletTransactions).values({
+                userId: swapOrder.ownerId,
+                type: "credit",
+                amount: bookPrice.toFixed(2),
+                balanceAfter: newBalance.toFixed(2),
+                transactionId: saleTransactionResult.id,
+                description: `Payment received for book sale - Order #${swapOrder.orderNumber}`,
+              });
 
-              const newBalance = parseFloat(sellerUser.walletBalance || "0") + bookPrice;
-
-              await db.execute(sql`
-                INSERT INTO wallet_transactions (user_id, type, amount, balance_after, transaction_id, description, created_at)
-                VALUES (
-                  ${swapOrder.ownerId},
-                  'credit',
-                  ${bookPrice},
-                  ${newBalance},
-                  ${saleTransactionResult[0].insertId},
-                  'Payment received for book sale - Order #${swapOrder.orderNumber}',
-                  NOW()
-                )
-              `);
+              console.log(`[SwapOrderService] Released KES ${bookPrice.toFixed(2)} from escrow to seller ${swapOrder.ownerId}. New balance: KES ${newBalance.toFixed(2)}`);
             }
           } else {
             // For swap orders: release commitment fees to platform

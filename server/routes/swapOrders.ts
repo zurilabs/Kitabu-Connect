@@ -606,15 +606,15 @@ router.post("/purchase/:id/pay/initialize", authenticateToken, async (req: Reque
       return res.status(400).json({ message: "Email is required for payment" });
     }
 
-    // Generate reference
-    const reference = `PUR-${purchaseOrder.orderNumber}-${Date.now()}`;
+    // Generate reference (orderNumber already includes PUR- prefix)
+    const reference = `${purchaseOrder.orderNumber}-${Date.now()}`;
 
     // Initialize payment with Paystack
     const paystackResult = await initializePayment({
       email: userEmail,
       amount: totalAmount,
       reference,
-      callback_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/orders/${purchaseOrderId}/messages?payment=success`,
+      callback_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/orders/${purchaseOrderId}/messages?payment=success&reference=${reference}`,
       metadata: {
         userId: buyerId,
         purchaseOrderId: purchaseOrderId,
@@ -650,26 +650,33 @@ router.get("/purchase/:id/pay/verify/:reference", authenticateToken, async (req:
     const purchaseOrderId = parseInt(req.params.id);
     const reference = req.params.reference;
 
+    console.log(`[Purchase Payment] Verifying payment for order ${purchaseOrderId}, reference: ${reference}`);
+
     if (isNaN(purchaseOrderId)) {
       return res.status(400).json({ message: "Invalid purchase order ID" });
     }
 
     // Verify payment with Paystack
+    console.log(`[Purchase Payment] Calling Paystack to verify: ${reference}`);
     const verificationResult = await verifyPayment(reference);
 
     if (!verificationResult.success || !verificationResult.data) {
+      console.error(`[Purchase Payment] Paystack verification failed:`, verificationResult);
       return res.status(400).json({ message: "Payment verification failed" });
     }
 
     const paymentData = verificationResult.data;
+    console.log(`[Purchase Payment] Paystack verification successful. Status: ${paymentData.status}`);
 
     // Verify payment metadata
     const metadata = paymentData.metadata || {};
     if (metadata.purchaseOrderId !== purchaseOrderId) {
+      console.error(`[Purchase Payment] Metadata mismatch. Expected order ${purchaseOrderId}, got ${metadata.purchaseOrderId}`);
       return res.status(400).json({ message: "Payment reference does not match order" });
     }
 
     // Process payment in swap order service
+    console.log(`[Purchase Payment] Processing payment for order ${purchaseOrderId}`);
     const result = await swapOrderService.payPurchaseOrder(
       purchaseOrderId,
       buyerId,
@@ -677,12 +684,14 @@ router.get("/purchase/:id/pay/verify/:reference", authenticateToken, async (req:
     );
 
     if (!result.success) {
+      console.error(`[Purchase Payment] Payment processing failed:`, result.message);
       return res.status(400).json({ message: result.message });
     }
 
+    console.log(`[Purchase Payment] Payment successfully processed for order ${purchaseOrderId}`);
     return res.json({
       success: true,
-      message: result.message,
+      message: result.message || "Payment verified successfully!",
     });
   } catch (error) {
     console.error("[Swap Orders API] Verify purchase payment error:", error);

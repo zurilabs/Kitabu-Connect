@@ -194,7 +194,7 @@ export default function DeliveryConfirmation({
               disabled={approving}
             >
               <ThumbsUp className="h-4 w-4 mr-2" />
-              {approving ? "Approving..." : "Approve Meetup Details"}
+              {approving ? "Approving..." : isPurchase ? "Approve Delivery Details" : "Approve Meetup Details"}
             </Button>
           )}
 

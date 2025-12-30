@@ -47,6 +47,7 @@ interface Message {
 interface SwapOrder {
   id: number;
   orderNumber: string;
+  orderType?: string;
   status: string;
   requesterId: string;
   ownerId: string;
@@ -62,6 +63,9 @@ interface SwapOrder {
   deliveryDeadline?: string;
   requesterReceivedBook: boolean;
   ownerReceivedBook: boolean;
+  bookPrice?: string;
+  convenienceFee?: string;
+  totalAmount?: string;
   createdAt: string;
   requester: {
     id: string;
@@ -121,16 +125,20 @@ export default function SwapOrderDetail() {
     const urlParams = new URLSearchParams(window.location.search);
     const paymentStatus = urlParams.get("payment");
     const reference = urlParams.get("reference");
+    const trxref = urlParams.get("trxref"); // Paystack also adds this
+    const paystackReference = urlParams.get("reference") || urlParams.get("trxref");
 
-    if (paymentStatus === "success" && reference) {
-      verifyPayment(reference);
+    if ((paymentStatus === "success" || trxref) && paystackReference) {
+      console.log("Payment callback detected, verifying:", paystackReference);
+      verifyPayment(paystackReference);
       // Clean up URL
       window.history.replaceState({}, "", `/orders/${id}/messages`);
     }
 
-    // Poll for new messages every 3 seconds
+    // Poll for new messages and order status every 3 seconds
     const interval = setInterval(() => {
       fetchMessages();
+      fetchSwapOrder(); // Also refresh order status to detect payment updates
     }, 3000);
 
     return () => clearInterval(interval);
@@ -146,12 +154,15 @@ export default function SwapOrderDetail() {
 
   const verifyPayment = async (reference: string) => {
     try {
-      const response = await fetch(
-        `/api/swap-orders/${id}/pay-commitment-fee/verify/${reference}`,
-        {
-          credentials: "include",
-        }
-      );
+      // Determine if this is a purchase or commitment fee payment
+      const isPurchasePayment = reference.startsWith("PUR-");
+      const endpoint = isPurchasePayment
+        ? `/api/swap-orders/purchase/${id}/pay/verify/${reference}`
+        : `/api/swap-orders/${id}/pay-commitment-fee/verify/${reference}`;
+
+      const response = await fetch(endpoint, {
+        credentials: "include",
+      });
 
       const data = await response.json();
 
@@ -509,6 +520,7 @@ export default function SwapOrderDetail() {
             !swapOrder.requirementsSubmitted && (
               <RequirementsForm
                 orderId={parseInt(id!)}
+                orderType={swapOrder.orderType}
                 onSuccess={() => {
                   fetchSwapOrder();
                   fetchMessages();
