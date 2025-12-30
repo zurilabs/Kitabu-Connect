@@ -26,6 +26,7 @@ import RequirementsForm from "@/components/swap-orders/RequirementsForm";
 import OrderTimeline from "@/components/swap-orders/OrderTimeline";
 import DeliveryConfirmation from "@/components/swap-orders/DeliveryConfirmation";
 import CommitmentFeePayment from "@/components/swap-orders/CommitmentFeePayment";
+import PurchaseOrderPayment from "@/components/swap-orders/PurchaseOrderPayment";
 
 interface Message {
   message: {
@@ -327,7 +328,9 @@ export default function SwapOrderDetail() {
           {/* Books Information */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Books Being Swapped</CardTitle>
+              <CardTitle className="text-sm">
+                {swapOrder.orderType === "purchase" ? "Book Details" : "Books Being Swapped"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Requested Book */}
@@ -356,50 +359,74 @@ export default function SwapOrderDetail() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-center">
-                <div className="bg-muted rounded-full p-2">
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                    />
-                  </svg>
+              {/* Price info for purchase orders */}
+              {swapOrder.orderType === "purchase" && swapOrder.bookPrice && (
+                <div className="bg-muted rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Book Price</span>
+                    <span className="font-medium">KES {parseFloat(swapOrder.bookPrice).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Platform Fee</span>
+                    <span className="font-medium">KES {parseFloat(swapOrder.convenienceFee || "0").toLocaleString()}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between font-semibold">
+                    <span>Total</span>
+                    <span>KES {parseFloat(swapOrder.totalAmount || "0").toLocaleString()}</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Offered Book */}
-              {swapOrder.offeredBook && (
-                <div className="flex gap-3">
-                  <div className="h-16 w-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
-                    {swapOrder.offeredBook.coverImageUrl ? (
-                      <img
-                        src={swapOrder.offeredBook.coverImageUrl}
-                        alt={swapOrder.offeredBook.title}
-                        className="h-full w-full object-cover rounded"
-                      />
-                    ) : (
-                      <Book className="h-6 w-6 text-muted-foreground" />
-                    )}
+              {/* Swap arrow and offered book for swap orders */}
+              {swapOrder.orderType !== "purchase" && (
+                <>
+                  <div className="flex items-center justify-center">
+                    <div className="bg-muted rounded-full p-2">
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                        />
+                      </svg>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {swapOrder.offeredBook.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {swapOrder.offeredBook.author}
-                    </p>
-                    <Badge variant="outline" className="mt-1 text-xs">
-                      {swapOrder.offeredBook.condition}
-                    </Badge>
-                  </div>
-                </div>
+
+                  {/* Offered Book */}
+                  {swapOrder.offeredBook && (
+                    <div className="flex gap-3">
+                      <div className="h-16 w-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                        {swapOrder.offeredBook.coverImageUrl ? (
+                          <img
+                            src={swapOrder.offeredBook.coverImageUrl}
+                            alt={swapOrder.offeredBook.title}
+                            className="h-full w-full object-cover rounded"
+                          />
+                        ) : (
+                          <Book className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {swapOrder.offeredBook.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {swapOrder.offeredBook.author}
+                        </p>
+                        <Badge variant="outline" className="mt-1 text-xs">
+                          {swapOrder.offeredBook.condition}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -408,7 +435,10 @@ export default function SwapOrderDetail() {
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">
-                {isRequester ? "Book Owner" : "Requester"}
+                {swapOrder.orderType === "purchase"
+                  ? (isRequester ? "Seller" : "Buyer")
+                  : (isRequester ? "Book Owner" : "Requester")
+                }
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -625,15 +655,29 @@ export default function SwapOrderDetail() {
           {/* Order Timeline */}
           <OrderTimeline swapOrder={swapOrder} isRequester={isRequester} />
 
-          {/* Commitment Fee Payment */}
+          {/* Payment Section */}
           {(swapOrder.status === "awaiting_payment" || swapOrder.status === "in_progress") && (
-            <CommitmentFeePayment
-              swapOrderId={swapOrder.id}
-              isRequester={isRequester}
-              requesterPaidFee={swapOrder.requesterPaidFee}
-              ownerPaidFee={swapOrder.ownerPaidFee}
-              commitmentFee={swapOrder.commitmentFee || "50.00"}
-            />
+            <>
+              {swapOrder.orderType === "purchase" ? (
+                <PurchaseOrderPayment
+                  purchaseOrderId={swapOrder.id}
+                  isBuyer={isRequester}
+                  buyerPaid={swapOrder.requesterPaidFee || false}
+                  bookPrice={swapOrder.bookPrice || "0"}
+                  convenienceFee={swapOrder.convenienceFee || "0"}
+                  totalAmount={swapOrder.totalAmount || "0"}
+                  status={swapOrder.status}
+                />
+              ) : (
+                <CommitmentFeePayment
+                  swapOrderId={swapOrder.id}
+                  isRequester={isRequester}
+                  requesterPaidFee={swapOrder.requesterPaidFee}
+                  ownerPaidFee={swapOrder.ownerPaidFee}
+                  commitmentFee={swapOrder.commitmentFee || "50.00"}
+                />
+              )}
+            </>
           )}
 
           {/* Actions */}

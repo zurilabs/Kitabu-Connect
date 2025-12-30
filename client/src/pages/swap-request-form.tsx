@@ -16,11 +16,15 @@ export default function SwapRequestForm() {
   const searchParams = useSearch();
   const { toast } = useToast();
 
-  const listingId = new URLSearchParams(searchParams).get("listingId");
+  const params = new URLSearchParams(searchParams);
+  const listingId = params.get("listingId");
+  const orderType = params.get("type") || "swap"; // "swap" or "purchase"
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestedBook, setRequestedBook] = useState<any>(null);
   const [isLoadingBook, setIsLoadingBook] = useState(true);
+
+  const isPurchase = orderType === "purchase";
 
   const [formData, setFormData] = useState({
     offeredBookTitle: "",
@@ -73,8 +77,8 @@ export default function SwapRequestForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
-    if (!formData.offeredBookTitle.trim()) {
+    // Validation - only check offered book for swaps
+    if (!isPurchase && !formData.offeredBookTitle.trim()) {
       toast({
         title: "Missing Information",
         description: "Please enter the title of the book you're offering",
@@ -86,26 +90,36 @@ export default function SwapRequestForm() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/swaps", {
+      const endpoint = isPurchase ? "/api/swap-orders" : "/api/swaps";
+      const payload = isPurchase
+        ? {
+            requestedBookId: parseInt(listingId!),
+            orderType: "purchase",
+          }
+        : {
+            requestedListingId: parseInt(listingId!),
+            ...formData,
+          };
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({
-          requestedListingId: parseInt(listingId!),
-          ...formData,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "Failed to create swap request");
+        throw new Error(error.message || `Failed to create ${isPurchase ? 'purchase' : 'swap'} request`);
       }
 
       toast({
-        title: "Swap Request Sent!",
-        description: "The book owner will be notified of your swap request.",
+        title: isPurchase ? "Purchase Request Sent!" : "Swap Request Sent!",
+        description: isPurchase
+          ? "The seller will be notified of your purchase request."
+          : "The book owner will be notified of your swap request.",
       });
 
       setLocation("/swaps");
@@ -143,13 +157,13 @@ export default function SwapRequestForm() {
       </Button>
 
       <div className="grid md:grid-cols-[1fr,1.5fr] gap-8">
-        {/* Book You're Requesting */}
+        {/* Book You're Requesting/Purchasing */}
         <div>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5 text-blue-600" />
-                You're Requesting
+                {isPurchase ? "You're Purchasing" : "You're Requesting"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -177,8 +191,18 @@ export default function SwapRequestForm() {
                 <p className="text-xs text-muted-foreground mt-1">
                   Condition: {requestedBook.condition}
                 </p>
+                {isPurchase && requestedBook.price && (
+                  <div className="mt-2">
+                    <p className="text-2xl font-bold text-primary">
+                      KES {Number(requestedBook.price).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      + 5% platform fee (KES {(Number(requestedBook.price) * 0.05).toLocaleString()})
+                    </p>
+                  </div>
+                )}
               </div>
-              {requestedBook.willingToSwapFor && (
+              {!isPurchase && requestedBook.willingToSwapFor && (
                 <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">
                     Looking for:
@@ -192,17 +216,23 @@ export default function SwapRequestForm() {
           </Card>
         </div>
 
-        {/* Swap Request Form */}
+        {/* Swap/Purchase Request Form */}
         <div>
           <Card>
             <CardHeader>
-              <CardTitle>What Are You Offering?</CardTitle>
+              <CardTitle>
+                {isPurchase ? "Confirm Purchase Request" : "What Are You Offering?"}
+              </CardTitle>
               <CardDescription>
-                Tell the owner about the book you want to swap
+                {isPurchase
+                  ? "Review the details and send your purchase request to the seller"
+                  : "Tell the owner about the book you want to swap"}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
+                {!isPurchase && (
+                  <>
                 <div className="space-y-2">
                   <Label htmlFor="title">Book Title *</Label>
                   <Input
@@ -276,10 +306,14 @@ export default function SwapRequestForm() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="message">Message to Owner (Optional)</Label>
+                  <Label htmlFor="message">
+                    {isPurchase ? "Message to Seller (Optional)" : "Message to Owner (Optional)"}
+                  </Label>
                   <Textarea
                     id="message"
-                    placeholder="Introduce yourself and explain why you'd like to swap..."
+                    placeholder={isPurchase
+                      ? "Add a message to the seller (e.g., preferred pickup time, questions about the book...)"
+                      : "Introduce yourself and explain why you'd like to swap..."}
                     rows={3}
                     value={formData.message}
                     onChange={(e) =>
@@ -287,6 +321,8 @@ export default function SwapRequestForm() {
                     }
                   />
                 </div>
+                  </>
+                )}
 
                 <div className="flex gap-3">
                   <Button
@@ -300,7 +336,7 @@ export default function SwapRequestForm() {
                   <Button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    className={`flex-1 ${isPurchase ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                   >
                     {isSubmitting ? (
                       <>
@@ -310,7 +346,7 @@ export default function SwapRequestForm() {
                     ) : (
                       <>
                         <ArrowLeftRight className="w-4 h-4 mr-2" />
-                        Send Swap Request
+                        {isPurchase ? "Send Purchase Request" : "Send Swap Request"}
                       </>
                     )}
                   </Button>

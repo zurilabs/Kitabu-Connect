@@ -7,6 +7,7 @@ import {
   escrowAccounts,
   transactions,
   type CreateSwapOrderInput,
+  type CreatePurchaseOrderInput,
   type UpdateSwapOrderInput,
   type SubmitRequirementsInput,
 } from "../db/schema";
@@ -138,6 +139,125 @@ export class SwapOrderService {
       return {
         success: false,
         message: "Failed to create swap order",
+      };
+    }
+  }
+
+  /**
+   * Create a purchase order when a user clicks "Buy Now"
+   * Uses same flow as swaps: order → payment → escrow → delivery → release
+   */
+  async createPurchaseOrder(
+    buyerId: string,
+    data: CreatePurchaseOrderInput
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    purchaseOrder?: any;
+  }> {
+    try {
+      // Get the book listing
+      const [listing] = await db
+        .select()
+        .from(bookListings)
+        .where(eq(bookListings.id, data.bookListingId))
+        .limit(1);
+
+      if (!listing) {
+        return {
+          success: false,
+          message: "Book listing not found",
+        };
+      }
+
+      // Check if listing is available
+      if (listing.listingStatus !== "active") {
+        return {
+          success: false,
+          message: "This book is no longer available",
+        };
+      }
+
+      // Check if buyer is trying to buy their own book
+      if (listing.sellerId === buyerId) {
+        return {
+          success: false,
+          message: "You cannot buy your own book",
+        };
+      }
+
+      // Calculate costs
+      const bookPrice = parseFloat(listing.price);
+      const convenienceFee = bookPrice * 0.05; // 5% convenience fee
+      const totalAmount = bookPrice + convenienceFee;
+
+      // Generate order number (format: PUR-YYYYMMDD-XXXX)
+      const orderNumber = `PUR-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+      // Create the purchase order with 'pending' status (awaiting seller acceptance)
+      const [result] = await db.insert(swapOrders).values({
+        orderNumber,
+        orderType: "purchase",
+        swapRequestId: null, // No swap request for purchase orders
+        requesterId: buyerId, // Buyer
+        ownerId: listing.sellerId, // Seller
+        requestedListingId: listing.id,
+        offeredListingId: null, // No offered book for purchases
+        bookPrice: bookPrice.toFixed(2),
+        convenienceFee: convenienceFee.toFixed(2),
+        totalAmount: totalAmount.toFixed(2),
+        status: "pending", // Pending seller acceptance (like swap flow)
+        deliveryMethod: data.deliveryMethod || "meetup",
+        meetupLocation: data.deliveryAddress,
+      });
+
+      const purchaseOrderId = result.insertId;
+
+      // Send system message to start the conversation
+      await messageService.sendSystemMessage(
+        purchaseOrderId,
+        `🛒 Purchase request created!\n\n` +
+        `Book: ${listing.title}\n` +
+        `Price: KES ${bookPrice.toLocaleString()}\n` +
+        `Platform Fee (5%): KES ${convenienceFee.toLocaleString()}\n` +
+        `Total: KES ${totalAmount.toLocaleString()}\n\n` +
+        `Waiting for seller to accept your purchase request.`,
+        "system"
+      );
+
+      // Notify seller
+      const [buyer] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, buyerId))
+        .limit(1);
+
+      await notificationService.createNotification({
+        userId: listing.sellerId,
+        type: "swap_request",
+        title: "New Purchase Request! 🛒",
+        message: `${buyer.fullName} wants to buy "${listing.title}" for KES ${totalAmount.toLocaleString()}`,
+        relatedBookListingId: listing.id,
+        actionUrl: `/orders/${purchaseOrderId}/messages`,
+      });
+
+      // Fetch the complete purchase order
+      const [newPurchaseOrder] = await db
+        .select()
+        .from(swapOrders)
+        .where(eq(swapOrders.id, purchaseOrderId))
+        .limit(1);
+
+      return {
+        success: true,
+        message: "Purchase order created successfully",
+        purchaseOrder: newPurchaseOrder,
+      };
+    } catch (error) {
+      console.error("[SwapOrderService] Create purchase order error:", error);
+      return {
+        success: false,
+        message: "Failed to create purchase order",
       };
     }
   }
@@ -629,6 +749,138 @@ export class SwapOrderService {
   }
 
   /**
+   * Pay for a purchase order (book price + convenience fee)
+   * Called after Paystack payment is verified
+   */
+  async payPurchaseOrder(
+    purchaseOrderId: number,
+    buyerId: string,
+    paymentReference: string
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    try {
+      const [purchaseOrder] = await db
+        .select()
+        .from(swapOrders)
+        .where(eq(swapOrders.id, purchaseOrderId))
+        .limit(1);
+
+      if (!purchaseOrder) {
+        return {
+          success: false,
+          message: "Purchase order not found",
+        };
+      }
+
+      // Verify it's a purchase order
+      if (purchaseOrder.orderType !== "purchase") {
+        return {
+          success: false,
+          message: "This is not a purchase order",
+        };
+      }
+
+      // Verify the buyer
+      if (purchaseOrder.requesterId !== buyerId) {
+        return {
+          success: false,
+          message: "You are not authorized to pay for this order",
+        };
+      }
+
+      // Check status
+      if (purchaseOrder.status !== "awaiting_payment") {
+        return {
+          success: false,
+          message: "This order is not awaiting payment",
+        };
+      }
+
+      const totalAmount = parseFloat(purchaseOrder.totalAmount || "0");
+      const bookPrice = parseFloat(purchaseOrder.bookPrice || "0");
+      const convenienceFee = parseFloat(purchaseOrder.convenienceFee || "0");
+
+      // Create escrow account to hold the payment
+      const [escrowAccount] = await db
+        .insert(escrowAccounts)
+        .values({
+          bookListingId: purchaseOrder.requestedListingId,
+          buyerId: buyerId,
+          sellerId: purchaseOrder.ownerId,
+          amount: bookPrice.toFixed(2), // Only book price goes to seller
+          currency: "KES",
+          platformFee: convenienceFee.toFixed(2), // Convenience fee is platform fee
+          status: "active",
+          holdPeriodDays: 7,
+          releaseAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+        })
+        .$returningId();
+
+      // Record transaction
+      await db.insert(transactions).values({
+        userId: buyerId,
+        type: "purchase",
+        status: "completed",
+        amount: totalAmount.toFixed(2),
+        currency: "KES",
+        paymentMethod: "paystack",
+        paymentReference: paymentReference,
+        bookListingId: purchaseOrder.requestedListingId,
+        escrowId: escrowAccount.id,
+        description: `Purchase of book - Order #${purchaseOrder.orderNumber}`,
+        metadata: JSON.stringify({
+          purchaseOrderId: purchaseOrderId,
+          orderNumber: purchaseOrder.orderNumber,
+          bookPrice: bookPrice,
+          convenienceFee: convenienceFee,
+        }),
+        completedAt: new Date(),
+      });
+
+      // Update purchase order status to requirements_gathering so buyer can submit delivery details
+      await db
+        .update(swapOrders)
+        .set({
+          escrowId: escrowAccount.id,
+          status: "requirements_gathering",
+          requesterPaidFee: true, // Using this field to track buyer payment
+          requesterPaymentReference: paymentReference,
+        })
+        .where(eq(swapOrders.id, purchaseOrderId));
+
+      // Send system message
+      await messageService.sendSystemMessage(
+        purchaseOrderId,
+        `💰 Payment received! KES ${totalAmount.toLocaleString()} has been placed in escrow.\n\n` +
+        `Please provide your delivery details (meetup location or shipping address) so the seller can dispatch the book.`,
+        "system"
+      );
+
+      // Notify seller
+      await notificationService.createNotification({
+        userId: purchaseOrder.ownerId,
+        type: "swap_accepted",
+        title: "Payment Received! 💰",
+        message: `The buyer has paid for "${purchaseOrder.requestedListing?.title || 'the book'}". Waiting for delivery details.`,
+        actionUrl: `/orders/${purchaseOrderId}/messages`,
+      });
+
+      return {
+        success: true,
+        message: "Payment successful! The order is now in progress.",
+      };
+    } catch (error) {
+      console.error("[SwapOrderService] Pay purchase order error:", error);
+      return {
+        success: false,
+        message: "Failed to process payment",
+      };
+    }
+  }
+
+  /**
    * Mark book as dispatched/sent
    */
   async markBookDispatched(
@@ -662,12 +914,31 @@ export class SwapOrderService {
         };
       }
 
-      // Check if both parties have paid
-      if (!swapOrder.requesterPaidFee || !swapOrder.ownerPaidFee) {
-        return {
-          success: false,
-          message: "Both parties must pay commitment fees before dispatching books",
-        };
+      // For purchase orders: only seller dispatches after buyer pays
+      if (swapOrder.orderType === "purchase") {
+        // Only seller can dispatch in purchase orders
+        if (!isOwner) {
+          return {
+            success: false,
+            message: "Only the seller can dispatch books in purchase orders",
+          };
+        }
+
+        // Check if buyer has paid
+        if (!swapOrder.requesterPaidFee) {
+          return {
+            success: false,
+            message: "The buyer must complete payment before you can dispatch the book",
+          };
+        }
+      } else {
+        // For swap orders: both parties must pay before dispatching
+        if (!swapOrder.requesterPaidFee || !swapOrder.ownerPaidFee) {
+          return {
+            success: false,
+            message: "Both parties must pay commitment fees before dispatching books",
+          };
+        }
       }
 
       // Update the appropriate dispatch field
@@ -764,6 +1035,19 @@ export class SwapOrderService {
         };
       }
 
+      // For purchase orders: only buyer confirms receipt
+      const isPurchaseOrder = swapOrder.orderType === "purchase";
+
+      if (isPurchaseOrder) {
+        // Only buyer can confirm in purchase orders
+        if (!isRequester) {
+          return {
+            success: false,
+            message: "Only the buyer can confirm receipt in purchase orders",
+          };
+        }
+      }
+
       // Update the appropriate confirmation field
       const updateData: any = {};
       if (isRequester) {
@@ -773,10 +1057,16 @@ export class SwapOrderService {
         updateData.ownerReceivedBook = true;
       }
 
-      // If both have confirmed, mark as completed
-      const bothConfirmed =
-        (isRequester && swapOrder.ownerReceivedBook) ||
-        (isOwner && swapOrder.requesterReceivedBook);
+      // For purchase orders: complete immediately when buyer confirms
+      // For swap orders: both parties must confirm
+      let bothConfirmed;
+      if (isPurchaseOrder) {
+        bothConfirmed = isRequester; // Buyer confirmed = order complete
+      } else {
+        bothConfirmed =
+          (isRequester && swapOrder.ownerReceivedBook) ||
+          (isOwner && swapOrder.requesterReceivedBook);
+      }
 
       if (bothConfirmed) {
         updateData.status = "completed";
@@ -792,7 +1082,7 @@ export class SwapOrderService {
         .where(eq(swapOrders.id, swapOrderId));
 
       if (bothConfirmed) {
-        // Release escrow and transfer service fees to platform
+        // Release escrow
         if (swapOrder.escrowId) {
           await db
             .update(escrowAccounts)
@@ -802,42 +1092,118 @@ export class SwapOrderService {
             })
             .where(eq(escrowAccounts.id, swapOrder.escrowId));
 
-          // Update the pending escrow_hold transactions to completed
-          const commitmentFeeAmount = parseFloat(swapOrder.commitmentFee || "50.00");
+          if (isPurchaseOrder) {
+            // For purchase orders: credit seller's wallet with book price
+            const bookPrice = parseFloat(swapOrder.bookPrice || "0");
 
-          // Complete the escrow hold transaction for requester (transfer to platform)
-          await db
-            .update(transactions)
-            .set({
-              status: "completed",
-              completedAt: new Date(),
-              description: `Service fee released to platform for swap order #${swapOrder.orderNumber}`,
-            })
-            .where(
-              and(
-                eq(transactions.userId, swapOrder.requesterId),
-                eq(transactions.type, "escrow_hold"),
-                eq(transactions.paymentReference, swapOrder.requesterPaymentReference || ""),
-                eq(transactions.status, "pending")
-              )
-            );
+            // Get the escrow account to check platform fee
+            const [escrowAccount] = await db
+              .select()
+              .from(escrowAccounts)
+              .where(eq(escrowAccounts.id, swapOrder.escrowId))
+              .limit(1);
 
-          // Complete the escrow hold transaction for owner (transfer to platform)
-          await db
-            .update(transactions)
-            .set({
-              status: "completed",
-              completedAt: new Date(),
-              description: `Service fee released to platform for swap order #${swapOrder.orderNumber}`,
-            })
-            .where(
-              and(
-                eq(transactions.userId, swapOrder.ownerId),
-                eq(transactions.type, "escrow_hold"),
-                eq(transactions.paymentReference, swapOrder.ownerPaymentReference || ""),
-                eq(transactions.status, "pending")
+            // Get the purchase transaction
+            const [purchaseTransaction] = await db
+              .select()
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.userId, swapOrder.requesterId),
+                  eq(transactions.type, "purchase"),
+                  eq(transactions.paymentReference, swapOrder.requesterPaymentReference || "")
+                )
               )
-            );
+              .limit(1);
+
+            // Credit seller - create a "sale" transaction
+            if (purchaseTransaction) {
+              const saleTransactionResult = await db.insert(transactions).values({
+                userId: swapOrder.ownerId,
+                type: "sale",
+                status: "completed",
+                amount: bookPrice.toFixed(2),
+                currency: "KES",
+                paymentMethod: "paystack",
+                paymentReference: swapOrder.requesterPaymentReference,
+                bookListingId: swapOrder.requestedListingId,
+                escrowId: swapOrder.escrowId,
+                description: `Sale of book - Order #${swapOrder.orderNumber}`,
+                metadata: JSON.stringify({
+                  purchaseOrderId: swapOrderId,
+                  orderNumber: swapOrder.orderNumber,
+                  buyerId: swapOrder.requesterId,
+                }),
+                completedAt: new Date(),
+              });
+
+              // Update seller's wallet balance
+              await db.execute(sql`
+                UPDATE users
+                SET wallet_balance = wallet_balance + ${bookPrice}
+                WHERE id = ${swapOrder.ownerId}
+              `);
+
+              // Record wallet transaction for seller
+              const [sellerUser] = await db
+                .select()
+                .from(users)
+                .where(eq(users.id, swapOrder.ownerId))
+                .limit(1);
+
+              const newBalance = parseFloat(sellerUser.walletBalance || "0") + bookPrice;
+
+              await db.execute(sql`
+                INSERT INTO wallet_transactions (user_id, type, amount, balance_after, transaction_id, description, created_at)
+                VALUES (
+                  ${swapOrder.ownerId},
+                  'credit',
+                  ${bookPrice},
+                  ${newBalance},
+                  ${saleTransactionResult[0].insertId},
+                  'Payment received for book sale - Order #${swapOrder.orderNumber}',
+                  NOW()
+                )
+              `);
+            }
+          } else {
+            // For swap orders: release commitment fees to platform
+            const commitmentFeeAmount = parseFloat(swapOrder.commitmentFee || "50.00");
+
+            // Complete the escrow hold transaction for requester (transfer to platform)
+            await db
+              .update(transactions)
+              .set({
+                status: "completed",
+                completedAt: new Date(),
+                description: `Service fee released to platform for swap order #${swapOrder.orderNumber}`,
+              })
+              .where(
+                and(
+                  eq(transactions.userId, swapOrder.requesterId),
+                  eq(transactions.type, "escrow_hold"),
+                  eq(transactions.paymentReference, swapOrder.requesterPaymentReference || ""),
+                  eq(transactions.status, "pending")
+                )
+              );
+
+            // Complete the escrow hold transaction for owner (transfer to platform)
+            await db
+              .update(transactions)
+              .set({
+                status: "completed",
+                completedAt: new Date(),
+                description: `Service fee released to platform for swap order #${swapOrder.orderNumber}`,
+              })
+              .where(
+                and(
+                  eq(transactions.userId, swapOrder.ownerId),
+                  eq(transactions.type, "escrow_hold"),
+                  eq(transactions.paymentReference, swapOrder.ownerPaymentReference || ""),
+                  eq(transactions.status, "pending")
+                )
+              );
+          }
         }
 
         // Decrement quantity for both books involved in the swap
@@ -861,28 +1227,53 @@ export class SwapOrderService {
         }
 
         // Send completion messages
-        await messageService.sendSystemMessage(
-          swapOrderId,
-          "🎊 Swap completed! Both parties have confirmed receiving their books. Thank you for using our platform!",
-          "system"
-        );
+        if (isPurchaseOrder) {
+          const bookPrice = parseFloat(swapOrder.bookPrice || "0");
+          await messageService.sendSystemMessage(
+            swapOrderId,
+            `🎊 Purchase completed! Payment of KES ${bookPrice.toLocaleString()} has been released to the seller. Thank you for using Kitabu Connect!`,
+            "system"
+          );
 
-        // Notify both parties
-        await notificationService.createNotification({
-          userId: swapOrder.requesterId,
-          type: "swap_completed",
-          title: "Swap Completed! 🎊",
-          message: "Your book swap is complete. Thank you for using Kitabu Connect!",
-          relatedSwapRequestId: swapOrder.swapRequestId,
-        });
+          // Notify buyer
+          await notificationService.createNotification({
+            userId: swapOrder.requesterId,
+            type: "swap_completed",
+            title: "Purchase Completed! 🎊",
+            message: "Your purchase is complete. Thank you for using Kitabu Connect!",
+          });
 
-        await notificationService.createNotification({
-          userId: swapOrder.ownerId,
-          type: "swap_completed",
-          title: "Swap Completed! 🎊",
-          message: "Your book swap is complete. Thank you for using Kitabu Connect!",
-          relatedSwapRequestId: swapOrder.swapRequestId,
-        });
+          // Notify seller
+          await notificationService.createNotification({
+            userId: swapOrder.ownerId,
+            type: "swap_completed",
+            title: "Sale Completed! 💰",
+            message: `You've received KES ${bookPrice.toLocaleString()} for your book sale. The funds are now in your wallet.`,
+          });
+        } else {
+          await messageService.sendSystemMessage(
+            swapOrderId,
+            "🎊 Swap completed! Both parties have confirmed receiving their books. Thank you for using our platform!",
+            "system"
+          );
+
+          // Notify both parties
+          await notificationService.createNotification({
+            userId: swapOrder.requesterId,
+            type: "swap_completed",
+            title: "Swap Completed! 🎊",
+            message: "Your book swap is complete. Thank you for using Kitabu Connect!",
+            relatedSwapRequestId: swapOrder.swapRequestId,
+          });
+
+          await notificationService.createNotification({
+            userId: swapOrder.ownerId,
+            type: "swap_completed",
+            title: "Swap Completed! 🎊",
+            message: "Your book swap is complete. Thank you for using Kitabu Connect!",
+            relatedSwapRequestId: swapOrder.swapRequestId,
+          });
+        }
       } else {
         // Notify the other party
         const otherPartyId = isRequester ? swapOrder.ownerId : swapOrder.requesterId;
@@ -1025,6 +1416,182 @@ export class SwapOrderService {
       return {
         success: false,
         message: "Failed to cancel swap order",
+      };
+    }
+  }
+
+  /**
+   * Accept a swap or purchase order (seller/owner accepts the request)
+   */
+  async acceptOrder(
+    orderId: number,
+    userId: string
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    try {
+      // Get the order
+      const [order] = await db
+        .select()
+        .from(swapOrders)
+        .where(eq(swapOrders.id, orderId))
+        .limit(1);
+
+      if (!order) {
+        return {
+          success: false,
+          message: "Order not found",
+        };
+      }
+
+      // Check authorization (must be owner/seller)
+      if (order.ownerId !== userId) {
+        return {
+          success: false,
+          message: "Only the seller can accept this order",
+        };
+      }
+
+      // Check status
+      if (order.status !== "pending") {
+        return {
+          success: false,
+          message: "This order cannot be accepted",
+        };
+      }
+
+      const isPurchase = order.orderType === "purchase";
+
+      // Update status based on order type
+      const newStatus = isPurchase ? "awaiting_payment" : "requirements_gathering";
+
+      await db
+        .update(swapOrders)
+        .set({ status: newStatus })
+        .where(eq(swapOrders.id, orderId));
+
+      // Send system message
+      const message = isPurchase
+        ? `✅ Seller accepted your purchase request!\n\nPlease complete payment to proceed with the order.`
+        : `✅ Your swap request has been accepted!\n\nBoth parties need to pay the KES 50 service fee to proceed.`;
+
+      await messageService.sendSystemMessage(orderId, message, "system");
+
+      // Notify buyer/requester
+      const [seller] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      await notificationService.createNotification({
+        userId: order.requesterId,
+        type: "swap_accepted",
+        title: isPurchase ? "Purchase Request Accepted! ✅" : "Swap Request Accepted! ✅",
+        message: isPurchase
+          ? `${seller.fullName} accepted your purchase request. Please complete payment.`
+          : `${seller.fullName} accepted your swap request. Pay the service fee to proceed.`,
+        relatedBookListingId: order.requestedListingId || undefined,
+        actionUrl: `/orders/${orderId}/messages`,
+      });
+
+      return {
+        success: true,
+        message: isPurchase ? "Purchase request accepted" : "Swap request accepted",
+      };
+    } catch (error) {
+      console.error("[SwapOrderService] Accept order error:", error);
+      return {
+        success: false,
+        message: "Failed to accept order",
+      };
+    }
+  }
+
+  /**
+   * Reject a swap or purchase order
+   */
+  async rejectOrder(
+    orderId: number,
+    userId: string
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    try {
+      // Get the order
+      const [order] = await db
+        .select()
+        .from(swapOrders)
+        .where(eq(swapOrders.id, orderId))
+        .limit(1);
+
+      if (!order) {
+        return {
+          success: false,
+          message: "Order not found",
+        };
+      }
+
+      // Check authorization (must be owner/seller)
+      if (order.ownerId !== userId) {
+        return {
+          success: false,
+          message: "Only the seller can reject this order",
+        };
+      }
+
+      // Check status
+      if (order.status !== "pending") {
+        return {
+          success: false,
+          message: "This order cannot be rejected",
+        };
+      }
+
+      const isPurchase = order.orderType === "purchase";
+
+      // Update status to rejected
+      await db
+        .update(swapOrders)
+        .set({ status: "rejected" })
+        .where(eq(swapOrders.id, orderId));
+
+      // Send system message
+      const message = isPurchase
+        ? `❌ Seller rejected your purchase request.`
+        : `❌ Your swap request has been rejected.`;
+
+      await messageService.sendSystemMessage(orderId, message, "system");
+
+      // Notify buyer/requester
+      const [seller] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      await notificationService.createNotification({
+        userId: order.requesterId,
+        type: "swap_rejected",
+        title: isPurchase ? "Purchase Request Rejected ❌" : "Swap Request Rejected ❌",
+        message: isPurchase
+          ? `${seller.fullName} rejected your purchase request.`
+          : `${seller.fullName} rejected your swap request.`,
+        relatedBookListingId: order.requestedListingId || undefined,
+        actionUrl: `/orders/${orderId}/messages`,
+      });
+
+      return {
+        success: true,
+        message: isPurchase ? "Purchase request rejected" : "Swap request rejected",
+      };
+    } catch (error) {
+      console.error("[SwapOrderService] Reject order error:", error);
+      return {
+        success: false,
+        message: "Failed to reject order",
       };
     }
   }

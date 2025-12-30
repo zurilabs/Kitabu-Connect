@@ -21,7 +21,9 @@ import SwapsPage from "@/pages/swaps";
 import SwapOrderDetail from "@/pages/swap-order-detail";
 import SwapCyclesPage from "@/pages/swap-cycles";
 import SwapCycleDetail from "@/pages/swap-cycle-detail";
-import Conversations from "@/pages/conversations";
+import SwapConversations from "@/pages/conversations";
+import Messages from "@/pages/messages";
+import Conversation from "@/pages/conversation";
 import Notifications from "@/pages/notifications";
 import { Navbar } from "@/components/layout/Navbar";
 
@@ -48,7 +50,9 @@ function Router() {
           <Route path="/swap-cycles/:id" component={SwapCycleDetail} />
           <Route path="/swap-cycles" component={SwapCyclesPage} />
           <Route path="/orders/:id/messages" component={SwapOrderDetail} />
-          <Route path="/conversations" component={Conversations} />
+          <Route path="/conversations/:id" component={Conversation} />
+          <Route path="/conversations" component={Messages} />
+          <Route path="/swap-conversations" component={SwapConversations} />
           <Route path="/notifications" component={Notifications} />
           <Route path="/" component={Home} />
           <Route path="/marketplace" component={Marketplace} />

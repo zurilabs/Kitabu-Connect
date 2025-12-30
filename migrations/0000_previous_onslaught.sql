@@ -77,6 +77,8 @@ CREATE TABLE `children` (
 	`name` varchar(255),
 	`grade` varchar(50) NOT NULL,
 	`display_order` int NOT NULL DEFAULT 0,
+	`school_id` varchar(36),
+	`school_name` text,
 	`user_id` varchar(36),
 	`created_at` timestamp NOT NULL DEFAULT (now()),
 	`updated_at` timestamp NOT NULL DEFAULT (now()),
@@ -91,6 +93,21 @@ CREATE TABLE `class_grades` (
 	`age_range` varchar(50),
 	CONSTRAINT `class_grades_id` PRIMARY KEY(`id`),
 	CONSTRAINT `class_grades_name_unique` UNIQUE(`name`)
+);
+--> statement-breakpoint
+CREATE TABLE `conversations` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`user1_id` varchar(36) NOT NULL,
+	`user2_id` varchar(36) NOT NULL,
+	`book_listing_id` int,
+	`last_message_content` text,
+	`last_message_at` timestamp,
+	`last_message_sender_id` varchar(36),
+	`user1_unread_count` int DEFAULT 0,
+	`user2_unread_count` int DEFAULT 0,
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	`updated_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `conversations_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
 CREATE TABLE `cycle_disputes` (
@@ -210,7 +227,8 @@ CREATE TABLE `favorites` (
 --> statement-breakpoint
 CREATE TABLE `messages` (
 	`id` int AUTO_INCREMENT NOT NULL,
-	`swap_order_id` int NOT NULL,
+	`swap_order_id` int,
+	`conversation_id` int,
 	`sender_id` varchar(36) NOT NULL,
 	`receiver_id` varchar(36) NOT NULL,
 	`content` text NOT NULL,
@@ -362,11 +380,15 @@ CREATE TABLE `swap_cycles` (
 CREATE TABLE `swap_orders` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`order_number` varchar(50) NOT NULL,
-	`swap_request_id` int NOT NULL,
+	`order_type` varchar(20) NOT NULL DEFAULT 'swap',
+	`swap_request_id` int,
 	`requester_id` varchar(36) NOT NULL,
 	`owner_id` varchar(36) NOT NULL,
 	`requested_listing_id` int NOT NULL,
 	`offered_listing_id` int,
+	`book_price` decimal(10,2),
+	`convenience_fee` decimal(10,2),
+	`total_amount` decimal(10,2),
 	`status` varchar(30) NOT NULL DEFAULT 'requirements_gathering',
 	`requirements_submitted` boolean DEFAULT false,
 	`requirements_approved` boolean DEFAULT false,
@@ -536,6 +558,9 @@ ALTER TABLE `book_condition_reports` ADD CONSTRAINT `book_condition_reports_repo
 ALTER TABLE `book_listings` ADD CONSTRAINT `book_listings_seller_id_users_id_fk` FOREIGN KEY (`seller_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `book_photos` ADD CONSTRAINT `book_photos_listing_id_book_listings_id_fk` FOREIGN KEY (`listing_id`) REFERENCES `book_listings`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `children` ADD CONSTRAINT `children_parent_id_users_id_fk` FOREIGN KEY (`parent_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `conversations` ADD CONSTRAINT `conversations_user1_id_users_id_fk` FOREIGN KEY (`user1_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `conversations` ADD CONSTRAINT `conversations_user2_id_users_id_fk` FOREIGN KEY (`user2_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `conversations` ADD CONSTRAINT `conversations_book_listing_id_book_listings_id_fk` FOREIGN KEY (`book_listing_id`) REFERENCES `book_listings`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_cycle_id_swap_cycles_id_fk` FOREIGN KEY (`cycle_id`) REFERENCES `swap_cycles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_reporter_id_users_id_fk` FOREIGN KEY (`reporter_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_respondent_id_users_id_fk` FOREIGN KEY (`respondent_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -556,6 +581,7 @@ ALTER TABLE `escrow_accounts` ADD CONSTRAINT `escrow_accounts_seller_id_users_id
 ALTER TABLE `favorites` ADD CONSTRAINT `favorites_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `favorites` ADD CONSTRAINT `favorites_listing_id_book_listings_id_fk` FOREIGN KEY (`listing_id`) REFERENCES `book_listings`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `messages` ADD CONSTRAINT `messages_swap_order_id_swap_orders_id_fk` FOREIGN KEY (`swap_order_id`) REFERENCES `swap_orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `messages` ADD CONSTRAINT `messages_conversation_id_conversations_id_fk` FOREIGN KEY (`conversation_id`) REFERENCES `conversations`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `messages` ADD CONSTRAINT `messages_sender_id_users_id_fk` FOREIGN KEY (`sender_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `messages` ADD CONSTRAINT `messages_receiver_id_users_id_fk` FOREIGN KEY (`receiver_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `notifications` ADD CONSTRAINT `notifications_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -602,6 +628,11 @@ CREATE INDEX `idx_book_listings_status_price` ON `book_listings` (`listing_statu
 CREATE INDEX `idx_book_photos_listing` ON `book_photos` (`listing_id`);--> statement-breakpoint
 CREATE INDEX `idx_children_parent` ON `children` (`parent_id`);--> statement-breakpoint
 CREATE INDEX `idx_children_order` ON `children` (`parent_id`,`display_order`);--> statement-breakpoint
+CREATE INDEX `idx_children_school` ON `children` (`school_id`);--> statement-breakpoint
+CREATE INDEX `idx_conversations_user1` ON `conversations` (`user1_id`);--> statement-breakpoint
+CREATE INDEX `idx_conversations_user2` ON `conversations` (`user2_id`);--> statement-breakpoint
+CREATE INDEX `idx_conversations_book_listing` ON `conversations` (`book_listing_id`);--> statement-breakpoint
+CREATE INDEX `idx_conversations_participants` ON `conversations` (`user1_id`,`user2_id`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_cycle` ON `cycle_disputes` (`cycle_id`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_status` ON `cycle_disputes` (`status`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_reporter` ON `cycle_disputes` (`reporter_id`);--> statement-breakpoint
@@ -616,6 +647,7 @@ CREATE INDEX `idx_drop_points_county` ON `drop_points` (`county`);--> statement-
 CREATE INDEX `idx_favorites_user_id` ON `favorites` (`user_id`);--> statement-breakpoint
 CREATE INDEX `idx_favorites_listing_id` ON `favorites` (`listing_id`);--> statement-breakpoint
 CREATE INDEX `idx_messages_swap_order` ON `messages` (`swap_order_id`);--> statement-breakpoint
+CREATE INDEX `idx_messages_conversation` ON `messages` (`conversation_id`);--> statement-breakpoint
 CREATE INDEX `idx_messages_sender` ON `messages` (`sender_id`);--> statement-breakpoint
 CREATE INDEX `idx_messages_receiver` ON `messages` (`receiver_id`);--> statement-breakpoint
 CREATE INDEX `idx_notifications_user_id` ON `notifications` (`user_id`);--> statement-breakpoint

@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "92913277-d9d9-458a-b0f1-c878bc1baac6",
+  "id": "f99a10ca-9675-4c71-b797-d3445270b537",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_condition_reports": {
@@ -726,6 +726,20 @@
           "autoincrement": false,
           "default": 0
         },
+        "school_id": {
+          "name": "school_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "school_name": {
+          "name": "school_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "user_id": {
           "name": "user_id",
           "type": "varchar(36)",
@@ -763,6 +777,13 @@
           "columns": [
             "parent_id",
             "display_order"
+          ],
+          "isUnique": false
+        },
+        "idx_children_school": {
+          "name": "idx_children_school",
+          "columns": [
+            "school_id"
           ],
           "isUnique": false
         }
@@ -850,6 +871,174 @@
           ]
         }
       },
+      "checkConstraint": {}
+    },
+    "conversations": {
+      "name": "conversations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "user1_id": {
+          "name": "user1_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user2_id": {
+          "name": "user2_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "book_listing_id": {
+          "name": "book_listing_id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_message_content": {
+          "name": "last_message_content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_message_at": {
+          "name": "last_message_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_message_sender_id": {
+          "name": "last_message_sender_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user1_unread_count": {
+          "name": "user1_unread_count",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "user2_unread_count": {
+          "name": "user2_unread_count",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "idx_conversations_user1": {
+          "name": "idx_conversations_user1",
+          "columns": [
+            "user1_id"
+          ],
+          "isUnique": false
+        },
+        "idx_conversations_user2": {
+          "name": "idx_conversations_user2",
+          "columns": [
+            "user2_id"
+          ],
+          "isUnique": false
+        },
+        "idx_conversations_book_listing": {
+          "name": "idx_conversations_book_listing",
+          "columns": [
+            "book_listing_id"
+          ],
+          "isUnique": false
+        },
+        "idx_conversations_participants": {
+          "name": "idx_conversations_participants",
+          "columns": [
+            "user1_id",
+            "user2_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "conversations_user1_id_users_id_fk": {
+          "name": "conversations_user1_id_users_id_fk",
+          "tableFrom": "conversations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user1_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "conversations_user2_id_users_id_fk": {
+          "name": "conversations_user2_id_users_id_fk",
+          "tableFrom": "conversations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user2_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "conversations_book_listing_id_book_listings_id_fk": {
+          "name": "conversations_book_listing_id_book_listings_id_fk",
+          "tableFrom": "conversations",
+          "tableTo": "book_listings",
+          "columnsFrom": [
+            "book_listing_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "conversations_id": {
+          "name": "conversations_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
       "checkConstraint": {}
     },
     "cycle_disputes": {
@@ -1976,7 +2165,14 @@
           "name": "swap_order_id",
           "type": "int",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "sender_id": {
@@ -2069,6 +2265,13 @@
           ],
           "isUnique": false
         },
+        "idx_messages_conversation": {
+          "name": "idx_messages_conversation",
+          "columns": [
+            "conversation_id"
+          ],
+          "isUnique": false
+        },
         "idx_messages_sender": {
           "name": "idx_messages_sender",
           "columns": [
@@ -2091,6 +2294,19 @@
           "tableTo": "swap_orders",
           "columnsFrom": [
             "swap_order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "messages_conversation_id_conversations_id_fk": {
+          "name": "messages_conversation_id_conversations_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversation_id"
           ],
           "columnsTo": [
             "id"
@@ -3247,11 +3463,19 @@
           "notNull": true,
           "autoincrement": false
         },
+        "order_type": {
+          "name": "order_type",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'swap'"
+        },
         "swap_request_id": {
           "name": "swap_request_id",
           "type": "int",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "requester_id": {
@@ -3278,6 +3502,27 @@
         "offered_listing_id": {
           "name": "offered_listing_id",
           "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "book_price": {
+          "name": "book_price",
+          "type": "decimal(10,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "convenience_fee": {
+          "name": "convenience_fee",
+          "type": "decimal(10,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "total_amount": {
+          "name": "total_amount",
+          "type": "decimal(10,2)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

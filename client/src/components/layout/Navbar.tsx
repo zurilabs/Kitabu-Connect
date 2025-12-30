@@ -27,6 +27,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBell } from "./NotificationBell";
 import { ActiveChildSelector } from "./ActiveChildSelector";
+import { UnreadMessagesIndicator } from "./UnreadMessagesIndicator";
 import { useState, useEffect } from "react";
 
 export function Navbar() {
@@ -128,8 +129,9 @@ export function Navbar() {
             </span>
           </Link>
           <Link href="/conversations">
-            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/conversations') ? 'text-primary' : 'text-muted-foreground'}`}>
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer relative ${isActive('/conversations') ? 'text-primary' : 'text-muted-foreground'}`}>
               Messages
+              <UnreadMessagesIndicator />
             </span>
           </Link>
         </>
@@ -239,8 +241,9 @@ export function Navbar() {
                       <Link href="/swap-cycles" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
                         Multi-Way Swaps
                       </Link>
-                      <Link href="/conversations" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                      <Link href="/conversations" className="py-2 hover:text-primary relative inline-block" onClick={() => setIsMobileOpen(false)}>
                         Messages
+                        <UnreadMessagesIndicator />
                       </Link>
                       <Link href="/favorites" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
                         Favorites

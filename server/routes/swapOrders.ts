@@ -33,6 +33,46 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/swap-orders
+ * Create a new swap or purchase order
+ */
+router.post("/", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { requestedBookId, orderType } = req.body;
+
+    if (!requestedBookId) {
+      return res.status(400).json({ message: "Requested book ID is required" });
+    }
+
+    if (orderType === "purchase") {
+      // Create purchase order with pending status (awaits seller acceptance)
+      const result = await swapOrderService.createPurchaseOrder(userId, {
+        bookListingId: parseInt(requestedBookId),
+        deliveryMethod: "meetup",
+      });
+
+      if (!result.success) {
+        return res.status(400).json({ message: result.message });
+      }
+
+      return res.status(201).json({
+        message: "Purchase request sent! The seller will be notified.",
+        order: result.purchaseOrder,
+      });
+    } else {
+      // For swaps, this will be handled by /api/swaps route
+      return res.status(400).json({
+        message: "Invalid order type. Use /api/swaps for swap requests.",
+      });
+    }
+  } catch (error) {
+    console.error("[Swap Orders API] Create order error:", error);
+    return res.status(500).json({ message: "Failed to create order" });
+  }
+});
+
+/**
  * GET /api/swap-orders/:id
  * Get a specific swap order by ID
  */
@@ -55,6 +95,58 @@ router.get("/:id", authenticateToken, async (req: Request, res: Response) => {
   } catch (error) {
     console.error("[Swap Orders API] Get swap order error:", error);
     return res.status(500).json({ message: "Failed to fetch swap order" });
+  }
+});
+
+/**
+ * POST /api/swap-orders/:id/accept
+ * Accept a swap or purchase order (seller accepts buyer's purchase request)
+ */
+router.post("/:id/accept", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const orderId = parseInt(req.params.id);
+
+    if (isNaN(orderId)) {
+      return res.status(400).json({ message: "Invalid order ID" });
+    }
+
+    const result = await swapOrderService.acceptOrder(orderId, userId);
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.json({ message: result.message });
+  } catch (error) {
+    console.error("[Swap Orders API] Accept order error:", error);
+    return res.status(500).json({ message: "Failed to accept order" });
+  }
+});
+
+/**
+ * POST /api/swap-orders/:id/reject
+ * Reject a swap or purchase order
+ */
+router.post("/:id/reject", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const orderId = parseInt(req.params.id);
+
+    if (isNaN(orderId)) {
+      return res.status(400).json({ message: "Invalid order ID" });
+    }
+
+    const result = await swapOrderService.rejectOrder(orderId, userId);
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.json({ message: result.message });
+  } catch (error) {
+    console.error("[Swap Orders API] Reject order error:", error);
+    return res.status(500).json({ message: "Failed to reject order" });
   }
 });
 
@@ -429,6 +521,172 @@ router.get("/conversations/all", authenticateToken, async (req: Request, res: Re
   } catch (error) {
     console.error("[Swap Orders API] Get conversations error:", error);
     return res.status(500).json({ message: "Failed to fetch conversations" });
+  }
+});
+
+/* ================================
+   PURCHASE ORDER ROUTES
+================================ */
+
+/**
+ * POST /api/swap-orders/purchase/create
+ * Create a new purchase order (buyer clicks "Buy Now")
+ */
+router.post("/purchase/create", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const buyerId = req.user!.id;
+    const { bookListingId, deliveryMethod, deliveryAddress, buyerNotes } = req.body;
+
+    if (!bookListingId) {
+      return res.status(400).json({ message: "Book listing ID is required" });
+    }
+
+    const result = await swapOrderService.createPurchaseOrder(buyerId, {
+      bookListingId: parseInt(bookListingId),
+      deliveryMethod: deliveryMethod || "meetup",
+      deliveryAddress,
+      buyerNotes,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.status(201).json({
+      message: result.message,
+      purchaseOrder: result.purchaseOrder,
+    });
+  } catch (error) {
+    console.error("[Swap Orders API] Create purchase order error:", error);
+    return res.status(500).json({ message: "Failed to create purchase order" });
+  }
+});
+
+/**
+ * POST /api/swap-orders/purchase/:id/pay/initialize
+ * Initialize payment for a purchase order via Paystack
+ */
+router.post("/purchase/:id/pay/initialize", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const buyerId = req.user!.id;
+    const purchaseOrderId = parseInt(req.params.id);
+    const { email } = req.body;
+
+    if (isNaN(purchaseOrderId)) {
+      return res.status(400).json({ message: "Invalid purchase order ID" });
+    }
+
+    // Get the purchase order
+    const orderResult = await swapOrderService.getSwapOrderById(purchaseOrderId, buyerId);
+    if (!orderResult.success || !orderResult.swapOrder) {
+      return res.status(404).json({ message: "Purchase order not found" });
+    }
+
+    const purchaseOrder = orderResult.swapOrder;
+
+    // Verify it's a purchase order
+    if (purchaseOrder.orderType !== "purchase") {
+      return res.status(400).json({ message: "This is not a purchase order" });
+    }
+
+    // Verify buyer
+    if (purchaseOrder.requesterId !== buyerId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    // Check status
+    if (purchaseOrder.status !== "awaiting_payment") {
+      return res.status(400).json({ message: "This order is not awaiting payment" });
+    }
+
+    const totalAmount = parseFloat(purchaseOrder.totalAmount || "0");
+    const userEmail = email || req.user!.email;
+
+    if (!userEmail) {
+      return res.status(400).json({ message: "Email is required for payment" });
+    }
+
+    // Generate reference
+    const reference = `PUR-${purchaseOrder.orderNumber}-${Date.now()}`;
+
+    // Initialize payment with Paystack
+    const paystackResult = await initializePayment({
+      email: userEmail,
+      amount: totalAmount,
+      reference,
+      callback_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/orders/${purchaseOrderId}/messages?payment=success`,
+      metadata: {
+        userId: buyerId,
+        purchaseOrderId: purchaseOrderId,
+        orderNumber: purchaseOrder.orderNumber,
+        type: "purchase_order",
+      },
+    });
+
+    if (!paystackResult.success) {
+      return res.status(400).json({
+        message: paystackResult.message || "Failed to initialize payment",
+      });
+    }
+
+    return res.json({
+      success: true,
+      authorizationUrl: paystackResult.data.authorization_url,
+      reference,
+    });
+  } catch (error) {
+    console.error("[Swap Orders API] Initialize purchase payment error:", error);
+    return res.status(500).json({ message: "Failed to initialize payment" });
+  }
+});
+
+/**
+ * GET /api/swap-orders/purchase/:id/pay/verify/:reference
+ * Verify payment and complete purchase order
+ */
+router.get("/purchase/:id/pay/verify/:reference", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const buyerId = req.user!.id;
+    const purchaseOrderId = parseInt(req.params.id);
+    const reference = req.params.reference;
+
+    if (isNaN(purchaseOrderId)) {
+      return res.status(400).json({ message: "Invalid purchase order ID" });
+    }
+
+    // Verify payment with Paystack
+    const verificationResult = await verifyPayment(reference);
+
+    if (!verificationResult.success || !verificationResult.data) {
+      return res.status(400).json({ message: "Payment verification failed" });
+    }
+
+    const paymentData = verificationResult.data;
+
+    // Verify payment metadata
+    const metadata = paymentData.metadata || {};
+    if (metadata.purchaseOrderId !== purchaseOrderId) {
+      return res.status(400).json({ message: "Payment reference does not match order" });
+    }
+
+    // Process payment in swap order service
+    const result = await swapOrderService.payPurchaseOrder(
+      purchaseOrderId,
+      buyerId,
+      reference
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error) {
+    console.error("[Swap Orders API] Verify purchase payment error:", error);
+    return res.status(500).json({ message: "Failed to verify payment" });
   }
 });
 

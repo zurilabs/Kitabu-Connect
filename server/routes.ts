@@ -25,6 +25,7 @@ import walletRoutes from "./routes/wallet";
 import favoritesRoutes from "./routes/favorites";
 import swapRoutes from "./routes/swaps";
 import swapOrderRoutes from "./routes/swapOrders";
+import conversationRoutes from "./routes/conversations";
 import notificationRoutes from "./routes/notifications";
 import cyclesRoutes from "./routes/cycles";
 import gamificationRoutes from "./routes/gamification";
@@ -74,6 +75,11 @@ export async function registerRoutes(
   // SWAP ORDER & MESSAGING ROUTES
   // ============================================
   app.use("/api/swap-orders", swapOrderRoutes);
+
+  // ============================================
+  // DIRECT MESSAGING / CONVERSATIONS ROUTES
+  // ============================================
+  app.use("/api/conversations", conversationRoutes);
 
   // ============================================
   // NOTIFICATION ROUTES

@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 interface SwapOrder {
   id: number;
   status: string;
+  orderType?: string;
   requirementsSubmitted: boolean;
   requirementsApproved: boolean;
   requesterPaidFee: boolean;
@@ -153,7 +154,13 @@ export default function DeliveryConfirmation({
     }
   };
 
+  const isPurchase = swapOrder.orderType === "purchase";
   const bothPaidFees = swapOrder.requesterPaidFee && swapOrder.ownerPaidFee;
+
+  // For purchases, only buyer pays, seller can dispatch after requirements approved
+  const canDispatch = isPurchase
+    ? swapOrder.requirementsApproved
+    : bothPaidFees;
 
   const userHasDispatched = isRequester
     ? swapOrder.requesterShipped
@@ -191,18 +198,21 @@ export default function DeliveryConfirmation({
             </Button>
           )}
 
-        {/* Dispatch Book - Show after both parties have paid */}
-        {bothPaidFees && swapOrder.status === "in_progress" && (
+        {/* Dispatch Book - Show after requirements approved (purchase) or both parties paid (swap) */}
+        {/* For purchases, only seller (owner) can dispatch */}
+        {canDispatch && swapOrder.status === "in_progress" && (!isPurchase || !isRequester) && (
           <div className="space-y-2">
             {userHasDispatched ? (
               <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
                 <Truck className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-sm text-blue-900 dark:text-blue-100">
-                    You dispatched your book
+                    {isPurchase ? "Book dispatched" : "You dispatched your book"}
                   </p>
                   <p className="text-xs text-blue-700 dark:text-blue-300">
-                    {otherPartyDispatched
+                    {isPurchase
+                      ? "Waiting for buyer to confirm receipt"
+                      : otherPartyDispatched
                       ? "Both books are on the way!"
                       : "Waiting for other party to dispatch"}
                   </p>
@@ -215,15 +225,16 @@ export default function DeliveryConfirmation({
                 disabled={dispatching}
               >
                 <Truck className="h-4 w-4 mr-2" />
-                {dispatching ? "Marking as Dispatched..." : "I've Sent My Book"}
+                {dispatching ? "Marking as Dispatched..." : isPurchase ? "Dispatch Book" : "I've Sent My Book"}
               </Button>
             )}
           </div>
         )}
 
         {/* Confirm Receipt - Show if in_progress or delivered status */}
+        {/* For purchases, only buyer (requester) can confirm receipt */}
         {(swapOrder.status === "in_progress" ||
-          swapOrder.status === "delivered") && (
+          swapOrder.status === "delivered") && (!isPurchase || isRequester) && (
           <div className="space-y-2">
             {userHasConfirmed ? (
               <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-900">
@@ -252,8 +263,9 @@ export default function DeliveryConfirmation({
                     <AlertDialogTitle>Confirm Book Receipt</AlertDialogTitle>
                     <AlertDialogDescription>
                       By confirming, you're indicating that you have received the
-                      book and are satisfied with the condition. Once both
-                      parties confirm, the swap will be marked as completed.
+                      book and are satisfied with the condition. {isPurchase
+                        ? "The payment will be released to the seller and the order will be marked as completed."
+                        : "Once both parties confirm, the swap will be marked as completed."}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

@@ -12,14 +12,13 @@ import {
   ShieldCheck,
   BookOpen,
   AlertCircle,
-  Truck,
   Loader2,
-  ArrowLeftRight
+  ArrowLeftRight,
+  MessageCircle
 } from "lucide-react";
-import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useBookListing } from "@/hooks/useBookListing";
 import { useAuth } from "@/hooks/useAuth";
+import { useConversation } from "@/hooks/useConversation";
 import { extractIdFromSlug } from "@/lib/utils";
 
 export default function BookDetails() {
@@ -27,8 +26,7 @@ export default function BookDetails() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const { createConversation } = useConversation();
 
   // Extract book ID from slug
   const bookId = slug ? parseInt(extractIdFromSlug(slug)) : 0;
@@ -59,21 +57,20 @@ export default function BookDetails() {
     bookImage !== "/placeholder-book.png" &&
     !bookImage.includes("placeholder");
 
-  const handleBuy = async () => {
-    setIsProcessing(true);
+  const handleInitiatePurchase = () => {
+    // Check if user is authenticated
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to purchase books.",
+        variant: "destructive",
+      });
+      setLocation('/login');
+      return;
+    }
 
-    // Simulate Paystack processing
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    setIsProcessing(false);
-    setShowConfirm(false);
-
-    toast({
-      title: "Payment Successful!",
-      description: "Funds are now held in escrow. Visit your dashboard to track this transaction.",
-    });
-
-    setLocation('/dashboard');
+    // Navigate to purchase request flow (similar to swap)
+    setLocation(`/swaps/new?listingId=${book.id}&type=purchase`);
   };
 
   const handleInitiateSwap = () => {
@@ -237,16 +234,53 @@ export default function BookDetails() {
               <Separator />
 
               <div className="space-y-4">
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                   <Avatar>
                     <AvatarFallback>S</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 overflow-hidden">
-                    <p className="text-sm font-medium truncate">Seller ID: {book.sellerId}</p>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <p className="text-sm font-medium truncate mb-1">Seller ID: {book.sellerId}</p>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
                       <MapPin className="w-3 h-3" />
                       <span className="truncate">Available quantity: {book.quantityAvailable}</span>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-8 text-xs"
+                      onClick={async () => {
+                        if (!user) {
+                          toast({
+                            title: "Authentication Required",
+                            description: "Please log in to chat with the seller.",
+                            variant: "destructive",
+                          });
+                          setLocation('/login');
+                          return;
+                        }
+
+                        try {
+                          const result = await createConversation.mutateAsync({
+                            otherUserId: book.sellerId,
+                            bookListingId: book.id,
+                          });
+
+                          if (result.success && result.conversation) {
+                            setLocation(`/conversations/${result.conversation.id}`);
+                          }
+                        } catch (error: any) {
+                          toast({
+                            title: "Failed to open chat",
+                            description: error.message || "Unable to start conversation. Please try again.",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      disabled={createConversation.isPending}
+                    >
+                      <MessageCircle className="w-3 h-3 mr-1.5" />
+                      {createConversation.isPending ? "Opening..." : "Chat with Seller"}
+                    </Button>
                   </div>
                 </div>
 
@@ -269,54 +303,14 @@ export default function BookDetails() {
                   {book.listingStatus === 'active' ? 'Initiate Swap' : 'Not Available'}
                 </Button>
               ) : (
-                <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full h-12 text-lg font-semibold" disabled={book.listingStatus !== 'active'}>
-                      {book.listingStatus === 'active' ? 'Buy Now' : 'Not Available'}
-                    </Button>
-                  </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Confirm Purchase</DialogTitle>
-                    <DialogDescription>
-                      You are about to purchase <strong>{book.title}</strong>.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="space-y-4 py-4">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Book Price</span>
-                      <span>KSh {bookPrice.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3" /> Convenience Fee (5%)
-                      </span>
-                      <span>KSh {convenienceFee.toLocaleString()}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold text-lg">
-                      <span>Total</span>
-                      <span>KSh {totalPrice.toLocaleString()}</span>
-                    </div>
-
-                    <div className="bg-muted p-3 rounded-md text-xs text-muted-foreground flex gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <p>
-                        Clicking "Pay Securely" will initialize a Paystack transaction.
-                        Your funds will be locked in escrow until you confirm receipt.
-                      </p>
-                    </div>
-                  </div>
-
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowConfirm(false)}>Cancel</Button>
-                    <Button onClick={handleBuy} disabled={isProcessing} className="bg-green-600 hover:bg-green-700 text-white">
-                      {isProcessing ? "Processing..." : `Pay KSh ${totalPrice.toLocaleString()}`}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                <Button
+                  className="w-full h-12 text-lg font-semibold bg-green-600 hover:bg-green-700"
+                  disabled={book.listingStatus !== 'active'}
+                  onClick={handleInitiatePurchase}
+                >
+                  <ShieldCheck className="w-5 h-5 mr-2" />
+                  {book.listingStatus === 'active' ? 'Initiate Purchase' : 'Not Available'}
+                </Button>
               )}
             </CardContent>
           </Card>

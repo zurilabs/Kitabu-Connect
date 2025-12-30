@@ -9,14 +9,19 @@ import {
   Truck,
   Package,
   AlertCircle,
+  CreditCard,
+  ShoppingCart,
 } from "lucide-react";
 
 interface SwapOrder {
   status: string;
+  orderType?: string;
   requirementsSubmitted: boolean;
   requirementsApproved: boolean;
   requesterReceivedBook: boolean;
   ownerReceivedBook: boolean;
+  requesterPaidFee?: boolean;
+  ownerPaidFee?: boolean;
 }
 
 interface OrderTimelineProps {
@@ -25,7 +30,62 @@ interface OrderTimelineProps {
 }
 
 export default function OrderTimeline({ swapOrder, isRequester }: OrderTimelineProps) {
-  const steps = [
+  const isPurchase = swapOrder.orderType === "purchase";
+
+  // Purchase order timeline
+  const purchaseSteps = [
+    {
+      id: "payment",
+      title: "Payment",
+      description: swapOrder.requesterPaidFee
+        ? "Payment received"
+        : "Awaiting payment",
+      icon: CreditCard,
+      completed: swapOrder.requesterPaidFee || false,
+      active: swapOrder.status === "awaiting_payment",
+    },
+    {
+      id: "delivery_details",
+      title: "Delivery Details",
+      description: swapOrder.requirementsSubmitted
+        ? "Details provided"
+        : "Awaiting details",
+      icon: FileText,
+      completed: swapOrder.requirementsSubmitted,
+      active: swapOrder.status === "requirements_gathering",
+    },
+    {
+      id: "dispatch",
+      title: "Dispatch",
+      description: swapOrder.ownerShipped
+        ? "Book dispatched"
+        : "Awaiting dispatch",
+      icon: Truck,
+      completed: swapOrder.ownerShipped || swapOrder.status === "delivered" || swapOrder.status === "completed",
+      active: swapOrder.status === "in_progress" && !swapOrder.ownerShipped,
+    },
+    {
+      id: "delivery",
+      title: "Delivery",
+      description: swapOrder.requesterReceivedBook
+        ? "Buyer confirmed receipt"
+        : "Awaiting delivery confirmation",
+      icon: Package,
+      completed: swapOrder.requesterReceivedBook || false,
+      active: swapOrder.status === "delivered" || (swapOrder.ownerShipped && !swapOrder.requesterReceivedBook),
+    },
+    {
+      id: "completed",
+      title: "Completed",
+      description: "Purchase successful!",
+      icon: CheckCircle2,
+      completed: swapOrder.status === "completed",
+      active: false,
+    },
+  ];
+
+  // Swap order timeline (original)
+  const swapSteps = [
     {
       id: "requirements",
       title: "Requirements",
@@ -93,7 +153,7 @@ export default function OrderTimeline({ swapOrder, isRequester }: OrderTimelineP
                 Order Cancelled
               </p>
               <p className="text-xs text-red-700 dark:text-red-300">
-                This swap order has been cancelled
+                This {isPurchase ? "purchase" : "swap"} order has been cancelled
               </p>
             </div>
           </div>
@@ -124,6 +184,9 @@ export default function OrderTimeline({ swapOrder, isRequester }: OrderTimelineP
       </Card>
     );
   }
+
+  // Use appropriate steps based on order type
+  const steps = isPurchase ? purchaseSteps : swapSteps;
 
   return (
     <Card>

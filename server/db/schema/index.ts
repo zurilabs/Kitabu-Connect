@@ -658,6 +658,7 @@ export const orders = mysqlTable("orders", {
 
 /* ================================
    SWAP ORDERS (Fiverr-style order management)
+   Now also supports purchase orders (unified system)
 ================================ */
 export const swapOrders = mysqlTable("swap_orders", {
   id: int("id").primaryKey().autoincrement(),
@@ -665,9 +666,11 @@ export const swapOrders = mysqlTable("swap_orders", {
   // Order reference
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
 
-  // Related swap request
+  // Order type: 'swap' or 'purchase'
+  orderType: varchar("order_type", { length: 20 }).notNull().default("swap"),
+
+  // Related swap request (only for swap orders)
   swapRequestId: int("swap_request_id")
-    .notNull()
     .references(() => swapRequests.id, { onDelete: "cascade" }),
 
   // Parties involved
@@ -679,7 +682,7 @@ export const swapOrders = mysqlTable("swap_orders", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
 
-  // Books being swapped
+  // Books being swapped (for swap orders)
   requestedListingId: int("requested_listing_id")
     .notNull()
     .references(() => bookListings.id, { onDelete: "cascade" }),
@@ -687,7 +690,12 @@ export const swapOrders = mysqlTable("swap_orders", {
   offeredListingId: int("offered_listing_id")
     .references(() => bookListings.id, { onDelete: "set null" }),
 
-  // Order status: 'active', 'requirements_gathering', 'in_progress', 'delivered', 'revision_requested', 'completed', 'cancelled', 'disputed'
+  // Purchase order fields (for purchase orders)
+  bookPrice: decimal("book_price", { precision: 10, scale: 2 }),
+  convenienceFee: decimal("convenience_fee", { precision: 10, scale: 2 }),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }),
+
+  // Order status: 'active', 'requirements_gathering', 'awaiting_payment', 'in_progress', 'delivered', 'revision_requested', 'completed', 'cancelled', 'disputed'
   status: varchar("status", { length: 30 }).notNull().default("requirements_gathering"),
 
   // Milestones/Requirements (like Fiverr's order requirements)
@@ -750,15 +758,56 @@ export const swapOrders = mysqlTable("swap_orders", {
 }));
 
 /* ================================
-   MESSAGES (Order-based messaging like Fiverr)
+   CONVERSATIONS (Direct messaging between users)
+================================ */
+export const conversations = mysqlTable("conversations", {
+  id: int("id").primaryKey().autoincrement(),
+
+  // Participants (two users in conversation)
+  user1Id: varchar("user1_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  user2Id: varchar("user2_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Optional: Book listing context (when chatting about a specific book)
+  bookListingId: int("book_listing_id")
+    .references(() => bookListings.id, { onDelete: "set null" }),
+
+  // Last message info for quick display
+  lastMessageContent: text("last_message_content"),
+  lastMessageAt: timestamp("last_message_at"),
+  lastMessageSenderId: varchar("last_message_sender_id", { length: 36 }),
+
+  // Unread counts for each user
+  user1UnreadCount: int("user1_unread_count").default(0),
+  user2UnreadCount: int("user2_unread_count").default(0),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => ({
+  user1Idx: index("idx_conversations_user1").on(table.user1Id),
+  user2Idx: index("idx_conversations_user2").on(table.user2Id),
+  bookListingIdx: index("idx_conversations_book_listing").on(table.bookListingId),
+  // Composite index to prevent duplicate conversations
+  uniqueParticipants: index("idx_conversations_participants").on(table.user1Id, table.user2Id),
+}));
+
+/* ================================
+   MESSAGES (Order-based and direct messaging)
 ================================ */
 export const messages = mysqlTable("messages", {
   id: int("id").primaryKey().autoincrement(),
 
-  // Related swap order
+  // Related swap order (nullable for direct messages)
   swapOrderId: int("swap_order_id")
-    .notNull()
     .references(() => swapOrders.id, { onDelete: "cascade" }),
+
+  // Related conversation (nullable for order messages)
+  conversationId: int("conversation_id")
+    .references(() => conversations.id, { onDelete: "cascade" }),
 
   // Sender
   senderId: varchar("sender_id", { length: 36 })
@@ -793,6 +842,7 @@ export const messages = mysqlTable("messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   orderIdx: index("idx_messages_swap_order").on(table.swapOrderId),
+  conversationIdx: index("idx_messages_conversation").on(table.conversationId),
   senderIdx: index("idx_messages_sender").on(table.senderId),
   receiverIdx: index("idx_messages_receiver").on(table.receiverId),
 }));
@@ -1033,9 +1083,18 @@ export const createSwapOrderSchema = z.object({
   meetupTime: z.string().optional(),
 });
 
+// Purchase Order Schema
+export const createPurchaseOrderSchema = z.object({
+  bookListingId: z.number(),
+  deliveryMethod: z.enum(["meetup", "delivery", "shipping"]).default("meetup"),
+  deliveryAddress: z.string().optional(),
+  buyerNotes: z.string().optional(),
+});
+
 export const updateSwapOrderSchema = z.object({
   status: z.enum([
     "requirements_gathering",
+    "awaiting_payment",
     "in_progress",
     "delivered",
     "revision_requested",
@@ -1461,8 +1520,10 @@ export type UpdateSwapRequestInput = z.infer<typeof updateSwapRequestSchema>;
 
 // Swap Order & Message Types
 export type SwapOrder = typeof swapOrders.$inferSelect;
+export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type CreateSwapOrderInput = z.infer<typeof createSwapOrderSchema>;
+export type CreatePurchaseOrderInput = z.infer<typeof createPurchaseOrderSchema>;
 export type UpdateSwapOrderInput = z.infer<typeof updateSwapOrderSchema>;
 export type SubmitRequirementsInput = z.infer<typeof submitRequirementsSchema>;
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
