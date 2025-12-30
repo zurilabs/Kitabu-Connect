@@ -111,6 +111,7 @@ export default function SwapOrderDetail() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showRequirementsForm, setShowRequirementsForm] = useState(false);
   const previousMessageCountRef = useRef<number>(0);
+  const verifiedPaymentsRef = useRef<Set<string>>(new Set());
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,14 +123,13 @@ export default function SwapOrderDetail() {
     fetchCurrentUser();
 
     // Check for payment success and verify
+    // Paystack redirects with reference/trxref parameter after payment
     const urlParams = new URLSearchParams(window.location.search);
-    const paymentStatus = urlParams.get("payment");
-    const reference = urlParams.get("reference");
-    const trxref = urlParams.get("trxref"); // Paystack also adds this
     const paystackReference = urlParams.get("reference") || urlParams.get("trxref");
 
-    if ((paymentStatus === "success" || trxref) && paystackReference) {
+    if (paystackReference && !verifiedPaymentsRef.current.has(paystackReference)) {
       console.log("Payment callback detected, verifying:", paystackReference);
+      verifiedPaymentsRef.current.add(paystackReference);
       verifyPayment(paystackReference);
       // Clean up URL
       window.history.replaceState({}, "", `/orders/${id}/messages`);

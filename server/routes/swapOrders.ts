@@ -249,7 +249,8 @@ router.post("/:id/pay-commitment-fee/initialize", authenticateToken, async (req:
 
     // 4. Paystack Initialization
     const reference = `SWAP_FEE_${swapOrderId}_${Date.now()}`;
-    const callbackUrl = `${process.env.CLIENT_URL || "http://localhost:5000"}/orders/${swapOrderId}/messages?payment=success&reference=${reference}`;
+    // Note: Paystack will automatically append reference and trxref parameters to callback_url
+    const callbackUrl = `${process.env.CLIENT_URL || "http://localhost:5000"}/orders/${swapOrderId}/messages`;
 
     const result = await initializePayment({
       email: userEmail,
@@ -606,15 +607,16 @@ router.post("/purchase/:id/pay/initialize", authenticateToken, async (req: Reque
       return res.status(400).json({ message: "Email is required for payment" });
     }
 
-    // Generate reference (orderNumber already includes PUR- prefix)
-    const reference = `${purchaseOrder.orderNumber}-${Date.now()}`;
+    // Generate reference with PUR- prefix to identify purchase payments
+    const reference = `PUR-${purchaseOrder.orderNumber}-${Date.now()}`;
 
     // Initialize payment with Paystack
+    // Note: Paystack will automatically append reference and trxref parameters to callback_url
     const paystackResult = await initializePayment({
       email: userEmail,
       amount: totalAmount,
       reference,
-      callback_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/orders/${purchaseOrderId}/messages?payment=success&reference=${reference}`,
+      callback_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/orders/${purchaseOrderId}/messages`,
       metadata: {
         userId: buyerId,
         purchaseOrderId: purchaseOrderId,

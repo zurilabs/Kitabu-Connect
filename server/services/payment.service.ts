@@ -1,5 +1,6 @@
 import { initializePayment, verifyPayment, generateReference } from "../config/paystack";
 import { walletService } from "./wallet.service";
+import { notificationService } from "./notification.service";
 
 /**
  * Get callback URL from environment or default to localhost
@@ -94,6 +95,7 @@ export class PaymentService {
       const verificationResult = await verifyPayment(reference);
 
       if (!verificationResult.success || !verificationResult.data) {
+        console.error(`[PaymentService] Payment verification failed for reference: ${reference}`);
         return {
           success: false,
           message: "Payment verification failed",
@@ -108,14 +110,46 @@ export class PaymentService {
       const transactionId = metadata.transactionId;
 
       if (!userId || !transactionId) {
+        console.error(`[PaymentService] Missing metadata for reference ${reference}. UserId: ${userId}, TransactionId: ${transactionId}`);
         return {
           success: false,
           message: "Invalid payment metadata",
         };
       }
 
+      // Check if transaction exists and get its current status
+      const existingTransaction = await walletService.getTransactionById(transactionId);
+
+      if (!existingTransaction.success || !existingTransaction.transaction) {
+        console.error(`[PaymentService] Transaction ${transactionId} not found for reference: ${reference}`);
+        return {
+          success: false,
+          message: "Transaction not found",
+        };
+      }
+
+      // Prevent duplicate processing - check if already completed
+      if (existingTransaction.transaction.status === "completed") {
+        console.warn(`[PaymentService] Transaction ${transactionId} already completed. Skipping duplicate credit for reference: ${reference}`);
+        return {
+          success: true,
+          amount: parseFloat(existingTransaction.transaction.amount),
+          message: "Payment already processed",
+        };
+      }
+
       // Convert amount from kobo to naira/kes
       const amount = paymentData.amount / 100;
+
+      // Verify amount matches
+      const expectedAmount = parseFloat(existingTransaction.transaction.amount);
+      if (Math.abs(amount - expectedAmount) > 0.01) {
+        console.error(`[PaymentService] Amount mismatch for transaction ${transactionId}. Expected: ${expectedAmount}, Got: ${amount}`);
+        return {
+          success: false,
+          message: "Payment amount mismatch",
+        };
+      }
 
       // Update transaction status
       await walletService.updateTransactionStatus(transactionId, "completed", new Date());
@@ -129,13 +163,25 @@ export class PaymentService {
       });
 
       if (!creditResult.success) {
+        console.error(`[PaymentService] Failed to credit wallet for transaction ${transactionId}. Error: ${creditResult.message}`);
+        // Revert transaction status back to pending
+        await walletService.updateTransactionStatus(transactionId, "failed", new Date());
         return {
           success: false,
           message: "Payment verified but failed to credit wallet. Please contact support.",
         };
       }
 
-      console.log(`[PaymentService] Payment verified and wallet credited. User: ${userId}, Amount: ${amount}`);
+      console.log(`[PaymentService] Payment verified and wallet credited. User: ${userId}, Amount: ${amount}, Reference: ${reference}`);
+
+      // Send notification to user
+      await notificationService.createNotification({
+        userId,
+        type: "wallet_topup",
+        title: "Wallet Top-up Successful",
+        message: `Your wallet has been credited with KES ${amount.toLocaleString()}. Your new balance is KES ${creditResult.newBalance?.toLocaleString()}.`,
+        actionUrl: "/dashboard",
+      });
 
       return {
         success: true,

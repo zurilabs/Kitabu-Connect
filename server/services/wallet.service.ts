@@ -218,6 +218,37 @@ export class WalletService {
   }
 
   /**
+   * Get transaction by ID
+   */
+  async getTransactionById(transactionId: number): Promise<{ success: boolean; transaction?: any; message?: string }> {
+    try {
+      const result = await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.id, transactionId))
+        .limit(1);
+
+      if (!result.length) {
+        return {
+          success: false,
+          message: "Transaction not found",
+        };
+      }
+
+      return {
+        success: true,
+        transaction: result[0],
+      };
+    } catch (error) {
+      console.error("[WalletService] Get transaction by ID error:", error);
+      return {
+        success: false,
+        message: "Failed to get transaction",
+      };
+    }
+  }
+
+  /**
    * Update transaction status
    */
   async updateTransactionStatus(

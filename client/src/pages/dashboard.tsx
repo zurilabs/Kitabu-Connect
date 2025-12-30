@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BookPlaceholder } from "@/components/ui/book-placeholder";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Wallet, Package, Plus, Edit, Trash2, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,14 +23,17 @@ export default function Dashboard() {
   const { myListings, isLoadingMyListings, deleteListing } = useBookListing();
   const { balance, transactions, isLoadingTransactions, verifyPayment } = useWallet();
   const searchParams = useSearch();
+  const verifiedRef = useRef<Set<string>>(new Set());
 
   // Handle payment verification after redirect from Paystack
   useEffect(() => {
     const urlParams = new URLSearchParams(searchParams);
-    const reference = urlParams.get('reference');
-    const status = urlParams.get('status');
+    const reference = urlParams.get('reference') || urlParams.get('trxref');
 
-    if (reference && status === 'success') {
+    // Paystack redirects with reference/trxref parameter after payment
+    // We verify the payment regardless of status param since Paystack will confirm success/failure
+    if (reference && !verifiedRef.current.has(reference)) {
+      verifiedRef.current.add(reference);
       verifyPayment.mutate(reference);
       // Clean up URL
       window.history.replaceState({}, '', '/dashboard');
