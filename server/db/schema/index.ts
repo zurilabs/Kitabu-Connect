@@ -36,14 +36,6 @@ export const users = mysqlTable(
       .notNull()
       .default("PARENT"),
 
-    schoolId: varchar("school_id", { length: 36 }),
-    schoolName: text("school_name"),
-
-    latitude: decimal("latitude", { precision: 10, scale: 7 }),
-    longitude: decimal("longitude", { precision: 10, scale: 7 }),
-
-    childGrade: int("child_grade"),
-
     onboardingCompleted: boolean("onboarding_completed")
       .notNull()
       .default(false),
@@ -66,7 +58,6 @@ export const users = mysqlTable(
   },
   (t) => ({
     phoneIdx: index("idx_users_phone").on(t.phoneNumber),
-    schoolIdx: index("idx_users_school").on(t.schoolId),
   })
 );
 
@@ -118,9 +109,6 @@ export const children = mysqlTable(
     // School information for this child
     schoolId: varchar("school_id", { length: 36 }),
     schoolName: text("school_name"),
-
-    // Future: For child sub-accounts
-    userId: varchar("user_id", { length: 36 }),
 
     createdAt: timestamp("created_at")
       .notNull()
