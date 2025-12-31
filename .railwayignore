@@ -1,0 +1,46 @@
+# Don't upload these to Railway (saves build time and storage)
+
+# Development files
+.git
+.github
+*.md
+!README.md
+!RAILWAY_ENV_SETUP.md
+!DEPLOYMENT_GUIDE.md
+
+# Dependencies (Railway will install these)
+node_modules
+
+# Environment files (set via Railway dashboard)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Build artifacts (Railway will build these)
+dist
+.next
+.cache
+.vite
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+.nyc_output
+*.log
+
+# Temporary files
+tmp
+temp
+*.tmp
