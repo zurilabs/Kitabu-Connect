@@ -14,6 +14,7 @@ import {
   schools,
   publishers,
   users,
+  children,
   bookListings,
   bookPhotos,
 } from "server/db/schema";
@@ -746,16 +747,24 @@ export async function registerRoutes(
       // Get current user for personalization (if authenticated)
       let currentUser = null;
       if (req.session?.userId) {
-        const userResults = await db
+        // Fetch user's children to get grades and schools
+        const userChildren = await db
           .select({
-            childGrade: users.childGrade,
-            schoolId: users.schoolId,
+            childId: children.id,
+            grade: children.grade,
+            schoolId: children.schoolId,
           })
-          .from(users)
-          .where(eq(users.id, req.session.userId))
-          .limit(1);
+          .from(children)
+          .where(eq(children.parentId, req.session.userId));
 
-        currentUser = userResults[0] || null;
+        // Use the first child's data for personalization (or could blend multiple children)
+        if (userChildren.length > 0) {
+          currentUser = {
+            childGrade: userChildren[0].grade,
+            schoolId: userChildren[0].schoolId,
+            allChildren: userChildren,
+          };
+        }
       }
 
       // Fetch candidate pool (last 30 days, up to 200 books)
@@ -766,7 +775,6 @@ export async function registerRoutes(
           seller: {
             id: users.id,
             fullName: users.fullName,
-            schoolName: users.schoolName,
           }
         })
         .from(bookListings)
@@ -789,7 +797,6 @@ export async function registerRoutes(
             seller: {
               id: users.id,
               fullName: users.fullName,
-              schoolName: users.schoolName,
             }
           })
           .from(bookListings)
@@ -807,6 +814,24 @@ export async function registerRoutes(
         candidatePool = [...candidatePool, ...olderBooks];
       }
 
+      // Fetch seller schools for personalization (batch query)
+      const sellerIds = [...new Set(candidatePool.map(({ seller }) => seller.id))];
+      const sellerSchools = await db
+        .select({
+          parentId: children.parentId,
+          schoolId: children.schoolId,
+        })
+        .from(children)
+        .where(sql`${children.parentId} IN (${sql.join(sellerIds.map(id => sql`${id}`), sql`, `)})`);
+
+      // Create a map of sellerId -> schoolId (use first child's school)
+      const sellerSchoolMap = new Map<number, string | null>();
+      sellerSchools.forEach(({ parentId, schoolId }) => {
+        if (!sellerSchoolMap.has(parentId)) {
+          sellerSchoolMap.set(parentId, schoolId);
+        }
+      });
+
       if (candidatePool.length === 0) {
         return res.status(200).json({
           success: true,
@@ -822,7 +847,8 @@ export async function registerRoutes(
         // 1. PERSONALIZATION (0-100 points) - If logged in
         if (currentUser) {
           // Same school: +40 points (highest priority - physical proximity)
-          if (currentUser.schoolId && currentUser.schoolId === seller.schoolName) {
+          const sellerSchoolId = sellerSchoolMap.get(seller.id);
+          if (currentUser.schoolId && sellerSchoolId && currentUser.schoolId === sellerSchoolId) {
             score += 40;
           }
 
@@ -1003,7 +1029,6 @@ export async function registerRoutes(
         seller: {
           id: seller.id,
           fullName: seller.fullName,
-          schoolName: seller.schoolName,
         }
       }));
 
