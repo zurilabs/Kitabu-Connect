@@ -59,10 +59,10 @@ export default function Dashboard() {
 
   const formatTransactionType = (type: string) => {
     const typeMap: Record<string, string> = {
-      'topup': 'Top-up',
+      'topup': 'Wallet Top-up',
       'withdrawal': 'Withdrawal',
-      'purchase': 'Purchase',
-      'sale': 'Sale',
+      'purchase': 'Book Purchase',
+      'sale': 'Book Sale',
       'refund': 'Refund',
       'escrow_hold': 'Escrow Hold',
       'escrow_release': 'Payment Received',
@@ -74,10 +74,39 @@ export default function Dashboard() {
   };
 
   const getTransactionIcon = (type: string) => {
-    if (type === 'credit') {
+    // Types that credit the wallet (money coming in)
+    const creditTypes = ['topup', 'sale', 'refund', 'escrow_release', 'swap_refund'];
+
+    if (creditTypes.includes(type)) {
       return <ArrowDownCircle className="w-4 h-4 text-green-600" />;
     }
+    // Types that debit the wallet (money going out)
     return <ArrowUpCircle className="w-4 h-4 text-red-600" />;
+  };
+
+  const getTransactionAmount = (transaction: any) => {
+    const amount = parseFloat(transaction.amount);
+    const creditTypes = ['topup', 'sale', 'refund', 'escrow_release', 'swap_refund'];
+    const isCredit = creditTypes.includes(transaction.type);
+
+    return {
+      amount,
+      isCredit,
+      prefix: isCredit ? '+' : '-',
+      color: isCredit ? 'text-green-600' : 'text-red-600'
+    };
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; className: string }> = {
+      pending: { label: "Pending", className: "bg-yellow-100 text-yellow-800" },
+      completed: { label: "Completed", className: "bg-green-100 text-green-800" },
+      failed: { label: "Failed", className: "bg-red-100 text-red-800" },
+      cancelled: { label: "Cancelled", className: "bg-gray-100 text-gray-800" },
+    };
+
+    const config = statusConfig[status] || statusConfig.pending;
+    return <Badge className={config.className} variant="outline">{config.label}</Badge>;
   };
 
   return (
@@ -281,7 +310,7 @@ export default function Dashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Transaction History</CardTitle>
-              <CardDescription>Your wallet transactions.</CardDescription>
+              <CardDescription>All your transactions including purchases, sales, and wallet activity.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingTransactions ? (
@@ -294,38 +323,47 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {transactions.map((transaction) => (
-                    <div
-                      key={transaction.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        {getTransactionIcon(transaction.type)}
-                        <div>
-                          <div className="font-medium text-sm">
-                            {transaction.description}
+                  {transactions.map((transaction) => {
+                    const txAmount = getTransactionAmount(transaction);
+                    return (
+                      <div
+                        key={transaction.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          {getTransactionIcon(transaction.type)}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">
+                                {transaction.description || formatTransactionType(transaction.type)}
+                              </span>
+                              {getStatusBadge(transaction.status)}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {new Date(transaction.createdAt).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                              {transaction.paymentReference && (
+                                <span className="ml-2">• Ref: {transaction.paymentReference}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right ml-4">
+                          <div className={`font-bold ${txAmount.color}`}>
+                            {txAmount.prefix}KSh {txAmount.amount.toLocaleString()}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {new Date(transaction.createdAt).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {transaction.currency || 'KES'}
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className={`font-bold ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                          {transaction.type === 'credit' ? '+' : '-'}KSh {parseFloat(transaction.amount).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Balance: KSh {parseFloat(transaction.balanceAfter).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

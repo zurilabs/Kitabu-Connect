@@ -607,8 +607,8 @@ router.post("/purchase/:id/pay/initialize", authenticateToken, async (req: Reque
       return res.status(400).json({ message: "Email is required for payment" });
     }
 
-    // Generate reference with PUR- prefix to identify purchase payments
-    const reference = `PUR-${purchaseOrder.orderNumber}-${Date.now()}`;
+    // Generate reference (orderNumber already includes PUR- prefix)
+    const reference = `${purchaseOrder.orderNumber}-${Date.now()}`;
 
     // Initialize payment with Paystack
     // Note: Paystack will automatically append reference and trxref parameters to callback_url
@@ -672,8 +672,10 @@ router.get("/purchase/:id/pay/verify/:reference", authenticateToken, async (req:
 
     // Verify payment metadata
     const metadata = paymentData.metadata || {};
-    if (metadata.purchaseOrderId !== purchaseOrderId) {
-      console.error(`[Purchase Payment] Metadata mismatch. Expected order ${purchaseOrderId}, got ${metadata.purchaseOrderId}`);
+    const metadataOrderId = parseInt(metadata.purchaseOrderId);
+
+    if (metadataOrderId !== purchaseOrderId) {
+      console.error(`[Purchase Payment] Metadata mismatch. Expected order ${purchaseOrderId}, got ${metadata.purchaseOrderId} (parsed: ${metadataOrderId})`);
       return res.status(400).json({ message: "Payment reference does not match order" });
     }
 

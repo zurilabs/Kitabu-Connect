@@ -160,21 +160,29 @@ export default function SwapOrderDetail() {
         ? `/api/swap-orders/purchase/${id}/pay/verify/${reference}`
         : `/api/swap-orders/${id}/pay-commitment-fee/verify/${reference}`;
 
+      console.log(`[Payment Verification] Reference: ${reference}`);
+      console.log(`[Payment Verification] Is Purchase: ${isPurchasePayment}`);
+      console.log(`[Payment Verification] Endpoint: ${endpoint}`);
+
       const response = await fetch(endpoint, {
         credentials: "include",
       });
 
       const data = await response.json();
 
+      console.log(`[Payment Verification] Response status: ${response.status}`);
+      console.log(`[Payment Verification] Response data:`, data);
+
       if (response.ok) {
         toast.success(data.message || "Payment verified successfully!");
         fetchSwapOrder();
         fetchMessages();
       } else {
+        console.error(`[Payment Verification] Failed:`, data);
         toast.error(data.message || "Payment verification failed");
       }
     } catch (error) {
-      console.error("Payment verification error:", error);
+      console.error("[Payment Verification] Error:", error);
       toast.error("Failed to verify payment");
     }
   };

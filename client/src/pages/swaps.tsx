@@ -43,6 +43,45 @@ interface SwapOrder {
   };
 }
 
+interface SwapRequest {
+  swapRequest: {
+    id: number;
+    requesterId: string;
+    ownerId: string;
+    status: string;
+    offeredBookTitle: string;
+    offeredBookPhotoUrl: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  requester?: {
+    id: string;
+    fullName: string;
+    profilePictureUrl: string | null;
+  };
+  owner?: {
+    id: string;
+    fullName: string;
+    profilePictureUrl: string | null;
+  };
+  requestedBook: {
+    id: number;
+    title: string;
+    coverImageUrl: string | null;
+  };
+  swapOrderId: number | null;
+}
+
+type SwapItem = SwapOrder | SwapRequest;
+
+function isSwapOrder(item: SwapItem): item is SwapOrder {
+  return 'orderNumber' in item;
+}
+
+function isSwapRequest(item: SwapItem): item is SwapRequest {
+  return 'swapRequest' in item;
+}
+
 export default function SwapsPage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
@@ -50,8 +89,24 @@ export default function SwapsPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">("incoming");
 
+  // Fetch swap requests
+  const { data: swapRequestsData, isLoading: isLoadingRequests } = useQuery({
+    queryKey: ["swap-requests"],
+    queryFn: async () => {
+      const response = await fetch("/api/swaps", {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch swap requests");
+      }
+
+      return response.json();
+    },
+  });
+
   // Fetch swap orders (includes both swaps and purchases)
-  const { data: ordersData, isLoading } = useQuery<{ orders: SwapOrder[] }>({
+  const { data: ordersData, isLoading: isLoadingOrders } = useQuery<{ orders: SwapOrder[] }>({
     queryKey: ["swap-orders"],
     queryFn: async () => {
       const response = await fetch("/api/swap-orders", {
@@ -65,6 +120,8 @@ export default function SwapsPage() {
       return response.json();
     },
   });
+
+  const isLoading = isLoadingRequests || isLoadingOrders;
 
   // Accept order mutation
   const acceptOrder = useMutation({
@@ -129,6 +186,75 @@ export default function SwapsPage() {
     },
   });
 
+  // Accept swap request mutation
+  const acceptSwapRequest = useMutation({
+    mutationFn: async (swapRequestId: number) => {
+      const response = await fetch(`/api/swaps/${swapRequestId}/accept`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to accept swap request");
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["swap-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["swap-orders"] });
+      toast({
+        title: "Swap Request Accepted!",
+        description: "A swap order has been created.",
+      });
+      if (data.swapOrderId) {
+        setLocation(`/orders/${data.swapOrderId}/messages`);
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Reject swap request mutation
+  const rejectSwapRequest = useMutation({
+    mutationFn: async (swapRequestId: number) => {
+      const response = await fetch(`/api/swaps/${swapRequestId}/reject`, {
+        method: "PUT",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to reject swap request");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["swap-requests"] });
+      toast({
+        title: "Swap Request Declined",
+        description: "The requester has been notified.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
       pending: { label: "Pending", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
@@ -145,18 +271,154 @@ export default function SwapsPage() {
     return <Badge className={config.className}>{config.label}</Badge>;
   };
 
-  const OrderCard = ({ orderData, type }: { orderData: SwapOrder; type: "incoming" | "outgoing" }) => {
+  const SwapItemCard = ({ item, type }: { item: SwapItem; type: "incoming" | "outgoing" }) => {
     const isIncoming = type === "incoming";
-    const isPurchase = orderData.orderType === "purchase";
-    const otherPerson = orderData.otherParty;
+
+    // Check if this is a swap order or swap request
+    if (isSwapOrder(item)) {
+      // This is a swap order
+      const isPurchase = item.orderType === "purchase";
+      const otherPerson = item.otherParty;
+
+      const handleCardClick = () => {
+        // Don't navigate if order is rejected or cancelled
+        if (item.status === "rejected" || item.status === "cancelled") {
+          return;
+        }
+        // Navigate to order details page
+        setLocation(`/orders/${item.id}/messages`);
+      };
+
+      return (
+        <Card
+          className="hover:shadow-md transition-shadow cursor-pointer"
+          onClick={handleCardClick}
+        >
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarImage src={otherPerson?.profilePictureUrl || undefined} />
+                  <AvatarFallback>
+                    {otherPerson?.fullName?.charAt(0) || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="font-semibold">{otherPerson?.fullName || "Unknown User"}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 items-end">
+                {getStatusBadge(item.status)}
+                <Badge variant={isPurchase ? "default" : "secondary"} className="text-xs">
+                  {isPurchase ? (
+                    <>
+                      <ShoppingCart className="w-3 h-3 mr-1" />
+                      Purchase
+                    </>
+                  ) : (
+                    <>
+                      <ArrowLeftRight className="w-3 h-3 mr-1" />
+                      Swap
+                    </>
+                  )}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="w-20 h-28 rounded overflow-hidden border bg-muted flex-shrink-0">
+                  <img
+                    src={item.requestedBook.coverImageUrl || "/placeholder-book.png"}
+                    alt={item.requestedBook.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                    {isPurchase ? (isIncoming ? "Your Book" : "Purchasing") : (isIncoming ? "Your Book" : "You Want")}
+                  </p>
+                  <p className="font-semibold text-sm line-clamp-2">{item.requestedBook.title}</p>
+                  {isPurchase && item.totalAmount && (
+                    <div className="mt-2">
+                      <p className="text-lg font-bold text-primary">
+                        KES {Number(item.totalAmount).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Book: KES {Number(item.bookPrice).toLocaleString()} + Fee: KES {Number(item.convenienceFee).toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+
+          <CardFooter className="pt-0">
+            {isIncoming && item.status === "pending" && (
+              <div className="flex gap-2 w-full" onClick={(e) => e.stopPropagation()}>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    rejectOrder.mutate(item.id);
+                  }}
+                  disabled={rejectOrder.isPending}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Decline
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    acceptOrder.mutate(item.id);
+                  }}
+                  disabled={acceptOrder.isPending}
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Accept
+                </Button>
+              </div>
+            )}
+
+            {item.status !== "pending" && item.status !== "rejected" && item.status !== "cancelled" && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLocation(`/orders/${item.id}/messages`);
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                View Details
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
+      );
+    }
+
+    // This is a swap request
+    const swapReq = item.swapRequest;
+    const otherPerson = isIncoming ? item.requester : item.owner;
 
     const handleCardClick = () => {
-      // Don't navigate if order is rejected or cancelled
-      if (orderData.status === "rejected" || orderData.status === "cancelled") {
+      // Don't navigate if swap request is rejected or cancelled
+      if (swapReq.status === "rejected" || swapReq.status === "cancelled") {
         return;
       }
-      // Navigate to order details page
-      setLocation(`/orders/${orderData.id}/messages`);
+      // If there's a swap order created, navigate to it
+      if (item.swapOrderId) {
+        setLocation(`/orders/${item.swapOrderId}/messages`);
+      }
     };
 
     return (
@@ -176,24 +438,15 @@ export default function SwapsPage() {
               <div>
                 <h3 className="font-semibold">{otherPerson?.fullName || "Unknown User"}</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {formatDistanceToNow(new Date(orderData.createdAt), { addSuffix: true })}
+                  {formatDistanceToNow(new Date(swapReq.createdAt), { addSuffix: true })}
                 </p>
               </div>
             </div>
             <div className="flex flex-col gap-2 items-end">
-              {getStatusBadge(orderData.status)}
-              <Badge variant={isPurchase ? "default" : "secondary"} className="text-xs">
-                {isPurchase ? (
-                  <>
-                    <ShoppingCart className="w-3 h-3 mr-1" />
-                    Purchase
-                  </>
-                ) : (
-                  <>
-                    <ArrowLeftRight className="w-3 h-3 mr-1" />
-                    Swap
-                  </>
-                )}
+              {getStatusBadge(swapReq.status)}
+              <Badge variant="secondary" className="text-xs">
+                <ArrowLeftRight className="w-3 h-3 mr-1" />
+                Swap Request
               </Badge>
             </div>
           </div>
@@ -201,45 +454,53 @@ export default function SwapsPage() {
 
         <CardContent className="space-y-4">
           <div className="space-y-3">
+            {/* Requested book */}
             <div className="flex gap-3">
               <div className="w-20 h-28 rounded overflow-hidden border bg-muted flex-shrink-0">
                 <img
-                  src={orderData.requestedBook.coverImageUrl || "/placeholder-book.png"}
-                  alt={orderData.requestedBook.title}
+                  src={item.requestedBook.coverImageUrl || "/placeholder-book.png"}
+                  alt={item.requestedBook.title}
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                  {isPurchase ? (isIncoming ? "Your Book" : "Purchasing") : (isIncoming ? "Your Book" : "You Want")}
+                  {isIncoming ? "Your Book" : "You Want"}
                 </p>
-                <p className="font-semibold text-sm line-clamp-2">{orderData.requestedBook.title}</p>
-                {isPurchase && orderData.totalAmount && (
-                  <div className="mt-2">
-                    <p className="text-lg font-bold text-primary">
-                      KES {Number(orderData.totalAmount).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Book: KES {Number(orderData.bookPrice).toLocaleString()} + Fee: KES {Number(orderData.convenienceFee).toLocaleString()}
-                    </p>
-                  </div>
-                )}
+                <p className="font-semibold text-sm line-clamp-2">{item.requestedBook.title}</p>
+              </div>
+            </div>
+
+            {/* Offered book */}
+            <div className="flex gap-3 pt-2 border-t">
+              <div className="w-20 h-28 rounded overflow-hidden border bg-muted flex-shrink-0">
+                <img
+                  src={swapReq.offeredBookPhotoUrl || "/placeholder-book.png"}
+                  alt={swapReq.offeredBookTitle}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                  {isIncoming ? "They Offer" : "You Offer"}
+                </p>
+                <p className="font-semibold text-sm line-clamp-2">{swapReq.offeredBookTitle}</p>
               </div>
             </div>
           </div>
         </CardContent>
 
         <CardFooter className="pt-0">
-          {isIncoming && orderData.status === "pending" && (
+          {isIncoming && swapReq.status === "pending" && (
             <div className="flex gap-2 w-full" onClick={(e) => e.stopPropagation()}>
               <Button
                 variant="outline"
                 className="flex-1"
                 onClick={(e) => {
                   e.stopPropagation();
-                  rejectOrder.mutate(orderData.id);
+                  rejectSwapRequest.mutate(swapReq.id);
                 }}
-                disabled={rejectOrder.isPending}
+                disabled={rejectSwapRequest.isPending}
               >
                 <X className="w-4 h-4 mr-2" />
                 Decline
@@ -248,9 +509,9 @@ export default function SwapsPage() {
                 className="flex-1 bg-green-600 hover:bg-green-700"
                 onClick={(e) => {
                   e.stopPropagation();
-                  acceptOrder.mutate(orderData.id);
+                  acceptSwapRequest.mutate(swapReq.id);
                 }}
-                disabled={acceptOrder.isPending}
+                disabled={acceptSwapRequest.isPending}
               >
                 <Check className="w-4 h-4 mr-2" />
                 Accept
@@ -258,13 +519,13 @@ export default function SwapsPage() {
             </div>
           )}
 
-          {orderData.status !== "pending" && orderData.status !== "rejected" && orderData.status !== "cancelled" && (
+          {swapReq.status === "accepted" && item.swapOrderId && (
             <Button
               variant="outline"
               className="w-full"
               onClick={(e) => {
                 e.stopPropagation();
-                setLocation(`/orders/${orderData.id}/messages`);
+                setLocation(`/orders/${item.swapOrderId}/messages`);
               }}
             >
               <MessageSquare className="w-4 h-4 mr-2" />
@@ -284,11 +545,18 @@ export default function SwapsPage() {
     );
   }
 
+  // Combine swap requests and swap orders
   const allOrders = ordersData?.orders || [];
+  const incomingRequests = swapRequestsData?.incoming || [];
+  const outgoingRequests = swapRequestsData?.outgoing || [];
 
   // Split orders into incoming (seller) and outgoing (buyer)
   const incomingOrders = allOrders.filter(o => o.ownerId === user?.id);
   const outgoingOrders = allOrders.filter(o => o.requesterId === user?.id);
+
+  // Combine requests and orders for each tab
+  const allIncoming = [...incomingRequests, ...incomingOrders];
+  const allOutgoing = [...outgoingRequests, ...outgoingOrders];
 
   return (
     <div className="container px-4 py-8 max-w-6xl mx-auto">
@@ -306,24 +574,24 @@ export default function SwapsPage() {
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="incoming" className="gap-2">
             Selling/Swapping
-            {incomingOrders.length > 0 && (
-              <Badge variant="secondary">{incomingOrders.length}</Badge>
+            {allIncoming.length > 0 && (
+              <Badge variant="secondary">{allIncoming.length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="outgoing" className="gap-2">
             Buying/Requesting
-            {outgoingOrders.length > 0 && (
-              <Badge variant="secondary">{outgoingOrders.length}</Badge>
+            {allOutgoing.length > 0 && (
+              <Badge variant="secondary">{allOutgoing.length}</Badge>
             )}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="incoming" className="space-y-4">
-          {incomingOrders.length === 0 ? (
+          {allIncoming.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="font-semibold mb-2">No Incoming Orders</h3>
+                <h3 className="font-semibold mb-2">No Incoming Requests</h3>
                 <p className="text-sm text-muted-foreground">
                   When someone wants to buy or swap a book with you, it will appear here
                 </p>
@@ -331,19 +599,20 @@ export default function SwapsPage() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {incomingOrders.map((order) => (
-                <OrderCard key={order.id} orderData={order} type="incoming" />
-              ))}
+              {allIncoming.map((item) => {
+                const key = isSwapOrder(item) ? `order-${item.id}` : `request-${item.swapRequest.id}`;
+                return <SwapItemCard key={key} item={item} type="incoming" />;
+              })}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="outgoing" className="space-y-4">
-          {outgoingOrders.length === 0 ? (
+          {allOutgoing.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <ShoppingCart className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="font-semibold mb-2">No Outgoing Orders</h3>
+                <h3 className="font-semibold mb-2">No Outgoing Requests</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   Browse the marketplace to find books to buy or swap
                 </p>
@@ -354,9 +623,10 @@ export default function SwapsPage() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {outgoingOrders.map((order) => (
-                <OrderCard key={order.id} orderData={order} type="outgoing" />
-              ))}
+              {allOutgoing.map((item) => {
+                const key = isSwapOrder(item) ? `order-${item.id}` : `request-${item.swapRequest.id}`;
+                return <SwapItemCard key={key} item={item} type="outgoing" />;
+              })}
             </div>
           )}
         </TabsContent>

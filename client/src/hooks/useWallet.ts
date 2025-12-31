@@ -6,13 +6,30 @@ interface WalletBalance {
   currency: string;
 }
 
-interface Transaction {
+interface WalletTransaction {
   id: number;
   type: string;
   amount: string;
   balanceAfter: string;
   description: string;
   createdAt: string;
+}
+
+interface Transaction {
+  id: number;
+  userId: string;
+  type: string;
+  status: string;
+  amount: string;
+  currency: string;
+  paymentMethod: string | null;
+  paymentReference: string | null;
+  bookListingId: number | null;
+  escrowId: number | null;
+  description: string | null;
+  metadata: string | null;
+  createdAt: string;
+  completedAt: string | null;
 }
 
 interface TopUpResponse {
@@ -49,14 +66,14 @@ export function useWallet() {
     },
   });
 
-  // Get transaction history
+  // Get all transaction history (from main transactions table)
   const {
     data: transactions,
     isLoading: isLoadingTransactions,
   } = useQuery<Transaction[]>({
-    queryKey: ["wallet", "transactions"],
+    queryKey: ["wallet", "all-transactions"],
     queryFn: async () => {
-      const response = await fetch("/api/wallet/transactions?limit=50", {
+      const response = await fetch("/api/wallet/all-transactions?limit=50", {
         credentials: "include",
       });
 
