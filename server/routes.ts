@@ -758,9 +758,9 @@ export async function registerRoutes(
         currentUser = userResults[0] || null;
       }
 
-      // Fetch candidate pool (last 7 days, up to 100 books)
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const candidatePool = await db
+      // Fetch candidate pool (last 30 days, up to 200 books)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      let candidatePool = await db
         .select({
           listing: bookListings,
           seller: {
@@ -775,11 +775,37 @@ export async function registerRoutes(
           and(
             eq(bookListings.listingStatus, "active"),
             sql`${bookListings.quantityAvailable} > 0`,
-            sql`${bookListings.createdAt} >= ${sevenDaysAgo}`
+            sql`${bookListings.createdAt} >= ${thirtyDaysAgo}`
           )
         )
         .orderBy(desc(bookListings.createdAt))
-        .limit(100);
+        .limit(200);
+
+      // Fallback: If not enough recent books, fetch older ones (30+ days)
+      if (candidatePool.length < limit) {
+        const olderBooks = await db
+          .select({
+            listing: bookListings,
+            seller: {
+              id: users.id,
+              fullName: users.fullName,
+              schoolName: users.schoolName,
+            }
+          })
+          .from(bookListings)
+          .innerJoin(users, eq(bookListings.sellerId, users.id))
+          .where(
+            and(
+              eq(bookListings.listingStatus, "active"),
+              sql`${bookListings.quantityAvailable} > 0`,
+              sql`${bookListings.createdAt} < ${thirtyDaysAgo}`
+            )
+          )
+          .orderBy(desc(bookListings.createdAt))
+          .limit(50);
+
+        candidatePool = [...candidatePool, ...olderBooks];
+      }
 
       if (candidatePool.length === 0) {
         return res.status(200).json({
@@ -789,46 +815,90 @@ export async function registerRoutes(
         });
       }
 
-      // Smart selection algorithm with diversity
-      const selectedListings: typeof candidatePool = [];
-      const usedSubjects = new Set<string>();
-      const usedGrades = new Set<string>();
-      const usedSellers = new Set<string>();
-
-      // Score each book based on personalization
+      // HYBRID PERSONALIZATION + POPULARITY SCORING ALGORITHM
       const scoredBooks = candidatePool.map(({ listing, seller }) => {
-        let score = 100; // Base score
+        let score = 0;
 
-        // Personalization bonus (if user is logged in)
+        // 1. PERSONALIZATION (0-100 points) - If logged in
         if (currentUser) {
-          // Match user's child grade
+          // Same school: +40 points (highest priority - physical proximity)
+          if (currentUser.schoolId && currentUser.schoolId === seller.schoolName) {
+            score += 40;
+          }
+
+          // Grade match
           if (currentUser.childGrade && listing.classGrade) {
             const userGrade = currentUser.childGrade;
             const bookGrade = parseInt(listing.classGrade.replace(/\D/g, '')) || 0;
 
-            // Exact match: +50 points
             if (userGrade === bookGrade) {
-              score += 50;
+              score += 60; // Exact match
+            } else if (Math.abs(userGrade - bookGrade) === 1) {
+              score += 40; // Adjacent grade (±1)
+            } else if (Math.abs(userGrade - bookGrade) === 2) {
+              score += 20; // Close grade (±2)
             }
-            // Close match (±2 grades): +25 points
-            else if (Math.abs(userGrade - bookGrade) <= 2) {
-              score += 25;
-            }
-          }
-
-          // Same school: +30 points (convenience for pickup)
-          if (currentUser.schoolId && currentUser.schoolId === seller.schoolName) {
-            score += 30;
           }
         }
 
-        // Recency bonus (exponential decay - newer = higher score)
-        const ageInDays = (Date.now() - new Date(listing.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-        const recencyScore = Math.max(0, 50 * Math.exp(-ageInDays / 2)); // Decays over ~2 days
-        score += recencyScore;
+        // 2. ENGAGEMENT (0-80 points)
+        const viewsCount = listing.viewsCount || 0;
+        const favoritesCount = listing.favoritesCount || 0;
 
-        // Random factor to ensure variety on each visit (±20 points)
-        score += Math.random() * 40 - 20;
+        // Views: up to 30 points
+        const viewsScore = Math.min(30, (Math.min(viewsCount, 100) / 100) * 30);
+        score += viewsScore;
+
+        // Favorites: up to 50 points (strong indicator of interest)
+        const favoritesScore = Math.min(50, (Math.min(favoritesCount, 20) / 20) * 50);
+        score += favoritesScore;
+
+        // 3. RECENCY (0-60 points)
+        const ageInHours = (Date.now() - new Date(listing.createdAt).getTime()) / (1000 * 60 * 60);
+        const ageInDays = ageInHours / 24;
+
+        if (ageInHours < 24) {
+          score += 60; // Brand new (< 24 hours) - visibility boost!
+        } else if (ageInDays <= 3) {
+          score += 45; // 1-3 days
+        } else if (ageInDays <= 7) {
+          score += 30; // 3-7 days
+        } else if (ageInDays <= 14) {
+          score += 15; // 7-14 days
+        } else if (ageInDays <= 30) {
+          score += 5; // 14-30 days
+        }
+        // Older than 30 days: 0 points
+
+        // 4. VALUE INDICATOR (0-30 points)
+        const price = parseFloat(listing.price || "0");
+        const originalPrice = parseFloat(listing.originalRetailPrice || "0");
+
+        if (originalPrice > 0 && price > 0) {
+          const discount = ((originalPrice - price) / originalPrice) * 100;
+
+          if (discount >= 50) {
+            score += 30; // Great deal!
+          } else if (discount >= 30) {
+            score += 20; // Good deal
+          } else if (discount >= 20) {
+            score += 10; // Decent deal
+          }
+        }
+
+        // Condition bonus
+        if (listing.condition === "Like New") {
+          score += 10;
+        }
+
+        // 5. LISTING TYPE BALANCE (0-20 points)
+        // Boost swap listings slightly to promote platform's swap feature
+        if (listing.listingType === "swap") {
+          score += 20;
+        }
+
+        // 6. RANDOMNESS (±15 points) - Ensures variety across visits
+        score += (Math.random() * 30) - 15;
 
         return { listing, seller, score };
       });
@@ -836,42 +906,68 @@ export async function registerRoutes(
       // Sort by score (highest first)
       scoredBooks.sort((a, b) => b.score - a.score);
 
-      // Select books with diversity constraints
+      // INTELLIGENT SELECTION WITH DIVERSITY CONSTRAINTS
+      const selectedListings: typeof candidatePool = [];
+      const usedSubjects = new Map<string, number>(); // Track count per subject
+      const usedGrades = new Map<string, number>(); // Track count per grade
+      const usedSellers = new Set<string>();
+      let swapListingsCount = 0;
+
+      // First pass: Select high-scoring books with diversity
       for (const { listing, seller } of scoredBooks) {
         if (selectedListings.length >= limit) break;
 
         const subject = listing.subject || "unknown";
         const grade = listing.classGrade || "unknown";
         const sellerId = seller.id;
+        const isSwap = listing.listingType === "swap";
 
         // Check diversity constraints
-        const isDifferentSubject = !usedSubjects.has(subject);
-        const isDifferentGrade = !usedGrades.has(grade);
-        const isDifferentSeller = !usedSellers.has(sellerId);
+        const subjectCount = usedSubjects.get(subject) || 0;
+        const gradeCount = usedGrades.get(grade) || 0;
+        const isNewSeller = !usedSellers.has(sellerId);
 
-        // For first 3 books, enforce all diversity rules
-        if (selectedListings.length < limit) {
-          // Accept if meets diversity criteria OR we're running out of options
-          const meetsMinimumDiversity =
-            (isDifferentSubject || usedSubjects.size < 3) &&
-            (isDifferentGrade || usedGrades.size < 3) &&
-            (isDifferentSeller || usedSellers.size < 3);
+        // Diversity rules:
+        // - Max 2 books from same subject
+        // - Max 2 books from same grade
+        // - Max 1 book per seller
+        const meetsDiversityRules =
+          subjectCount < 2 &&
+          gradeCount < 2 &&
+          isNewSeller;
 
-          if (meetsMinimumDiversity) {
+        if (meetsDiversityRules) {
+          selectedListings.push({ listing, seller });
+          usedSubjects.set(subject, subjectCount + 1);
+          usedGrades.set(grade, gradeCount + 1);
+          usedSellers.add(sellerId);
+          if (isSwap) swapListingsCount++;
+        }
+      }
+
+      // Ensure at least 1-2 swap listings if available
+      const minSwapListings = limit >= 8 ? 2 : 1;
+      if (swapListingsCount < minSwapListings) {
+        const swapBooks = scoredBooks.filter(({ listing }) => listing.listingType === "swap");
+
+        for (const { listing, seller } of swapBooks) {
+          if (swapListingsCount >= minSwapListings) break;
+          if (selectedListings.length >= limit) break;
+
+          // Avoid duplicates
+          const alreadySelected = selectedListings.some(s => s.listing.id === listing.id);
+          if (!alreadySelected) {
             selectedListings.push({ listing, seller });
-            usedSubjects.add(subject);
-            usedGrades.add(grade);
-            usedSellers.add(sellerId);
+            swapListingsCount++;
           }
         }
       }
 
-      // If we still don't have enough books, relax diversity rules and take top-scored
+      // If we still don't have enough books, relax diversity rules
       if (selectedListings.length < limit) {
         for (const { listing, seller } of scoredBooks) {
           if (selectedListings.length >= limit) break;
 
-          // Avoid duplicates
           const alreadySelected = selectedListings.some(s => s.listing.id === listing.id);
           if (!alreadySelected) {
             selectedListings.push({ listing, seller });

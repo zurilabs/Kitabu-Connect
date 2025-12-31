@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Heart, BookOpen, Loader2, ShoppingCart } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,28 @@ import { Link } from "wouter";
 import { useFavorites } from "@/hooks/use-favorites";
 import { FavoriteButton } from "@/components/books/FavoriteButton";
 import { generateBookSlug } from "@/lib/utils";
+
+// Component to display book image with fallback
+function BookImage({ src, alt }: { src: string | null; alt: string }) {
+  const [imageError, setImageError] = useState(false);
+
+  if (!src || imageError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900 dark:to-blue-800">
+        <BookOpen className="w-16 h-16 text-blue-400 dark:text-blue-300" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+      onError={() => setImageError(true)}
+    />
+  );
+}
 
 export default function Favorites() {
   const { data, isLoading, error } = useFavorites(50, 0);
@@ -88,10 +111,9 @@ export default function Favorites() {
                   className="overflow-hidden group hover:shadow-lg transition-all duration-300"
                 >
                   <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-                    <img
-                      src={book.coverImageUrl || "/placeholder-book.png"}
+                    <BookImage
+                      src={book.coverImageUrl}
                       alt={book.title}
-                      className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
                     />
                     <div className="absolute top-2 right-2">
                       <Badge

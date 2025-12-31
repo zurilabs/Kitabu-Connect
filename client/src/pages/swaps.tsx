@@ -16,6 +16,7 @@ import {
   MessageSquare,
   ShoppingCart,
   Package,
+  BookOpen,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -80,6 +81,28 @@ function isSwapOrder(item: SwapItem): item is SwapOrder {
 
 function isSwapRequest(item: SwapItem): item is SwapRequest {
   return 'swapRequest' in item;
+}
+
+// Component to display book image with fallback
+function BookImage({ src, alt }: { src: string | null; alt: string }) {
+  const [imageError, setImageError] = useState(false);
+
+  if (!src || imageError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900 dark:to-blue-800">
+        <BookOpen className="w-10 h-10 text-blue-400 dark:text-blue-300" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-full h-full object-cover"
+      onError={() => setImageError(true)}
+    />
+  );
 }
 
 export default function SwapsPage() {
@@ -333,10 +356,9 @@ export default function SwapsPage() {
             <div className="space-y-3">
               <div className="flex gap-3">
                 <div className="w-20 h-28 rounded overflow-hidden border bg-muted flex-shrink-0">
-                  <img
-                    src={item.requestedBook.coverImageUrl || "/placeholder-book.png"}
+                  <BookImage
+                    src={item.requestedBook.coverImageUrl}
                     alt={item.requestedBook.title}
-                    className="w-full h-full object-cover"
                   />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -457,10 +479,9 @@ export default function SwapsPage() {
             {/* Requested book */}
             <div className="flex gap-3">
               <div className="w-20 h-28 rounded overflow-hidden border bg-muted flex-shrink-0">
-                <img
-                  src={item.requestedBook.coverImageUrl || "/placeholder-book.png"}
+                <BookImage
+                  src={item.requestedBook.coverImageUrl}
                   alt={item.requestedBook.title}
-                  className="w-full h-full object-cover"
                 />
               </div>
               <div className="min-w-0 flex-1">
@@ -474,10 +495,9 @@ export default function SwapsPage() {
             {/* Offered book */}
             <div className="flex gap-3 pt-2 border-t">
               <div className="w-20 h-28 rounded overflow-hidden border bg-muted flex-shrink-0">
-                <img
-                  src={swapReq.offeredBookPhotoUrl || "/placeholder-book.png"}
+                <BookImage
+                  src={swapReq.offeredBookPhotoUrl}
                   alt={swapReq.offeredBookTitle}
-                  className="w-full h-full object-cover"
                 />
               </div>
               <div className="min-w-0 flex-1">

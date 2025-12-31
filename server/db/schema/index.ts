@@ -493,7 +493,7 @@ export const transactions = mysqlTable("transactions", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
 
-  // Transaction Type: 'topup', 'withdrawal', 'purchase', 'sale', 'refund', 'escrow_hold', 'escrow_release'
+  // Transaction Type: 'topup', 'withdrawal', 'purchase', 'sale', 'refund', 'escrow_hold', 'escrow_release', 'platform_revenue', 'platform_payout'
   type: varchar("type", { length: 20 }).notNull(),
 
   // Transaction Status: 'pending', 'processing', 'completed', 'failed', 'cancelled'

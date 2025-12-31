@@ -1193,6 +1193,67 @@ export class SwapOrderService {
               });
 
               console.log(`[SwapOrderService] Released KES ${bookPrice.toFixed(2)} from escrow to seller ${swapOrder.ownerId}. New balance: KES ${newBalance.toFixed(2)}`);
+
+              // Credit platform account with convenience fee
+              const platformFee = parseFloat(escrowAccount?.platformFee || swapOrder.convenienceFee || "0");
+
+              if (platformFee > 0) {
+                const PLATFORM_EMAIL = "platform@kitabuconnect.com";
+
+                // Get platform account by email (works regardless of ID)
+                const [platformUser] = await db
+                  .select()
+                  .from(users)
+                  .where(eq(users.email, PLATFORM_EMAIL))
+                  .limit(1);
+
+                if (platformUser) {
+                  const platformCurrentBalance = parseFloat(platformUser.walletBalance || "0");
+                  const platformNewBalance = platformCurrentBalance + platformFee;
+
+                  // Create platform revenue transaction
+                  const [platformRevenueResult] = await db.insert(transactions).values({
+                    userId: platformUser.id,
+                    type: "platform_revenue",
+                    status: "completed",
+                    amount: platformFee.toFixed(2),
+                    currency: "KES",
+                    paymentMethod: "paystack",
+                    paymentReference: swapOrder.requesterPaymentReference,
+                    bookListingId: swapOrder.requestedListingId,
+                    escrowId: swapOrder.escrowId,
+                    description: `Platform fee from Order #${swapOrder.orderNumber}`,
+                    metadata: JSON.stringify({
+                      purchaseOrderId: swapOrderId,
+                      orderNumber: swapOrder.orderNumber,
+                      sellerId: swapOrder.ownerId,
+                      buyerId: swapOrder.requesterId,
+                      bookPrice: bookPrice,
+                    }),
+                    completedAt: new Date(),
+                  }).$returningId();
+
+                  // Update platform wallet balance
+                  await db
+                    .update(users)
+                    .set({
+                      walletBalance: platformNewBalance.toFixed(2),
+                    })
+                    .where(eq(users.id, platformUser.id));
+
+                  // Record wallet transaction for platform (credit)
+                  await db.insert(walletTransactions).values({
+                    userId: platformUser.id,
+                    type: "credit",
+                    amount: platformFee.toFixed(2),
+                    balanceAfter: platformNewBalance.toFixed(2),
+                    transactionId: platformRevenueResult.id,
+                    description: `Platform fee collected - Order #${swapOrder.orderNumber}`,
+                  });
+
+                  console.log(`[SwapOrderService] Collected KES ${platformFee.toFixed(2)} platform fee. Platform balance: KES ${platformNewBalance.toFixed(2)}`);
+                }
+              }
             }
           } else {
             // For swap orders: release commitment fees to platform

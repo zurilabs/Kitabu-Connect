@@ -11,6 +11,7 @@
 
 import { db } from "../server/db";
 import { users, children, bookListings, schools, swapRequests, favorites } from "../server/db/schema";
+import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
 // Kenyan-specific data
@@ -191,6 +192,37 @@ function generatePrice(condition: string, basePrice: number): number {
 
 async function main() {
   console.log("🌱 Starting realistic data seeding...\n");
+
+  // Create platform account first
+  console.log("🏢 Creating platform account...");
+  const PLATFORM_USER_ID = "platform-000000-0000-0000-0000-000000000001";
+  const PLATFORM_EMAIL = "platform@kitabuconnect.com";
+
+  // Check if platform account already exists
+  const [existingPlatform] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, PLATFORM_EMAIL))
+    .limit(1);
+
+  if (existingPlatform) {
+    console.log(`✅ Platform account already exists (${PLATFORM_EMAIL})\n`);
+  } else {
+    try {
+      await db.insert(users).values({
+        id: PLATFORM_USER_ID,
+        email: PLATFORM_EMAIL,
+        fullName: "Kitabu Connect Platform",
+        phoneNumber: "+254700000000",
+        role: "admin",
+        walletBalance: "0.00",
+        onboardingCompleted: true,
+      });
+      console.log(`✅ Created platform account (${PLATFORM_EMAIL})\n`);
+    } catch (error) {
+      console.log(`⚠️  Platform account creation failed (may already exist): ${error}\n`);
+    }
+  }
 
   // Fetch all schools
   console.log("📚 Fetching schools from database...");

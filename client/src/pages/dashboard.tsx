@@ -69,13 +69,14 @@ export default function Dashboard() {
       'swap_commitment': 'Swap Commitment Fee',
       'swap_logistics': 'Swap Logistics Cost',
       'swap_refund': 'Swap Refund',
+      'platform_revenue': 'Platform Fee Collected',
     };
     return typeMap[type] || type;
   };
 
   const getTransactionIcon = (type: string) => {
     // Types that credit the wallet (money coming in)
-    const creditTypes = ['topup', 'sale', 'refund', 'escrow_release', 'swap_refund'];
+    const creditTypes = ['topup', 'sale', 'refund', 'escrow_release', 'swap_refund', 'platform_revenue'];
 
     if (creditTypes.includes(type)) {
       return <ArrowDownCircle className="w-4 h-4 text-green-600" />;
@@ -86,7 +87,7 @@ export default function Dashboard() {
 
   const getTransactionAmount = (transaction: any) => {
     const amount = parseFloat(transaction.amount);
-    const creditTypes = ['topup', 'sale', 'refund', 'escrow_release', 'swap_refund'];
+    const creditTypes = ['topup', 'sale', 'refund', 'escrow_release', 'swap_refund', 'platform_revenue'];
     const isCredit = creditTypes.includes(transaction.type);
 
     return {
