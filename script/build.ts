@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm } from "fs/promises";
 
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
@@ -9,35 +9,21 @@ async function buildAll() {
   await viteBuild();
 
   console.log("building server...");
-  const pkg = JSON.parse(await readFile("package.json", "utf-8"));
 
-  // Get all dependencies to mark as external (don't bundle them)
-  const allDeps = [
-    ...Object.keys(pkg.dependencies || {}),
-    ...Object.keys(pkg.devDependencies || {}),
-  ];
-
+  // Bundle the server code (needed to resolve all imports)
   await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
     bundle: true,
     format: "esm",
     outfile: "dist/index.js",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
-    // Don't minify to avoid issues with large files
+    // Don't minify to preserve readability and avoid issues
     minify: false,
-    // Mark all node_modules as external (don't bundle them)
-    external: allDeps,
+    // Keep all node_modules external (don't bundle dependencies)
+    packages: "external",
     logLevel: "info",
-    banner: {
-      js: "import { createRequire } from 'module'; import { fileURLToPath as __fileURLToPath } from 'url'; import { dirname as __pathDirname } from 'path'; const require = createRequire(import.meta.url); const __filename = __fileURLToPath(import.meta.url); const __dirname = __pathDirname(__filename); globalThis.__dirname = __dirname; globalThis.__filename = __filename;",
-    },
-    // Add sourcemap for debugging
+    // No sourcemap for production
     sourcemap: false,
-    // Tree shaking
-    treeShaking: true,
   });
 }
 
