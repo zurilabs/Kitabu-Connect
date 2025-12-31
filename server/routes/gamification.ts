@@ -19,7 +19,7 @@ import {
   getUserRank,
 } from "../services/gamification.service";
 import { db } from "../db";
-import { users, userReliabilityScores } from "../db/schema";
+import { users, userReliabilityScores, children } from "../db/schema";
 import { eq } from "drizzle-orm";
 
 const router = Router();
@@ -223,6 +223,13 @@ router.get("/rank/me", authenticateToken, async (req: Request, res: Response) =>
       .where(eq(users.id, userId))
       .limit(1);
 
+    // Get user's child to find their school
+    const [child] = await db
+      .select()
+      .from(children)
+      .where(eq(children.parentId, userId))
+      .limit(1);
+
     res.json({
       success: true,
       rank: {
@@ -253,7 +260,7 @@ router.get("/rank/me", authenticateToken, async (req: Request, res: Response) =>
             id: user.id,
             fullName: user.fullName,
             profilePictureUrl: user.profilePictureUrl,
-            schoolId: user.schoolId,
+            schoolId: child?.schoolId || null,
           }
         : null,
     });

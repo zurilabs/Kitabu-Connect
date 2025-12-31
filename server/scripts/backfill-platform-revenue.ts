@@ -9,7 +9,8 @@ import { db } from "../db";
 import { swapOrders, escrowAccounts, transactions, users, walletTransactions } from "../db/schema";
 import { eq, and } from "drizzle-orm";
 
-const PLATFORM_USER_ID = "platform-000000-0000-0000-0000-000000000001";
+// Use a standard UUID format (36 characters) for the platform user
+const PLATFORM_USER_ID = "56f3a7d4-8e21-4b1a-9c65-2f8471e039b2";
 const PLATFORM_EMAIL = "platform@kitabuconnect.com";
 
 async function backfillPlatformRevenue() {

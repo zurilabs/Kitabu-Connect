@@ -79,7 +79,6 @@ CREATE TABLE `children` (
 	`display_order` int NOT NULL DEFAULT 0,
 	`school_id` varchar(36),
 	`school_name` text,
-	`user_id` varchar(36),
 	`created_at` timestamp NOT NULL DEFAULT (now()),
 	`updated_at` timestamp NOT NULL DEFAULT (now()),
 	CONSTRAINT `children_id` PRIMARY KEY(`id`)
@@ -527,11 +526,6 @@ CREATE TABLE `users` (
 	`email` varchar(255),
 	`profile_picture_url` text,
 	`role` varchar(20) NOT NULL DEFAULT 'PARENT',
-	`school_id` varchar(36),
-	`school_name` text,
-	`latitude` decimal(10,7),
-	`longitude` decimal(10,7),
-	`child_grade` int,
 	`onboarding_completed` boolean NOT NULL DEFAULT false,
 	`wallet_balance` decimal(10,2) NOT NULL DEFAULT '0.00',
 	`created_at` timestamp NOT NULL DEFAULT (now()),
@@ -674,5 +668,4 @@ CREATE INDEX `idx_swap_requests_listing` ON `swap_requests` (`requested_listing_
 CREATE INDEX `idx_swap_requests_status` ON `swap_requests` (`status`);--> statement-breakpoint
 CREATE INDEX `idx_reliability_score` ON `user_reliability_scores` (`reliability_score`);--> statement-breakpoint
 CREATE INDEX `idx_reliability_user` ON `user_reliability_scores` (`user_id`);--> statement-breakpoint
-CREATE INDEX `idx_users_phone` ON `users` (`phone_number`);--> statement-breakpoint
-CREATE INDEX `idx_users_school` ON `users` (`school_id`);
+CREATE INDEX `idx_users_phone` ON `users` (`phone_number`);

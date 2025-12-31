@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "4dd90072-4491-4587-af44-de76c18682b7",
+  "id": "7ba7416d-27e5-4d70-9245-e98d4fa39276",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_condition_reports": {
@@ -736,13 +736,6 @@
         "school_name": {
           "name": "school_name",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "varchar(36)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -4762,41 +4755,6 @@
           "autoincrement": false,
           "default": "'PARENT'"
         },
-        "school_id": {
-          "name": "school_id",
-          "type": "varchar(36)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "school_name": {
-          "name": "school_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "latitude": {
-          "name": "latitude",
-          "type": "decimal(10,7)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "longitude": {
-          "name": "longitude",
-          "type": "decimal(10,7)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "child_grade": {
-          "name": "child_grade",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "onboarding_completed": {
           "name": "onboarding_completed",
           "type": "boolean",
@@ -4835,13 +4793,6 @@
           "name": "idx_users_phone",
           "columns": [
             "phone_number"
-          ],
-          "isUnique": false
-        },
-        "idx_users_school": {
-          "name": "idx_users_school",
-          "columns": [
-            "school_id"
           ],
           "isUnique": false
         }

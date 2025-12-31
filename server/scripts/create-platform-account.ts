@@ -8,7 +8,8 @@ import { db } from "../db";
 import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
 
-const PLATFORM_USER_ID = "platform-000000-0000-0000-0000-000000000001";
+// Use a standard UUID format (36 characters) for the platform user
+const PLATFORM_USER_ID = "00000000-0000-0000-0000-000000000001";
 const PLATFORM_EMAIL = "platform@kitabuconnect.com";
 
 async function createPlatformAccount() {

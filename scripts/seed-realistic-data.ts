@@ -195,7 +195,7 @@ async function main() {
 
   // Create platform account first
   console.log("🏢 Creating platform account...");
-  const PLATFORM_USER_ID = "platform-000000-0000-0000-0000-000000000001";
+  const PLATFORM_USER_ID = "56f3a7d4-8e21-4b1a-9c65-2f8471e039b2";
   const PLATFORM_EMAIL = "platform@kitabuconnect.com";
 
   // Check if platform account already exists

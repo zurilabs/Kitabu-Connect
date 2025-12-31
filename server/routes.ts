@@ -705,6 +705,13 @@ export async function registerRoutes(
       // Enable personalization by default for authenticated users (can be disabled via query param)
       const enablePersonalization = currentUser && personalized !== 'false';
 
+      // Get user's school from children table if needed for sameSchoolOnly filter
+      let userSchoolId: string | undefined;
+      if (sameSchoolOnly === 'true' && currentUser?.id) {
+        const [child] = await db.select().from(children).where(eq(children.parentId, currentUser.id)).limit(1);
+        userSchoolId = child?.schoolId || undefined;
+      }
+
       const filters = {
         searchTerm: searchTerm as string | undefined,
         subject: subject as string | undefined,
@@ -713,7 +720,7 @@ export async function registerRoutes(
         minPrice: minPrice ? Number(minPrice) : undefined,
         maxPrice: maxPrice ? Number(maxPrice) : undefined,
         listingType: listingType as string | undefined,
-        schoolId: sameSchoolOnly === 'true' && currentUser?.schoolId ? currentUser.schoolId : undefined,
+        schoolId: userSchoolId,
         maxDistance: maxDistance ? Number(maxDistance) : undefined,
         userLatitude: currentUser?.latitude ? Number(currentUser.latitude) : undefined,
         userLongitude: currentUser?.longitude ? Number(currentUser.longitude) : undefined,

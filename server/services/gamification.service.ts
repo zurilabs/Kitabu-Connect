@@ -9,7 +9,7 @@
  */
 
 import { db } from "../db";
-import { userReliabilityScores, users, schools, notifications } from "../db/schema";
+import { userReliabilityScores, users, children, schools, notifications } from "../db/schema";
 import { eq, desc, and, gte } from "drizzle-orm";
 
 /* ================================
@@ -206,7 +206,8 @@ export async function getSchoolLeaderboard(
     })
     .from(userReliabilityScores)
     .innerJoin(users, eq(userReliabilityScores.userId, users.id))
-    .where(eq(users.schoolId, schoolId))
+    .innerJoin(children, eq(children.parentId, users.id))
+    .where(eq(children.schoolId, schoolId))
     .orderBy(desc(userReliabilityScores.reliabilityScore))
     .limit(limit);
 
@@ -230,7 +231,8 @@ export async function getGlobalLeaderboard(limit: number = 50) {
     })
     .from(userReliabilityScores)
     .innerJoin(users, eq(userReliabilityScores.userId, users.id))
-    .leftJoin(schools, eq(users.schoolId, schools.id))
+    .leftJoin(children, eq(children.parentId, users.id))
+    .leftJoin(schools, eq(children.schoolId, schools.id))
     .orderBy(desc(userReliabilityScores.reliabilityScore))
     .limit(limit);
 
@@ -255,7 +257,8 @@ export async function getTopSwappersLeaderboard(limit: number = 50) {
     })
     .from(userReliabilityScores)
     .innerJoin(users, eq(userReliabilityScores.userId, users.id))
-    .leftJoin(schools, eq(users.schoolId, schools.id))
+    .leftJoin(children, eq(children.parentId, users.id))
+    .leftJoin(schools, eq(children.schoolId, schools.id))
     .where(gte(userReliabilityScores.totalSwapsCompleted, 1))
     .orderBy(desc(userReliabilityScores.totalSwapsCompleted))
     .limit(limit);
@@ -311,7 +314,15 @@ export async function getUserRank(userId: string): Promise<{
 
   // Get school rank
   let schoolRank: number | null = null;
-  if (user.schoolId) {
+
+  // Get user's child to find their school
+  const [child] = await db
+    .select()
+    .from(children)
+    .where(eq(children.parentId, userId))
+    .limit(1);
+
+  if (child && child.schoolId) {
     const schoolUsers = await db
       .select({
         score: userReliabilityScores,
@@ -319,9 +330,10 @@ export async function getUserRank(userId: string): Promise<{
       })
       .from(userReliabilityScores)
       .innerJoin(users, eq(userReliabilityScores.userId, users.id))
+      .innerJoin(children, eq(children.parentId, users.id))
       .where(
         and(
-          eq(users.schoolId, user.schoolId),
+          eq(children.schoolId, child.schoolId),
           gte(userReliabilityScores.reliabilityScore, reliabilityScore.toString())
         )
       );

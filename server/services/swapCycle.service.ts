@@ -14,6 +14,7 @@ import { db } from "../db";
 import {
   bookListings,
   users,
+  children,
   schools,
   swapCycles,
   cycleParticipants,
@@ -130,7 +131,8 @@ export class CycleDetector {
       })
       .from(bookListings)
       .innerJoin(users, eq(bookListings.sellerId, users.id))
-      .leftJoin(schools, eq(users.schoolId, schools.id))
+      .leftJoin(children, eq(children.parentId, users.id))
+      .leftJoin(schools, eq(children.schoolId, schools.id))
       .where(
         and(
           eq(bookListings.listingType, "swap"),
