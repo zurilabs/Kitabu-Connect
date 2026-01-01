@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Generate Favicon</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        #canvas {
+            border: 2px solid #ccc;
+            background: white;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Kitabu Favicon Generator</h2>
+    <canvas id="canvas" width="512" height="512"></canvas>
+    <div class="controls">
+        <button onclick="downloadPNG()">Download PNG</button>
+        <p>Right-click the canvas and "Save Image As..." to save as PNG</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Teal color from the app
+        const tealColor = 'hsl(175, 84%, 32%)'; // #0d9488
+
+        // Clear canvas
+        ctx.clearRect(0, 0, 512, 512);
+
+        // Draw background with rounded corners
+        ctx.fillStyle = tealColor;
+        roundRect(ctx, 0, 0, 512, 512, 80);
+        ctx.fill();
+
+        // Draw book icon
+        ctx.strokeStyle = '#ffffff';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.lineWidth = 20;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Save context
+        ctx.save();
+        ctx.translate(256, 256);
+
+        // Left page
+        ctx.beginPath();
+        ctx.moveTo(-140, -80);
+        ctx.quadraticCurveTo(-100, -90, -60, -80);
+        ctx.quadraticCurveTo(-20, -70, 0, -60);
+        ctx.lineTo(0, 80);
+        ctx.quadraticCurveTo(-20, 70, -60, 80);
+        ctx.quadraticCurveTo(-100, 90, -140, 80);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Right page
+        ctx.beginPath();
+        ctx.moveTo(140, -80);
+        ctx.quadraticCurveTo(100, -90, 60, -80);
+        ctx.quadraticCurveTo(20, -70, 0, -60);
+        ctx.lineTo(0, 80);
+        ctx.quadraticCurveTo(20, 70, 60, 80);
+        ctx.quadraticCurveTo(100, 90, 140, 80);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Center binding
+        ctx.beginPath();
+        ctx.lineWidth = 28;
+        ctx.moveTo(0, -60);
+        ctx.lineTo(0, 80);
+        ctx.stroke();
+
+        // Page lines (left)
+        ctx.strokeStyle = '#14b8a6';
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 6;
+
+        [-40, -10, 20, 50].forEach(y => {
+            ctx.beginPath();
+            ctx.moveTo(-110, y);
+            ctx.lineTo(-30, y);
+            ctx.stroke();
+        });
+
+        // Page lines (right)
+        [-40, -10, 20, 50].forEach(y => {
+            ctx.beginPath();
+            ctx.moveTo(30, y);
+            ctx.lineTo(110, y);
+            ctx.stroke();
+        });
+
+        ctx.restore();
+
+        // Helper function for rounded rectangle
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+
+        function downloadPNG() {
+            const link = document.createElement('a');
+            link.download = 'favicon.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+    </script>
+</body>
+</html>

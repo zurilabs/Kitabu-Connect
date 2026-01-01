@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="hsl(175, 84%, 32%)"/>
+
+  <!-- BookOpen icon - lucide-react style -->
+  <g transform="translate(256, 256)" stroke="#ffffff" stroke-width="24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Left page -->
+    <path d="M -140 -80 Q -100 -90 -60 -80 Q -20 -70 0 -60 L 0 80 Q -20 70 -60 80 Q -100 90 -140 80 Z" fill="#ffffff" fill-opacity="0.95" stroke-width="20"/>
+
+    <!-- Right page -->
+    <path d="M 140 -80 Q 100 -90 60 -80 Q 20 -70 0 -60 L 0 80 Q 20 70 60 80 Q 100 90 140 80 Z" fill="#ffffff" fill-opacity="0.95" stroke-width="20"/>
+
+    <!-- Center binding/fold -->
+    <path d="M 0 -60 L 0 80" stroke="#ffffff" stroke-width="28"/>
+
+    <!-- Page lines on left -->
+    <g stroke="#14b8a6" stroke-width="6" opacity="0.4">
+      <path d="M -110 -40 L -30 -40"/>
+      <path d="M -110 -10 L -30 -10"/>
+      <path d="M -110 20 L -30 20"/>
+      <path d="M -110 50 L -30 50"/>
+    </g>
+
+    <!-- Page lines on right -->
+    <g stroke="#14b8a6" stroke-width="6" opacity="0.4">
+      <path d="M 30 -40 L 110 -40"/>
+      <path d="M 30 -10 L 110 -10"/>
+      <path d="M 30 20 L 110 20"/>
+      <path d="M 30 50 L 110 50"/>
+    </g>
+  </g>
+</svg>
