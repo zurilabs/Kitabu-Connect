@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>🎨 Generate PWA Icons for Kitabu Connect</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 16px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 18px;
+        }
+
+        .controls {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            margin-bottom: 32px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        button {
+            background: #0d9488;
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 12px;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #0f766e;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        button.secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .icons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 32px;
+        }
+
+        .icon-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        canvas {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            background: white;
+            width: 100%;
+            height: auto;
+            max-width: 256px;
+            display: block;
+            margin: 0 auto 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .icon-name {
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .icon-size {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .icon-type {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #f0fdfa;
+            color: #0d9488;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .instructions {
+            background: #fef3c7;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 32px;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .instructions h2 {
+            color: #92400e;
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+
+        .instructions ol {
+            color: #78350f;
+            line-height: 1.8;
+            margin-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+        }
+
+        .instructions code {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .success {
+            background: #d1fae5;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 24px;
+            border-left: 4px solid #10b981;
+            color: #065f46;
+            font-weight: 500;
+            display: none;
+        }
+
+        .success.show {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 24px;
+            }
+
+            .icons-grid {
+                grid-template-columns: 1fr;
+            }
+
+            button {
+                display: block;
+                width: 100%;
+                margin: 8px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 PWA Icon Generator</h1>
+        <p class="subtitle">Generate perfect icons for Kitabu Connect</p>
+
+        <div class="instructions">
+            <h2>📋 Instructions</h2>
+            <ol>
+                <li>Click <strong>"Generate All Icons"</strong> button below</li>
+                <li>Wait for all 4 icons to appear</li>
+                <li>Click <strong>"Download All Icons"</strong></li>
+                <li>Save the downloaded files to <code>client/public/</code> folder</li>
+                <li>Rebuild the app: <code>npm run build</code></li>
+                <li>Done! Your PWA icons now match the favicon ✅</li>
+            </ol>
+        </div>
+
+        <div class="controls">
+            <button onclick="generateAllIcons()">✨ Generate All Icons</button>
+            <button onclick="downloadAll()">⬇️ Download All Icons</button>
+            <button class="secondary" onclick="clearAll()">🗑️ Clear</button>
+        </div>
+
+        <div id="iconsContainer" class="icons-grid"></div>
+
+        <div id="success" class="success">
+            ✅ <strong>Success!</strong> All icons generated. Click "Download All Icons" to save them.
+        </div>
+    </div>
+
+    <script>
+        const tealColor = '#0d9488';
+
+        const icons = [
+            { size: 192, filename: 'icon-192.png', type: 'Standard', maskable: false },
+            { size: 512, filename: 'icon-512.png', type: 'Standard', maskable: false },
+            { size: 192, filename: 'icon-maskable-192.png', type: 'Maskable', maskable: true },
+            { size: 512, filename: 'icon-maskable-512.png', type: 'Maskable', maskable: true }
+        ];
+
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+
+        function drawIcon(canvas, size, maskable = false) {
+            const ctx = canvas.getContext('2d');
+            canvas.width = size;
+            canvas.height = size;
+
+            const safeArea = maskable ? size * 0.1 : 0;
+            const iconSize = size - (safeArea * 2);
+            const scale = iconSize / 512;
+
+            ctx.clearRect(0, 0, size, size);
+
+            // Background
+            if (maskable) {
+                ctx.fillStyle = tealColor;
+                ctx.fillRect(0, 0, size, size);
+            } else {
+                ctx.fillStyle = tealColor;
+                roundRect(ctx, safeArea, safeArea, iconSize, iconSize, 80 * scale);
+                ctx.fill();
+            }
+
+            ctx.save();
+            ctx.translate(size / 2, size / 2);
+            ctx.scale(scale, scale);
+
+            // Book icon
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.lineWidth = 20;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // Left page
+            ctx.beginPath();
+            ctx.moveTo(-140, -80);
+            ctx.quadraticCurveTo(-100, -90, -60, -80);
+            ctx.quadraticCurveTo(-20, -70, 0, -60);
+            ctx.lineTo(0, 80);
+            ctx.quadraticCurveTo(-20, 70, -60, 80);
+            ctx.quadraticCurveTo(-100, 90, -140, 80);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Right page
+            ctx.beginPath();
+            ctx.moveTo(140, -80);
+            ctx.quadraticCurveTo(100, -90, 60, -80);
+            ctx.quadraticCurveTo(20, -70, 0, -60);
+            ctx.lineTo(0, 80);
+            ctx.quadraticCurveTo(20, 70, 60, 80);
+            ctx.quadraticCurveTo(100, 90, 140, 80);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Center binding
+            ctx.beginPath();
+            ctx.lineWidth = 28;
+            ctx.moveTo(0, -60);
+            ctx.lineTo(0, 80);
+            ctx.stroke();
+
+            // Page lines
+            ctx.strokeStyle = '#14b8a6';
+            ctx.globalAlpha = 0.4;
+            ctx.lineWidth = 6;
+
+            [-40, -10, 20, 50].forEach(y => {
+                ctx.beginPath();
+                ctx.moveTo(-110, y);
+                ctx.lineTo(-30, y);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(30, y);
+                ctx.lineTo(110, y);
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        function generateAllIcons() {
+            const container = document.getElementById('iconsContainer');
+            container.innerHTML = '';
+
+            icons.forEach(({ size, filename, type, maskable }) => {
+                const card = document.createElement('div');
+                card.className = 'icon-card';
+
+                const canvas = document.createElement('canvas');
+                canvas.id = filename;
+                drawIcon(canvas, size, maskable);
+
+                const name = document.createElement('div');
+                name.className = 'icon-name';
+                name.textContent = filename;
+
+                const sizeLabel = document.createElement('div');
+                sizeLabel.className = 'icon-size';
+                sizeLabel.textContent = `${size} × ${size} pixels`;
+
+                const typeLabel = document.createElement('div');
+                typeLabel.className = 'icon-type';
+                typeLabel.textContent = type;
+
+                card.appendChild(canvas);
+                card.appendChild(name);
+                card.appendChild(sizeLabel);
+                card.appendChild(typeLabel);
+                container.appendChild(card);
+            });
+
+            document.getElementById('success').classList.add('show');
+        }
+
+        function downloadAll() {
+            icons.forEach(({ filename }) => {
+                const canvas = document.getElementById(filename);
+                if (canvas) {
+                    const link = document.createElement('a');
+                    link.download = filename;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                }
+            });
+
+            alert('✅ All icons downloaded!\n\nNext steps:\n1. Move the files to client/public/\n2. Rebuild: npm run build\n3. Deploy!');
+        }
+
+        function clearAll() {
+            document.getElementById('iconsContainer').innerHTML = '';
+            document.getElementById('success').classList.remove('show');
+        }
+
+        // Auto-generate on load
+        window.addEventListener('load', () => {
+            setTimeout(generateAllIcons, 500);
+        });
+    </script>
+</body>
+</html>
