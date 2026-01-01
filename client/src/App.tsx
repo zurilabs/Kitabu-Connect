@@ -26,6 +26,7 @@ import Messages from "@/pages/messages";
 import Conversation from "@/pages/conversation";
 import Notifications from "@/pages/notifications";
 import { Navbar } from "@/components/layout/Navbar";
+import { PWAInstallPrompt } from "@/components/ui/pwa-install-prompt";
 
 import Profile from "@/pages/profile";
 
@@ -73,6 +74,7 @@ function App() {
       <ActiveChildProvider>
         <TooltipProvider>
           <Toaster />
+          <PWAInstallPrompt />
           <Router />
         </TooltipProvider>
       </ActiveChildProvider>

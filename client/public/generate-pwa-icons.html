@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Generate PWA Icons</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            font-family: system-ui, sans-serif;
+        }
+        .canvas-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        .icon-preview {
+            text-align: center;
+        }
+        canvas {
+            border: 2px solid #ccc;
+            background: white;
+            display: block;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #0d9488;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0f766e;
+        }
+        h2 {
+            color: #0d9488;
+        }
+        .instructions {
+            background: #fef3c7;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Kitabu Connect - PWA Icon Generator</h2>
+
+    <div class="controls">
+        <button onclick="generateAllIcons()">Generate All Icons</button>
+        <button onclick="downloadAll()">Download All</button>
+    </div>
+
+    <div class="canvas-container" id="canvasContainer"></div>
+
+    <div class="instructions">
+        <strong>Instructions:</strong><br>
+        1. Click "Generate All Icons" to create all required PWA icons<br>
+        2. Right-click each canvas and "Save Image As..." with the filename shown below it<br>
+        3. Or click "Download All" to download them automatically<br>
+        4. Save all icons to the <code>client/public/</code> folder
+    </div>
+
+    <script>
+        const tealColor = '#0d9488';
+        const sizes = [
+            { size: 192, name: 'icon-192.png', maskable: false },
+            { size: 512, name: 'icon-512.png', maskable: false },
+            { size: 192, name: 'icon-maskable-192.png', maskable: true },
+            { size: 512, name: 'icon-maskable-512.png', maskable: true }
+        ];
+
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+
+        function drawIcon(canvas, size, maskable = false) {
+            const ctx = canvas.getContext('2d');
+            canvas.width = size;
+            canvas.height = size;
+
+            // For maskable icons, add safe area padding (10%)
+            const safeArea = maskable ? size * 0.1 : 0;
+            const iconSize = size - (safeArea * 2);
+            const scale = iconSize / 512;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+
+            // Background
+            if (maskable) {
+                // Maskable icons need full bleed background
+                ctx.fillStyle = tealColor;
+                ctx.fillRect(0, 0, size, size);
+            } else {
+                // Regular icons with rounded corners
+                ctx.fillStyle = tealColor;
+                roundRect(ctx, safeArea, safeArea, iconSize, iconSize, 80 * scale);
+                ctx.fill();
+            }
+
+            // Save context and translate to center
+            ctx.save();
+            ctx.translate(size / 2, size / 2);
+            ctx.scale(scale, scale);
+
+            // Draw book icon
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.lineWidth = 20;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // Left page
+            ctx.beginPath();
+            ctx.moveTo(-140, -80);
+            ctx.quadraticCurveTo(-100, -90, -60, -80);
+            ctx.quadraticCurveTo(-20, -70, 0, -60);
+            ctx.lineTo(0, 80);
+            ctx.quadraticCurveTo(-20, 70, -60, 80);
+            ctx.quadraticCurveTo(-100, 90, -140, 80);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Right page
+            ctx.beginPath();
+            ctx.moveTo(140, -80);
+            ctx.quadraticCurveTo(100, -90, 60, -80);
+            ctx.quadraticCurveTo(20, -70, 0, -60);
+            ctx.lineTo(0, 80);
+            ctx.quadraticCurveTo(20, 70, 60, 80);
+            ctx.quadraticCurveTo(100, 90, 140, 80);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Center binding
+            ctx.beginPath();
+            ctx.lineWidth = 28;
+            ctx.moveTo(0, -60);
+            ctx.lineTo(0, 80);
+            ctx.stroke();
+
+            // Page lines (left)
+            ctx.strokeStyle = '#14b8a6';
+            ctx.globalAlpha = 0.4;
+            ctx.lineWidth = 6;
+
+            [-40, -10, 20, 50].forEach(y => {
+                ctx.beginPath();
+                ctx.moveTo(-110, y);
+                ctx.lineTo(-30, y);
+                ctx.stroke();
+            });
+
+            // Page lines (right)
+            [-40, -10, 20, 50].forEach(y => {
+                ctx.beginPath();
+                ctx.moveTo(30, y);
+                ctx.lineTo(110, y);
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        function generateAllIcons() {
+            const container = document.getElementById('canvasContainer');
+            container.innerHTML = '';
+
+            sizes.forEach(({ size, name, maskable }) => {
+                const div = document.createElement('div');
+                div.className = 'icon-preview';
+
+                const canvas = document.createElement('canvas');
+                canvas.id = name;
+                drawIcon(canvas, size, maskable);
+
+                const label = document.createElement('p');
+                label.textContent = `${name} (${size}x${size})${maskable ? ' - Maskable' : ''}`;
+                label.style.margin = '10px 0 0 0';
+                label.style.fontWeight = 'bold';
+
+                div.appendChild(canvas);
+                div.appendChild(label);
+                container.appendChild(div);
+            });
+        }
+
+        function downloadAll() {
+            sizes.forEach(({ name }) => {
+                const canvas = document.getElementById(name);
+                if (canvas) {
+                    const link = document.createElement('a');
+                    link.download = name;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                }
+            });
+        }
+
+        // Generate icons on load
+        window.addEventListener('load', generateAllIcons);
+    </script>
+</body>
+</html>
