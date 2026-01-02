@@ -5,25 +5,51 @@ import { eq } from "drizzle-orm";
 export class OnboardingService {
   async completeOnboarding(userId: string, data: CompleteOnboardingInput): Promise<{ success: boolean; user?: User; message?: string }> {
     try {
-      // Determine role based on email
-      const role = data.email.endsWith("@kitabu.admin") ? "ADMIN" : "PARENT";
+      console.log('[OnboardingService] completeOnboarding called with data:', {
+        userId,
+        fullName: data.fullName,
+        phoneNumber: data.phoneNumber,
+        childrenCount: data.children?.length || 0,
+        children: data.children,
+      });
+
+      // Get user's current email to check for admin role
+      const [currentUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (!currentUser) {
+        return {
+          success: false,
+          message: "User not found",
+        };
+      }
+
+      // Determine role based on email (user already has email from login)
+      const role = currentUser.email.endsWith("@kitabu.admin") ? "ADMIN" : "PARENT";
 
       // Update user with onboarding data (without school fields)
+      const updateData: any = {
+        fullName: data.fullName,
+        role,
+        latitude: data.latitude !== null && data.latitude !== undefined ? data.latitude.toString() : null,
+        longitude: data.longitude !== null && data.longitude !== undefined ? data.longitude.toString() : null,
+        onboardingCompleted: true,
+        updatedAt: new Date(),
+      };
+
+      // Only update phoneNumber if provided
+      if (data.phoneNumber) {
+        updateData.phoneNumber = data.phoneNumber;
+      }
+
       await db
         .update(users)
-        .set({
-          fullName: data.fullName,
-          email: data.email,
-          role,
-          latitude: data.latitude !== null && data.latitude !== undefined ? data.latitude.toString() : null,
-          longitude: data.longitude !== null && data.longitude !== undefined ? data.longitude.toString() : null,
-          onboardingCompleted: true,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(users.id, userId));
+
+      console.log('[OnboardingService] User updated successfully');
 
       // Create child records if provided
       if (data.children && data.children.length > 0) {
+        console.log('[OnboardingService] Creating child records:', data.children.length);
         // Get current max displayOrder
         const existingChildren = await db
           .select()
@@ -37,6 +63,15 @@ export class OnboardingService {
 
         for (const child of data.children) {
           maxOrder += 1;
+          console.log('[OnboardingService] Inserting child:', {
+            parentId: userId,
+            name: child.name || null,
+            grade: child.grade,
+            schoolId: child.schoolId,
+            schoolName: child.schoolName,
+            displayOrder: maxOrder,
+          });
+
           await db.insert(children).values({
             parentId: userId,
             name: child.name || null,
@@ -45,7 +80,13 @@ export class OnboardingService {
             schoolName: child.schoolName,
             displayOrder: maxOrder,
           });
+
+          console.log('[OnboardingService] Child inserted successfully');
         }
+
+        console.log(`[OnboardingService] All ${data.children.length} children created successfully`);
+      } else {
+        console.log('[OnboardingService] No children to create');
       }
 
       // Fetch updated user

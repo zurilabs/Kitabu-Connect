@@ -33,37 +33,37 @@ async function fetchCurrentUser(): Promise<User | null> {
   return data.user;
 }
 
-async function sendOTP(phoneNumber: string): Promise<SendOTPResponse> {
+async function sendOTP(email: string): Promise<SendOTPResponse> {
   const response = await fetch("/api/auth/send-otp", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     credentials: "include",
-    body: JSON.stringify({ phoneNumber }),
+    body: JSON.stringify({ email }),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.message || "Failed to send OTP");
+    throw new Error(error.message || "Failed to send verification code");
   }
 
   return response.json();
 }
 
-async function verifyOTP(phoneNumber: string, code: string): Promise<LoginResponse> {
+async function verifyOTP(email: string, code: string): Promise<LoginResponse> {
   const response = await fetch("/api/auth/verify-otp", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     credentials: "include",
-    body: JSON.stringify({ phoneNumber, code }),
+    body: JSON.stringify({ email, code }),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.message || "Failed to verify OTP");
+    throw new Error(error.message || "Failed to verify code");
   }
 
   return response.json();
@@ -102,8 +102,8 @@ export function useAuth() {
 
   // Verify OTP mutation
   const verifyOTPMutation = useMutation({
-    mutationFn: ({ phoneNumber, code }: { phoneNumber: string; code: string }) =>
-      verifyOTP(phoneNumber, code),
+    mutationFn: ({ email, code }: { email: string; code: string }) =>
+      verifyOTP(email, code),
     onSuccess: (data) => {
       // Update user in cache
       queryClient.setQueryData(["auth", "me"], data.user);

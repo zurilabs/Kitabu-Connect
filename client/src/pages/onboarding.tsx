@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { SchoolCombobox } from "@/components/ui/school-combobox";
-import { CheckCircle2, School, ArrowRight, ShieldCheck, Mail, Lock, Users, X } from "lucide-react";
+import { CheckCircle2, School, ArrowRight, ShieldCheck, Phone, Lock, Users, X } from "lucide-react";
 import onboardingHero from "@assets/generated_images/friendly_parents_talking_at_school_gate.png";
 
 const GRADES = [
@@ -31,7 +31,7 @@ export default function Onboarding() {
   // Form data
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   // Children data
   const [childrenCount, setChildrenCount] = useState<number | null>(null);
@@ -53,7 +53,7 @@ export default function Onboarding() {
           credentials: "include",
           body: JSON.stringify({
             fullName: `${firstName} ${lastName}`,
-            email,
+            phoneNumber,
             children: children.map(child => ({
               name: child.name || null,
               grade: child.grade,
@@ -104,7 +104,7 @@ export default function Onboarding() {
         credentials: "include",
         body: JSON.stringify({
           fullName: `${firstName} ${lastName}`,
-          email,
+          phoneNumber,
           children: [],
         }),
       });
@@ -201,18 +201,21 @@ export default function Onboarding() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
+                    <Label htmlFor="phoneNumber">Phone Number</Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
+                      <Phone className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
                       <Input
-                        id="email"
-                        type="email"
-                        placeholder="jane@example.com"
+                        id="phoneNumber"
+                        type="tel"
+                        placeholder="0712 345 678 or +254712345678"
                         className="pl-10 h-12"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
                       />
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      For SMS notifications about your transactions
+                    </p>
                   </div>
                 </div>
               )}
@@ -419,7 +422,11 @@ export default function Onboarding() {
               <Button
                 onClick={handleNext}
                 className="w-full h-12 bg-primary hover:bg-primary/90"
-                disabled={loading || (step === 2 && childrenCount !== null && children.some(c => !c.grade || !c.schoolId))}
+                disabled={
+                  loading ||
+                  (step === 1 && (!firstName.trim() || !lastName.trim() || !phoneNumber.trim())) ||
+                  (step === 2 && childrenCount !== null && children.some(c => !c.grade || !c.schoolId))
+                }
               >
                 {loading ? "Joining..." : step === totalSteps ? "Join" : "Continue"}
                 {!loading && step !== totalSteps && <ArrowRight className="ml-2 w-4 h-4" />}

@@ -26,6 +26,10 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Initialize Passport for OAuth
+import { passport } from "./lib/passport";
+app.use(passport.initialize());
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",

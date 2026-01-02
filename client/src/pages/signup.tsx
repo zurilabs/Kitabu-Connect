@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { School, Phone, KeyRound, ArrowRight } from "lucide-react";
+import { School, Mail, KeyRound, ArrowRight, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,8 +15,8 @@ export default function Signup() {
   const { toast } = useToast();
   const { user, isLoading, sendOTP, verifyOTP, isSendingOTP, isVerifyingOTP } = useAuth();
 
-  const [step, setStep] = useState<"phone" | "otp">("phone");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
 
@@ -34,38 +34,27 @@ export default function Signup() {
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!phoneNumber.trim()) {
+    if (!email.trim()) {
       toast({
-        title: "Phone number required",
-        description: "Please enter your phone number",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate Kenyan phone number format
-    const kenyanPhoneRegex = /^(\+254|254|0)?[17]\d{8}$/;
-    if (!kenyanPhoneRegex.test(phoneNumber.replace(/\s/g, ""))) {
-      toast({
-        title: "Invalid phone number",
-        description: "Please enter a valid Kenyan phone number (e.g., 0712345678 or +254712345678)",
+        title: "Email required",
+        description: "Please enter your email address",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      const result = await sendOTP(phoneNumber);
+      const result = await sendOTP(email);
       setOtpMessage(result.message);
       setStep("otp");
       toast({
-        title: "OTP Sent",
+        title: "Verification code sent",
         description: result.message,
       });
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send OTP",
+        description: error instanceof Error ? error.message : "Failed to send verification code",
         variant: "destructive",
       });
     }
@@ -76,15 +65,15 @@ export default function Signup() {
 
     if (!otpCode.trim() || otpCode.length !== 6) {
       toast({
-        title: "Invalid OTP",
-        description: "Please enter the 6-digit code",
+        title: "Invalid code",
+        description: "Please enter the 6-digit verification code",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      const result = await verifyOTP({ phoneNumber, code: otpCode });
+      const result = await verifyOTP({ email, code: otpCode });
 
       toast({
         title: "Welcome to Kitabu Connect!",
@@ -100,15 +89,19 @@ export default function Signup() {
     } catch (error) {
       toast({
         title: "Verification failed",
-        description: error instanceof Error ? error.message : "Invalid OTP code",
+        description: error instanceof Error ? error.message : "Invalid verification code",
         variant: "destructive",
       });
     }
   };
 
-  const handleBackToPhone = () => {
-    setStep("phone");
+  const handleBackToEmail = () => {
+    setStep("email");
     setOtpCode("");
+  };
+
+  const handleGoogleSignup = () => {
+    window.location.href = "/api/auth/google";
   };
 
   if (isLoading) {
@@ -156,7 +149,7 @@ export default function Signup() {
                   <span className="text-sm font-bold">1</span>
                 </div>
                 <div>
-                  <h3 className="font-semibold">Enter your phone number</h3>
+                  <h3 className="font-semibold">Enter your email</h3>
                   <p className="text-sm text-white/80">We'll send you a verification code</p>
                 </div>
               </div>
@@ -184,51 +177,59 @@ export default function Signup() {
       </div>
 
       {/* Right Panel - Signup Form */}
-      <div className="flex flex-col justify-center items-center p-6 lg:p-12 bg-background">
+      <div className="flex flex-col justify-center items-center p-6 lg:p-12 bg-background relative">
+        {/* Back to Home Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setLocation("/")}
+          className="absolute top-4 left-4 gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Home
+        </Button>
+
         <div className="w-full max-w-md space-y-8">
           <div className="space-y-2 text-center lg:text-left">
             <h2 className="text-3xl font-display font-bold">Create Parent Account</h2>
             <p className="text-muted-foreground">
-              {step === "phone"
+              {step === "email"
                 ? "Join the trusted community of Kenyan parents"
                 : "Enter the verification code we sent you"}
             </p>
           </div>
 
-          {step === "phone" ? (
+          {step === "email" ? (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Phone className="w-5 h-5" />
-                  Phone Number
+                  <Mail className="w-5 h-5" />
+                  Email Address
                 </CardTitle>
                 <CardDescription>
-                  We'll send you a 6-digit verification code via SMS
+                  We'll send you a 6-digit verification code
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSendOTP} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="phoneNumber">Phone Number</Label>
+                    <Label htmlFor="email">Email</Label>
                     <Input
-                      id="phoneNumber"
-                      type="tel"
-                      placeholder="0712 345 678 or +254712345678"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       required
                       autoFocus
                       className="text-lg"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Enter a valid Kenyan phone number (Safaricom, Airtel, Telkom)
-                    </p>
                   </div>
 
                   <Alert>
                     <AlertDescription className="text-sm">
                       By signing up, you agree to connect with verified parents in your school's community.
-                      Your phone number will be kept private.
+                      Your email will be kept private.
                     </AlertDescription>
                   </Alert>
 
@@ -236,7 +237,7 @@ export default function Signup() {
                     type="submit"
                     className="w-full"
                     size="lg"
-                    disabled={isSendingOTP || !phoneNumber.trim()}
+                    disabled={isSendingOTP || !email.trim()}
                   >
                     {isSendingOTP ? "Sending code..." : (
                       <>
@@ -244,6 +245,45 @@ export default function Signup() {
                         <ArrowRight className="ml-2 w-4 h-4" />
                       </>
                     )}
+                  </Button>
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Or continue with
+                      </span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    size="lg"
+                    onClick={handleGoogleSignup}
+                  >
+                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                      <path
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        fill="#4285F4"
+                      />
+                      <path
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        fill="#34A853"
+                      />
+                      <path
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        fill="#FBBC05"
+                      />
+                      <path
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        fill="#EA4335"
+                      />
+                    </svg>
+                    Sign up with Google
                   </Button>
 
                   <div className="text-center pt-4">
@@ -269,7 +309,7 @@ export default function Signup() {
                   Verification Code
                 </CardTitle>
                 <CardDescription>
-                  {otpMessage || `Code sent to ${phoneNumber}`}
+                  {otpMessage || `Code sent to ${email}`}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -293,7 +333,7 @@ export default function Signup() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={handleBackToPhone}
+                      onClick={handleBackToEmail}
                       className="flex-1"
                       disabled={isVerifyingOTP}
                     >
