@@ -136,15 +136,37 @@ function generatePhoneNumber(): string {
   return prefix + suffix;
 }
 
+// Track generated emails to ensure uniqueness
+const generatedEmails = new Set<string>();
+
 function generateEmail(firstName: string, lastName: string): string {
   const domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com"];
-  const variations = [
-    `${firstName.toLowerCase()}.${lastName.toLowerCase()}`,
-    `${firstName.toLowerCase()}${lastName.toLowerCase()}`,
-    `${firstName.toLowerCase()}${randomInt(1, 99)}`,
-    `${firstName.toLowerCase()}_${lastName.toLowerCase()}`,
-  ];
-  return `${randomElement(variations)}@${randomElement(domains)}`;
+  let email: string;
+  let attempts = 0;
+  const maxAttempts = 100;
+
+  do {
+    const variations = [
+      `${firstName.toLowerCase()}.${lastName.toLowerCase()}`,
+      `${firstName.toLowerCase()}${lastName.toLowerCase()}`,
+      `${firstName.toLowerCase()}${randomInt(1, 999)}`,
+      `${firstName.toLowerCase()}_${lastName.toLowerCase()}`,
+      `${firstName.toLowerCase()}.${lastName.toLowerCase()}${randomInt(1, 999)}`,
+      `${firstName.toLowerCase()}${randomInt(100, 9999)}`,
+    ];
+
+    email = `${randomElement(variations)}@${randomElement(domains)}`;
+    attempts++;
+
+    // If we've tried too many times, add a unique suffix
+    if (attempts >= maxAttempts) {
+      email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${Date.now()}.${randomInt(1000, 9999)}@${randomElement(domains)}`;
+      break;
+    }
+  } while (generatedEmails.has(email));
+
+  generatedEmails.add(email);
+  return email;
 }
 
 // Generate coordinates near a school (within ~5-10km radius)
@@ -197,6 +219,9 @@ async function main() {
   console.log("🏢 Creating platform account...");
   const PLATFORM_USER_ID = "56f3a7d4-8e21-4b1a-9c65-2f8471e039b2";
   const PLATFORM_EMAIL = "platform@kitabuconnect.com";
+
+  // Add platform email to generated emails set to avoid collisions
+  generatedEmails.add(PLATFORM_EMAIL);
 
   // Check if platform account already exists
   const [existingPlatform] = await db

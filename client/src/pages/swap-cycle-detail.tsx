@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, MessageSquare } from "lucide-react";
+import { Loader2, ArrowLeft, MessageSquare, AlertTriangle } from "lucide-react";
 import CycleConfirmationFlow from "@/components/cycles/CycleConfirmationFlow";
 import CycleProgress from "@/components/cycles/CycleProgress";
 import DropOffTracking from "@/components/cycles/DropOffTracking";
+import FileDisputeDialog from "@/components/disputes/FileDisputeDialog";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface CycleParticipant {
@@ -205,6 +206,32 @@ export default function SwapCycleDetail() {
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Group Chat (Coming Soon)
                   </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Dispute Card */}
+          {(cycle.status === "active" || cycle.status === "confirmed") && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center space-y-3">
+                  <AlertTriangle className="h-12 w-12 mx-auto text-amber-500" />
+                  <div>
+                    <h3 className="font-semibold mb-1">Having Issues?</h3>
+                    <p className="text-sm text-muted-foreground">
+                      File a dispute if there are problems with this swap cycle
+                    </p>
+                  </div>
+                  <FileDisputeDialog
+                    cycleId={cycle.id}
+                    triggerButton={
+                      <Button className="w-full" variant="outline">
+                        <AlertTriangle className="h-4 w-4 mr-2" />
+                        File a Dispute
+                      </Button>
+                    }
+                  />
                 </div>
               </CardContent>
             </Card>

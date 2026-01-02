@@ -25,6 +25,8 @@ import SwapConversations from "@/pages/conversations";
 import Messages from "@/pages/messages";
 import Conversation from "@/pages/conversation";
 import Notifications from "@/pages/notifications";
+import DisputesPage from "@/pages/disputes";
+import DisputeDetail from "@/pages/dispute-detail";
 import { Navbar } from "@/components/layout/Navbar";
 import { PWAInstallPrompt } from "@/components/ui/pwa-install-prompt";
 
@@ -55,6 +57,8 @@ function Router() {
           <Route path="/conversations" component={Messages} />
           <Route path="/swap-conversations" component={SwapConversations} />
           <Route path="/notifications" component={Notifications} />
+          <Route path="/disputes/:id" component={DisputeDetail} />
+          <Route path="/disputes" component={DisputesPage} />
           <Route path="/" component={Home} />
           <Route path="/marketplace" component={Marketplace} />
           <Route path="/favorites" component={Favorites} />

@@ -5,6 +5,8 @@ import { authService } from "./services/auth.service";
 import { onboardingService } from "./services/onboarding.service";
 import { bookListingService } from "./services/bookListing.service";
 import { authenticateToken, checkOnboardingStatus } from "./middleware/auth.middleware";
+import { passport, isGoogleConfigured } from "./lib/passport";
+import { generateToken } from "./lib/jwt";
 import {
   sendOTPSchema,
   verifyOTPSchema,
@@ -31,6 +33,7 @@ import notificationRoutes from "./routes/notifications";
 import cyclesRoutes from "./routes/cycles";
 import gamificationRoutes from "./routes/gamification";
 import childrenRoutes from "./routes/children";
+import disputeRoutes from "./routes/disputes";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -112,6 +115,11 @@ export async function registerRoutes(
   // CHILDREN ROUTES
   // ============================================
   app.use("/api/children", childrenRoutes);
+
+  // ============================================
+  // DISPUTES ROUTES
+  // ============================================
+  app.use("/api/disputes", disputeRoutes);
 
   // ============================================
   // PAYSTACK WEBHOOK
@@ -244,8 +252,6 @@ export async function registerRoutes(
 
   // Google OAuth - Initiate authentication
   app.get("/api/auth/google", (req, res, next) => {
-    const { passport, isGoogleConfigured } = require("./lib/passport");
-
     if (!isGoogleConfigured) {
       return res.status(503).json({
         success: false,
@@ -260,8 +266,6 @@ export async function registerRoutes(
 
   // Google OAuth - Callback
   app.get("/api/auth/google/callback", (req, res, next) => {
-    const { passport } = require("./lib/passport");
-
     passport.authenticate("google", {
       session: false,
       failureRedirect: "/login?error=google_auth_failed"
@@ -273,7 +277,6 @@ export async function registerRoutes(
 
       try {
         // Generate JWT token for the authenticated user
-        const { generateToken } = require("./lib/jwt");
         const token = await generateToken(user);
 
         // Set JWT token in httpOnly cookie
@@ -894,13 +897,17 @@ export async function registerRoutes(
 
       // Fetch seller schools for personalization (batch query)
       const sellerIds = [...new Set(candidatePool.map(({ seller }) => seller.id))];
-      const sellerSchools = await db
-        .select({
-          parentId: children.parentId,
-          schoolId: children.schoolId,
-        })
-        .from(children)
-        .where(sql`${children.parentId} IN (${sql.join(sellerIds.map(id => sql`${id}`), sql`, `)})`);
+
+      // Only query seller schools if we have sellers
+      const sellerSchools = sellerIds.length > 0
+        ? await db
+            .select({
+              parentId: children.parentId,
+              schoolId: children.schoolId,
+            })
+            .from(children)
+            .where(sql`${children.parentId} IN (${sql.join(sellerIds.map(id => sql`${id}`), sql`, `)})`)
+        : [];
 
       // Create a map of sellerId -> schoolId (use first child's school)
       const sellerSchoolMap = new Map<number, string | null>();

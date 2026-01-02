@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { SchoolCombobox } from "@/components/ui/school-combobox";
 import { CheckCircle2, School, ArrowRight, ShieldCheck, Phone, Lock, Users, X } from "lucide-react";
 import onboardingHero from "@assets/generated_images/friendly_parents_talking_at_school_gate.png";
+import { useAuth } from "@/hooks/useAuth";
 
 const GRADES = [
   "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6",
@@ -27,6 +28,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
 
   // Form data
   const [firstName, setFirstName] = useState("");
@@ -39,6 +41,26 @@ export default function Onboarding() {
 
   const totalSteps = 2;
   const progress = (step / totalSteps) * 100;
+
+  // Pre-fill form with user data from Google OAuth
+  useEffect(() => {
+    if (user?.fullName) {
+      const nameParts = user.fullName.trim().split(/\s+/);
+      if (nameParts.length >= 2) {
+        // If name has 2+ parts, use first as firstName and rest as lastName
+        setFirstName(nameParts[0]);
+        setLastName(nameParts.slice(1).join(" "));
+      } else if (nameParts.length === 1) {
+        // If only one name, use it as firstName
+        setFirstName(nameParts[0]);
+      }
+    }
+
+    // Pre-fill phone number if available
+    if (user?.phoneNumber) {
+      setPhoneNumber(user.phoneNumber);
+    }
+  }, [user]);
 
   const handleNext = async () => {
     if (step < totalSteps) {
@@ -320,7 +342,7 @@ export default function Onboarding() {
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select grade" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="max-h-[300px] overflow-y-auto">
                                   {GRADES.map((grade) => (
                                     <SelectItem key={grade} value={grade}>
                                       {grade}

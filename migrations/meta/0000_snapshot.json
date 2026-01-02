@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "9a384e65-7d51-46ce-a583-5f9a4e895a08",
+  "id": "1fde9976-8c8a-4da5-80c1-e6ebce6af4c4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_condition_reports": {
