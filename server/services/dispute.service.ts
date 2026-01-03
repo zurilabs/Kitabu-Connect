@@ -21,7 +21,7 @@ import {
   notifications,
   userReliabilityScores,
 } from "../db/schema";
-import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, or, desc, sql, inArray, alias } from "drizzle-orm";
 
 /* ================================
    CONSTANTS

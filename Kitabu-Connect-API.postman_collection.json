@@ -1,0 +1,2153 @@
+{
+  "info": {
+    "name": "Kitabu Connect API",
+    "description": "Complete API collection for Kitabu Connect - Book swapping and marketplace platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health & Debug",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            }
+          }
+        },
+        {
+          "name": "Debug Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/debug/config",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "debug", "config"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/send-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "send-otp"]
+            }
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "verify-otp"]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          }
+        },
+        {
+          "name": "Google OAuth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/google",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "google"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Onboarding",
+      "item": [
+        {
+          "name": "Complete Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"John Doe\",\n  \"phoneNumber\": \"+254712345678\",\n  \"schoolId\": 1,\n  \"schoolName\": \"Sample School\",\n  \"userType\": \"parent\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/onboarding/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "onboarding", "complete"]
+            }
+          }
+        },
+        {
+          "name": "Get Onboarding Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/onboarding/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "onboarding", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Schools",
+      "item": [
+        {
+          "name": "Get All Schools",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/schools",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schools"]
+            }
+          }
+        },
+        {
+          "name": "Search Schools",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/schools/search?q=academy&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schools", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "academy"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Profile",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"John Doe Updated\",\n  \"phoneNumber\": \"+254712345678\",\n  \"schoolId\": 1,\n  \"schoolName\": \"Sample School\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Get Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "dashboard"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Preferences",
+      "item": [
+        {
+          "name": "Get Preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "preferences"]
+            }
+          }
+        },
+        {
+          "name": "Update Notification Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailNotifications\": true,\n  \"pushNotifications\": true,\n  \"smsNotifications\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/preferences/notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "preferences", "notifications"]
+            }
+          }
+        },
+        {
+          "name": "Update Payment Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preferredPaymentMethod\": \"mpesa\",\n  \"mpesaNumber\": \"+254712345678\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/preferences/payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "preferences", "payment"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Books / Marketplace",
+      "item": [
+        {
+          "name": "Get All Books",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "books"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "searchTerm",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "subject",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "classGrade",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "condition",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "minPrice",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "listingType",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sortBy",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Recent Books",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/recent",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "books", "recent"]
+            }
+          }
+        },
+        {
+          "name": "Get Book by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "books", "1"]
+            }
+          }
+        },
+        {
+          "name": "Create Book Listing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Mathematics Grade 8\",\n  \"author\": \"John Author\",\n  \"isbn\": \"9781234567890\",\n  \"publisher\": \"Sample Publisher\",\n  \"classGrade\": \"Grade 8\",\n  \"subject\": \"Mathematics\",\n  \"condition\": \"good\",\n  \"listingType\": \"sell\",\n  \"price\": \"500\",\n  \"description\": \"Good condition textbook\",\n  \"primaryPhotoUrl\": \"https://example.com/photo.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "books"]
+            }
+          }
+        },
+        {
+          "name": "Update Book Listing",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Mathematics Grade 8 Updated\",\n  \"price\": \"450\",\n  \"condition\": \"like_new\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/books/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "books", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Book Listing",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "books", "1"]
+            }
+          }
+        },
+        {
+          "name": "Get My Books",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/my-books",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "my-books"]
+            }
+          }
+        },
+        {
+          "name": "Get Publishers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/publishers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "publishers"]
+            }
+          }
+        },
+        {
+          "name": "ISBN Lookup",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/isbn/9781234567890",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "isbn", "9781234567890"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Favorites",
+      "item": [
+        {
+          "name": "Get Favorites",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/favorites?limit=20&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "favorites"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Favorite IDs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/favorites/ids",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "favorites", "ids"]
+            }
+          }
+        },
+        {
+          "name": "Get Favorites Count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/favorites/count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "favorites", "count"]
+            }
+          }
+        },
+        {
+          "name": "Check If Favorited",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/favorites/check/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "favorites", "check", "1"]
+            }
+          }
+        },
+        {
+          "name": "Add to Favorites",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/favorites/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "favorites", "1"]
+            }
+          }
+        },
+        {
+          "name": "Remove from Favorites",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/favorites/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "favorites", "1"]
+            }
+          }
+        },
+        {
+          "name": "Toggle Favorite",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/favorites/1/toggle",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "favorites", "1", "toggle"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Swap Requests",
+      "item": [
+        {
+          "name": "Search Swap Listings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swaps/search-listings?title=math",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swaps", "search-listings"],
+              "query": [
+                {
+                  "key": "title",
+                  "value": "math"
+                },
+                {
+                  "key": "author",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "subject",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "classGrade",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "condition",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "schoolId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Swap Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestedListingId\": 1,\n  \"offeredListingId\": 2,\n  \"offeredBookTitle\": \"Science Grade 7\",\n  \"offeredBookAuthor\": \"Jane Author\",\n  \"offeredBookCondition\": \"good\",\n  \"offeredBookDescription\": \"Well maintained book\",\n  \"message\": \"Hi, I would like to swap this book\",\n  \"deliveryMethod\": \"meetup\",\n  \"meetupLocation\": \"CBD Nairobi\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/swaps",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swaps"]
+            }
+          }
+        },
+        {
+          "name": "Get User Swap Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swaps",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swaps"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "incoming",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Swap Request by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swaps/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swaps", "1"]
+            }
+          }
+        },
+        {
+          "name": "Accept Swap Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meetupLocation\": \"CBD Nairobi\",\n  \"meetupTime\": \"2025-01-15T14:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/swaps/1/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swaps", "1", "accept"]
+            }
+          }
+        },
+        {
+          "name": "Reject Swap Request",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swaps/1/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swaps", "1", "reject"]
+            }
+          }
+        },
+        {
+          "name": "Confirm Swap Receipt",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swaps/1/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swaps", "1", "confirm"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Swap Request",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swaps/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swaps", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Swap Orders",
+      "item": [
+        {
+          "name": "Get User Swap Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders"]
+            }
+          }
+        },
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestedBookId\": 1,\n  \"orderType\": \"purchase\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders"]
+            }
+          }
+        },
+        {
+          "name": "Get Swap Order by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1"]
+            }
+          }
+        },
+        {
+          "name": "Accept Order",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "accept"]
+            }
+          }
+        },
+        {
+          "name": "Reject Order",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "reject"]
+            }
+          }
+        },
+        {
+          "name": "Submit Requirements",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meetupLocation\": \"CBD Nairobi, Kenya\",\n  \"meetupTime\": \"2025-01-15T14:00:00Z\",\n  \"additionalNotes\": \"Please bring ID for verification\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/requirements",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "requirements"]
+            }
+          }
+        },
+        {
+          "name": "Approve Requirements",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/approve-requirements",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "approve-requirements"]
+            }
+          }
+        },
+        {
+          "name": "Initialize Commitment Fee Payment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/pay-commitment-fee/initialize",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "pay-commitment-fee", "initialize"]
+            }
+          }
+        },
+        {
+          "name": "Verify Commitment Fee Payment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/pay-commitment-fee/verify/REF123456",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "pay-commitment-fee", "verify", "REF123456"]
+            }
+          }
+        },
+        {
+          "name": "Mark Book Dispatched",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/dispatch",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "dispatch"]
+            }
+          }
+        },
+        {
+          "name": "Confirm Delivery",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/confirm-delivery",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "confirm-delivery"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Swap Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Changed my mind\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Get Order Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "messages"]
+            }
+          }
+        },
+        {
+          "name": "Send Order Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Hello, when can we meet?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "messages"]
+            }
+          }
+        },
+        {
+          "name": "Mark Messages as Read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/1/messages/mark-read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "1", "messages", "mark-read"]
+            }
+          }
+        },
+        {
+          "name": "Get All Conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/conversations/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "conversations", "all"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Purchase Orders",
+      "item": [
+        {
+          "name": "Create Purchase Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookListingId\": 1,\n  \"deliveryMethod\": \"meetup\",\n  \"deliveryAddress\": \"CBD Nairobi\",\n  \"buyerNotes\": \"Please call before delivery\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/purchase/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "purchase", "create"]
+            }
+          }
+        },
+        {
+          "name": "Initialize Purchase Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"buyer@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/purchase/1/pay/initialize",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "purchase", "1", "pay", "initialize"]
+            }
+          }
+        },
+        {
+          "name": "Verify Purchase Payment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/swap-orders/purchase/1/pay/verify/REF123456",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "swap-orders", "purchase", "1", "pay", "verify", "REF123456"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wallet",
+      "item": [
+        {
+          "name": "Get Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "balance"]
+            }
+          }
+        },
+        {
+          "name": "Get Transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/transactions?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "transactions"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/all-transactions?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "all-transactions"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Initialize Top-up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1000,\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/topup/initialize",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "topup", "initialize"]
+            }
+          }
+        },
+        {
+          "name": "Verify Top-up",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/topup/verify/REF123456",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "topup", "verify", "REF123456"]
+            }
+          }
+        },
+        {
+          "name": "Get Available Withdrawal Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/withdrawal/available",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "withdrawal", "available"]
+            }
+          }
+        },
+        {
+          "name": "Initiate Withdrawal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 500,\n  \"paymentMethod\": \"mpesa\",\n  \"accountDetails\": {\n    \"phoneNumber\": \"+254712345678\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/withdrawal/initiate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "withdrawal", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "Get Withdrawal History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/withdrawal/history?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "withdrawal", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Escrow Accounts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/escrow?role=buyer",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "escrow"],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "buyer"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Escrow Dispute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"escrowId\": 1,\n  \"reason\": \"Book not as described\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/escrow/dispute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "escrow", "dispute"]
+            }
+          }
+        },
+        {
+          "name": "Create Wallet Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookListingId\": 1,\n  \"deliveryMethod\": \"meetup\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "orders"]
+            }
+          }
+        },
+        {
+          "name": "Pay Order with Wallet",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/orders/1/pay",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "orders", "1", "pay"]
+            }
+          }
+        },
+        {
+          "name": "Update Order Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"shipped\",\n  \"trackingNumber\": \"TRK123456\",\n  \"notes\": \"Dispatched via courier\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/orders/1/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "orders", "1", "status"]
+            }
+          }
+        },
+        {
+          "name": "Get User Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/orders?role=buyer",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "orders"],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "buyer"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Order Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/orders/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallet", "orders", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications?limit=20&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/unread-count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "unread-count"]
+            }
+          }
+        },
+        {
+          "name": "Mark as Read",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/1/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "1", "read"]
+            }
+          }
+        },
+        {
+          "name": "Mark All as Read",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/read-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "read-all"]
+            }
+          }
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "Get All Conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/conversations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "conversations"]
+            }
+          }
+        },
+        {
+          "name": "Create/Get Conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otherUserId\": \"user-uuid-here\",\n  \"bookListingId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/conversations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "conversations"]
+            }
+          }
+        },
+        {
+          "name": "Get Conversation Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/conversations/1/messages?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "conversations", "1", "messages"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Hello, is this book still available?\",\n  \"receiverId\": \"receiver-uuid-here\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/conversations/1/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "conversations", "1", "messages"]
+            }
+          }
+        },
+        {
+          "name": "Mark Conversation as Read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/conversations/1/mark-read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "conversations", "1", "mark-read"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Swap Cycles",
+      "item": [
+        {
+          "name": "Detect Cycles",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"maxCycleSize\": 5,\n  \"topN\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cycles/detect",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cycles", "detect"]
+            }
+          }
+        },
+        {
+          "name": "Get User Cycles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cycles?status=active&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cycles"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cycle Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cycles/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cycles", "1"]
+            }
+          }
+        },
+        {
+          "name": "Confirm Cycle Participation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cycles/1/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cycles", "1", "confirm"]
+            }
+          }
+        },
+        {
+          "name": "Mark Book as Dropped Off",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verificationPhotoUrl\": \"https://example.com/photo.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cycles/1/drop-off",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cycles", "1", "drop-off"]
+            }
+          }
+        },
+        {
+          "name": "Mark Book as Collected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"qrCode\": \"QR123456\",\n  \"verificationPhotoUrl\": \"https://example.com/photo.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cycles/1/collect",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cycles", "1", "collect"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Cycle",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"No longer interested\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cycles/1/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cycles", "1", "cancel"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Children",
+      "item": [
+        {
+          "name": "Get All Children",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/children",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "children"]
+            }
+          }
+        },
+        {
+          "name": "Get Child by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/children/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "children", "1"]
+            }
+          }
+        },
+        {
+          "name": "Create Child",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Jr\",\n  \"grade\": \"Grade 5\",\n  \"schoolId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/children",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "children"]
+            }
+          }
+        },
+        {
+          "name": "Update Child",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Jr Updated\",\n  \"grade\": \"Grade 6\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/children/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "children", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Child",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/children/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "children", "1"]
+            }
+          }
+        },
+        {
+          "name": "Reorder Children",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"childrenOrder\": [3, 1, 2]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/children/reorder",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "children", "reorder"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gamification",
+      "item": [
+        {
+          "name": "Get All Badges",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamification/badges",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamification", "badges"]
+            }
+          }
+        },
+        {
+          "name": "Get My Badges",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamification/badges/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamification", "badges", "me"]
+            }
+          }
+        },
+        {
+          "name": "Get User Badges",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamification/badges/user-uuid-here",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamification", "badges", "user-uuid-here"]
+            }
+          }
+        },
+        {
+          "name": "School Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamification/leaderboard/school/1?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamification", "leaderboard", "school", "1"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Global Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamification/leaderboard/global?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamification", "leaderboard", "global"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Top Swappers Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamification/leaderboard/swappers?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamification", "leaderboard", "swappers"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Rank",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamification/rank/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamification", "rank", "me"]
+            }
+          }
+        },
+        {
+          "name": "Get User Rank",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamification/rank/user-uuid-here",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamification", "rank", "user-uuid-here"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Disputes",
+      "item": [
+        {
+          "name": "Create Dispute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cycleId\": 1,\n  \"respondentId\": \"respondent-uuid-here\",\n  \"disputeType\": \"book_condition\",\n  \"title\": \"Book not as described\",\n  \"description\": \"The book condition was listed as 'like new' but arrived with torn pages\",\n  \"evidencePhotoUrls\": [\"https://example.com/evidence1.jpg\"],\n  \"priority\": \"medium\",\n  \"disputeValue\": 500\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes"]
+            }
+          }
+        },
+        {
+          "name": "Get My Disputes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes?status=open",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Disputes (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/all?status=open&priority=high",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes", "all"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open"
+                },
+                {
+                  "key": "priority",
+                  "value": "high"
+                },
+                {
+                  "key": "disputeType",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Dispute Stats (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get Dispute Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes", "1"]
+            }
+          }
+        },
+        {
+          "name": "Add Dispute Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Here is additional information about my dispute\",\n  \"attachmentUrls\": [\"https://example.com/attachment.jpg\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/1/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes", "1", "messages"]
+            }
+          }
+        },
+        {
+          "name": "Respond to Dispute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": \"The book was in good condition when I sent it\",\n  \"evidencePhotoUrls\": [\"https://example.com/evidence.jpg\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/1/respond",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes", "1", "respond"]
+            }
+          }
+        },
+        {
+          "name": "Escalate Dispute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"The other party is not responding\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/1/escalate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes", "1", "escalate"]
+            }
+          }
+        },
+        {
+          "name": "Assign Mediator (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mediatorId\": \"mediator-uuid-here\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/1/assign-mediator",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes", "1", "assign-mediator"]
+            }
+          }
+        },
+        {
+          "name": "Resolve Dispute (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolution\": \"Refund issued to the buyer\",\n  \"resolutionType\": \"refund\",\n  \"adminNotes\": \"Evidence clearly shows the book was damaged\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/1/resolve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "disputes", "1", "resolve"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Upload",
+      "item": [
+        {
+          "name": "Upload Book Image",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/upload/book-image",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "upload", "book-image"]
+            }
+          }
+        },
+        {
+          "name": "Upload Multiple Book Images",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/upload/book-images",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "upload", "book-images"]
+            }
+          }
+        },
+        {
+          "name": "Upload Profile Picture",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/upload/profile-picture",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "upload", "profile-picture"]
+            }
+          }
+        },
+        {
+          "name": "Delete Image",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/upload/image/public-id-here",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "upload", "image", "public-id-here"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Paystack Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-paystack-signature",
+                "value": "signature-here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"charge.success\",\n  \"data\": {\n    \"reference\": \"REF123456\",\n    \"amount\": 50000,\n    \"status\": \"success\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/webhooks/paystack",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "webhooks", "paystack"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

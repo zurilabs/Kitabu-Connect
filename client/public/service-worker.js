@@ -1,7 +1,7 @@
 // Kitabu Connect Service Worker
 // Handles caching and offline functionality
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2'; // Updated to clear old caches
 const CACHE_NAME = `kitabu-connect-${CACHE_VERSION}`;
 
 // Assets to cache immediately on install
@@ -120,20 +120,43 @@ self.addEventListener('fetch', (event) => {
  */
 async function networkFirstStrategy(request) {
   const cache = await caches.open(CACHE_NAME);
+  const url = new URL(request.url);
+
+  // Don't cache authentication-related endpoints or write operations
+  const skipCachePatterns = [
+    '/api/auth/',
+    '/api/swaps',
+    '/api/swap-orders',
+    '/api/disputes',
+    '/api/wallet/',
+    '/api/upload/'
+  ];
+
+  const shouldSkipCache = skipCachePatterns.some(pattern => url.pathname.includes(pattern));
 
   try {
-    // Try network first
+    // Try network first - just pass through the original request
     const networkResponse = await fetch(request);
 
-    // Only cache successful responses
-    if (networkResponse.ok) {
+    // Only cache successful responses for cacheable endpoints
+    if (networkResponse.ok && !shouldSkipCache) {
       // Clone the response before caching
       cache.put(request, networkResponse.clone());
     }
 
     return networkResponse;
   } catch (error) {
-    // Network failed, try cache
+    // Don't use cache for endpoints that should skip caching
+    if (shouldSkipCache) {
+      console.log('[SW] Network failed for non-cacheable endpoint:', request.url);
+      // Return a proper error response instead of throwing
+      return new Response(
+        JSON.stringify({ message: 'Network error - please check your connection' }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Network failed, try cache for cacheable endpoints
     console.log('[SW] Network failed, trying cache:', request.url);
     const cachedResponse = await cache.match(request);
 

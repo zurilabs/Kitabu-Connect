@@ -70,7 +70,9 @@ interface SwapRequest {
     title: string;
     coverImageUrl: string | null;
   };
-  swapOrderId: number | null;
+  swapOrder: {
+    id: number;
+  } | null;
 }
 
 type SwapItem = SwapOrder | SwapRequest;
@@ -126,6 +128,7 @@ export default function SwapsPage() {
 
       return response.json();
     },
+    enabled: !!user, // Only fetch when user is authenticated
   });
 
   // Fetch swap orders (includes both swaps and purchases)
@@ -142,6 +145,7 @@ export default function SwapsPage() {
 
       return response.json();
     },
+    enabled: !!user, // Only fetch when user is authenticated
   });
 
   const isLoading = isLoadingRequests || isLoadingOrders;
@@ -308,6 +312,10 @@ export default function SwapsPage() {
         if (item.status === "rejected" || item.status === "cancelled") {
           return;
         }
+        // For incoming pending orders, don't navigate (user should accept/decline first)
+        if (isIncoming && item.status === "pending") {
+          return;
+        }
         // Navigate to order details page
         setLocation(`/orders/${item.id}/messages`);
       };
@@ -410,7 +418,8 @@ export default function SwapsPage() {
               </div>
             )}
 
-            {item.status !== "pending" && item.status !== "rejected" && item.status !== "cancelled" && (
+            {/* Show View Details for all non-rejected/cancelled orders, including pending outgoing */}
+            {!(isIncoming && item.status === "pending") && item.status !== "rejected" && item.status !== "cancelled" && (
               <Button
                 variant="outline"
                 className="w-full"
@@ -438,9 +447,11 @@ export default function SwapsPage() {
         return;
       }
       // If there's a swap order created, navigate to it
-      if (item.swapOrderId) {
-        setLocation(`/orders/${item.swapOrderId}/messages`);
+      if (item.swapOrder?.id) {
+        setLocation(`/orders/${item.swapOrder.id}/messages`);
       }
+      // For pending swap requests without an order, clicking the card does nothing
+      // (user needs to accept/decline first for incoming, or wait for outgoing)
     };
 
     return (
@@ -539,13 +550,14 @@ export default function SwapsPage() {
             </div>
           )}
 
-          {swapReq.status === "accepted" && item.swapOrderId && (
+          {/* Show View Details button for swap requests that have an order created */}
+          {item.swapOrder?.id && swapReq.status !== "rejected" && swapReq.status !== "cancelled" && (
             <Button
               variant="outline"
               className="w-full"
               onClick={(e) => {
                 e.stopPropagation();
-                setLocation(`/orders/${item.swapOrderId}/messages`);
+                setLocation(`/orders/${item.swapOrder!.id}/messages`);
               }}
             >
               <MessageSquare className="w-4 h-4 mr-2" />
