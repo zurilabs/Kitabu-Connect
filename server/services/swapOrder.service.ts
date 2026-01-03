@@ -282,7 +282,6 @@ export class SwapOrderService {
             id: users.id,
             fullName: users.fullName,
             profilePictureUrl: users.profilePictureUrl,
-            schoolName: users.schoolName,
             phoneNumber: users.phoneNumber,
           },
           requestedBook: {
@@ -318,17 +317,24 @@ export class SwapOrderService {
       }
 
       // Get owner info
-      const [owner] = await db
+      const [ownerResult] = await db
         .select({
           id: users.id,
           fullName: users.fullName,
           profilePictureUrl: users.profilePictureUrl,
-          schoolName: users.schoolName,
           phoneNumber: users.phoneNumber,
         })
         .from(users)
         .where(eq(users.id, result.order.ownerId))
         .limit(1);
+
+      if (!ownerResult) {
+        console.error(`[SwapOrderService] Owner not found for swap order ${swapOrderId}, ownerId: ${result.order.ownerId}`);
+        return {
+          success: false,
+          message: "Owner information not found for this swap order",
+        };
+      }
 
       // Get offered book info if exists
       let offeredBook = null;
@@ -345,7 +351,7 @@ export class SwapOrderService {
           .where(eq(bookListings.id, result.order.offeredListingId))
           .limit(1);
 
-        offeredBook = offered;
+        offeredBook = offered || null;
       }
 
       return {
@@ -353,7 +359,7 @@ export class SwapOrderService {
         swapOrder: {
           ...result.order,
           requester: result.requester,
-          owner,
+          owner: ownerResult,
           requestedBook: result.requestedBook,
           offeredBook,
         },
