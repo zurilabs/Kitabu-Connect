@@ -5,6 +5,8 @@ import { authService } from "./services/auth.service";
 import { onboardingService } from "./services/onboarding.service";
 import { bookListingService } from "./services/bookListing.service";
 import { authenticateToken, checkOnboardingStatus } from "./middleware/auth.middleware";
+import { passport, isGoogleConfigured } from "./lib/passport";
+import { generateToken } from "./lib/jwt";
 import {
   sendOTPSchema,
   verifyOTPSchema,
@@ -31,6 +33,7 @@ import notificationRoutes from "./routes/notifications";
 import cyclesRoutes from "./routes/cycles";
 import gamificationRoutes from "./routes/gamification";
 import childrenRoutes from "./routes/children";
+import disputeRoutes from "./routes/disputes";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -114,6 +117,11 @@ export async function registerRoutes(
   app.use("/api/children", childrenRoutes);
 
   // ============================================
+  // DISPUTES ROUTES
+  // ============================================
+  app.use("/api/disputes", disputeRoutes);
+
+  // ============================================
   // PAYSTACK WEBHOOK
   // ============================================
   app.post("/api/webhooks/paystack", async (req, res) => {
@@ -175,8 +183,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: error.message });
       }
 
-      const { phoneNumber } = validation.data;
-      const result = await authService.sendOTP(phoneNumber);
+      const { email } = validation.data;
+      const result = await authService.sendOTP(email);
 
       return res.status(200).json(result);
     } catch (error) {
@@ -195,8 +203,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: error.message });
       }
 
-      const { phoneNumber, code } = validation.data;
-      const result = await authService.verifyOTP(phoneNumber, code);
+      const { email, code } = validation.data;
+      const result = await authService.verifyOTP(email, code);
 
       if (!result.success) {
         return res.status(400).json({ message: result.message });
@@ -242,6 +250,56 @@ export async function registerRoutes(
     }
   });
 
+  // Google OAuth - Initiate authentication
+  app.get("/api/auth/google", (req, res, next) => {
+    if (!isGoogleConfigured) {
+      return res.status(503).json({
+        success: false,
+        message: "Google authentication is not configured"
+      });
+    }
+
+    passport.authenticate("google", {
+      scope: ["profile", "email"]
+    })(req, res, next);
+  });
+
+  // Google OAuth - Callback
+  app.get("/api/auth/google/callback", (req, res, next) => {
+    passport.authenticate("google", {
+      session: false,
+      failureRedirect: "/login?error=google_auth_failed"
+    }, async (err: any, user: any) => {
+      if (err || !user) {
+        console.error("[Google OAuth] Authentication failed:", err);
+        return res.redirect("/login?error=google_auth_failed");
+      }
+
+      try {
+        // Generate JWT token for the authenticated user
+        const token = await generateToken(user);
+
+        // Set JWT token in httpOnly cookie
+        res.cookie("auth_token", token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+
+        // Redirect based on onboarding status
+        if (user.onboardingCompleted) {
+          return res.redirect("/dashboard");
+        } else {
+          return res.redirect("/onboarding");
+        }
+      } catch (error) {
+        console.error("[Google OAuth] Error setting up session:", error);
+        return res.redirect("/login?error=session_setup_failed");
+      }
+    })(req, res, next);
+  });
+
   // ============================================
   // ONBOARDING ROUTES
   // ============================================
@@ -253,12 +311,17 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Authentication required" });
       }
 
+      console.log('[Route] Onboarding complete request body:', JSON.stringify(req.body, null, 2));
+
       const validation = completeOnboardingSchema.safeParse(req.body);
 
       if (!validation.success) {
+        console.log('[Route] Validation failed:', validation.error);
         const error = fromZodError(validation.error);
         return res.status(400).json({ message: error.message });
       }
+
+      console.log('[Route] Validation successful, validated data:', JSON.stringify(validation.data, null, 2));
 
       const result = await onboardingService.completeOnboarding(
         req.user.id,
@@ -834,13 +897,17 @@ export async function registerRoutes(
 
       // Fetch seller schools for personalization (batch query)
       const sellerIds = [...new Set(candidatePool.map(({ seller }) => seller.id))];
-      const sellerSchools = await db
-        .select({
-          parentId: children.parentId,
-          schoolId: children.schoolId,
-        })
-        .from(children)
-        .where(sql`${children.parentId} IN (${sql.join(sellerIds.map(id => sql`${id}`), sql`, `)})`);
+
+      // Only query seller schools if we have sellers
+      const sellerSchools = sellerIds.length > 0
+        ? await db
+            .select({
+              parentId: children.parentId,
+              schoolId: children.schoolId,
+            })
+            .from(children)
+            .where(sql`${children.parentId} IN (${sql.join(sellerIds.map(id => sql`${id}`), sql`, `)})`)
+        : [];
 
       // Create a map of sellerId -> schoolId (use first child's school)
       const sellerSchoolMap = new Map<number, string | null>();

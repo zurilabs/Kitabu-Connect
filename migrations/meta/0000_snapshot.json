@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "7ba7416d-27e5-4d70-9245-e98d4fa39276",
+  "id": "503d990f-e182-424d-92b5-8bf8bd79727e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_condition_reports": {
@@ -1116,6 +1116,49 @@
           "notNull": false,
           "autoincrement": false
         },
+        "respondent_response_deadline": {
+          "name": "respondent_response_deadline",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "mediator_id": {
+          "name": "mediator_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "escalated_at": {
+          "name": "escalated_at",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "auto_escalated": {
+          "name": "auto_escalated",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": false
+        },
+        "resolution_deadline": {
+          "name": "resolution_deadline",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dispute_value": {
+          "name": "dispute_value",
+          "type": "decimal(10,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "resolution": {
           "name": "resolution",
           "type": "text",
@@ -1140,6 +1183,13 @@
         "resolved_at": {
           "name": "resolved_at",
           "type": "datetime",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "enforcement_status": {
+          "name": "enforcement_status",
+          "type": "varchar(30)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1187,6 +1237,20 @@
           "name": "idx_disputes_reporter",
           "columns": [
             "reporter_id"
+          ],
+          "isUnique": false
+        },
+        "idx_disputes_respondent": {
+          "name": "idx_disputes_respondent",
+          "columns": [
+            "respondent_id"
+          ],
+          "isUnique": false
+        },
+        "idx_disputes_priority": {
+          "name": "idx_disputes_priority",
+          "columns": [
+            "priority"
           ],
           "isUnique": false
         }
@@ -1237,6 +1301,19 @@
           "tableTo": "book_condition_reports",
           "columnsFrom": [
             "condition_report_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "cycle_disputes_mediator_id_users_id_fk": {
+          "name": "cycle_disputes_mediator_id_users_id_fk",
+          "tableFrom": "cycle_disputes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "mediator_id"
           ],
           "columnsTo": [
             "id"
@@ -1679,6 +1756,115 @@
       "compositePrimaryKeys": {
         "dispute_messages_id": {
           "name": "dispute_messages_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "dispute_timeline": {
+      "name": "dispute_timeline",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dispute_id": {
+          "name": "dispute_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "idx_timeline_dispute": {
+          "name": "idx_timeline_dispute",
+          "columns": [
+            "dispute_id"
+          ],
+          "isUnique": false
+        },
+        "idx_timeline_event_type": {
+          "name": "idx_timeline_event_type",
+          "columns": [
+            "event_type"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "dispute_timeline_dispute_id_cycle_disputes_id_fk": {
+          "name": "dispute_timeline_dispute_id_cycle_disputes_id_fk",
+          "tableFrom": "dispute_timeline",
+          "tableTo": "cycle_disputes",
+          "columnsFrom": [
+            "dispute_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "dispute_timeline_actor_id_users_id_fk": {
+          "name": "dispute_timeline_actor_id_users_id_fk",
+          "tableFrom": "dispute_timeline",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "dispute_timeline_id": {
+          "name": "dispute_timeline_id",
           "columns": [
             "id"
           ]
@@ -2783,9 +2969,9 @@
           "notNull": true,
           "autoincrement": false
         },
-        "phone_number": {
-          "name": "phone_number",
-          "type": "varchar(20)",
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -2822,10 +3008,10 @@
         }
       },
       "indexes": {
-        "idx_otp_phone_code": {
-          "name": "idx_otp_phone_code",
+        "idx_otp_email_code": {
+          "name": "idx_otp_email_code",
           "columns": [
-            "phone_number",
+            "email",
             "code"
           ],
           "isUnique": false
@@ -4719,23 +4905,23 @@
           "notNull": true,
           "autoincrement": false
         },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "phone_number": {
           "name": "phone_number",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "full_name": {
           "name": "full_name",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -4746,6 +4932,21 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "google_id": {
+          "name": "google_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "auth_provider": {
+          "name": "auth_provider",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'email'"
         },
         "role": {
           "name": "role",
@@ -4789,10 +4990,24 @@
         }
       },
       "indexes": {
+        "idx_users_email": {
+          "name": "idx_users_email",
+          "columns": [
+            "email"
+          ],
+          "isUnique": false
+        },
         "idx_users_phone": {
           "name": "idx_users_phone",
           "columns": [
             "phone_number"
+          ],
+          "isUnique": false
+        },
+        "idx_users_google": {
+          "name": "idx_users_google",
+          "columns": [
+            "google_id"
           ],
           "isUnique": false
         }
@@ -4807,10 +5022,22 @@
         }
       },
       "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "columns": [
+            "email"
+          ]
+        },
         "users_phone_number_unique": {
           "name": "users_phone_number_unique",
           "columns": [
             "phone_number"
+          ]
+        },
+        "users_google_id_unique": {
+          "name": "users_google_id_unique",
+          "columns": [
+            "google_id"
           ]
         }
       },

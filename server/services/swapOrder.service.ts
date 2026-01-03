@@ -282,7 +282,6 @@ export class SwapOrderService {
             id: users.id,
             fullName: users.fullName,
             profilePictureUrl: users.profilePictureUrl,
-            schoolName: users.schoolName,
             phoneNumber: users.phoneNumber,
           },
           requestedBook: {
@@ -318,17 +317,24 @@ export class SwapOrderService {
       }
 
       // Get owner info
-      const [owner] = await db
+      const [ownerResult] = await db
         .select({
           id: users.id,
           fullName: users.fullName,
           profilePictureUrl: users.profilePictureUrl,
-          schoolName: users.schoolName,
           phoneNumber: users.phoneNumber,
         })
         .from(users)
         .where(eq(users.id, result.order.ownerId))
         .limit(1);
+
+      if (!ownerResult) {
+        console.error(`[SwapOrderService] Owner not found for swap order ${swapOrderId}, ownerId: ${result.order.ownerId}`);
+        return {
+          success: false,
+          message: "Owner information not found for this swap order",
+        };
+      }
 
       // Get offered book info if exists
       let offeredBook = null;
@@ -345,7 +351,7 @@ export class SwapOrderService {
           .where(eq(bookListings.id, result.order.offeredListingId))
           .limit(1);
 
-        offeredBook = offered;
+        offeredBook = offered || null;
       }
 
       return {
@@ -353,13 +359,17 @@ export class SwapOrderService {
         swapOrder: {
           ...result.order,
           requester: result.requester,
-          owner,
+          owner: ownerResult,
           requestedBook: result.requestedBook,
           offeredBook,
         },
       };
     } catch (error) {
       console.error("[SwapOrderService] Get swap order error:", error);
+      console.error("[SwapOrderService] Error details:", error instanceof Error ? error.message : String(error));
+      if (error instanceof Error && error.stack) {
+        console.error("[SwapOrderService] Error stack:", error.stack);
+      }
       return {
         success: false,
         message: "Failed to fetch swap order",
@@ -404,16 +414,20 @@ export class SwapOrderService {
       // Get additional info for each order
       const enrichedOrders = await Promise.all(
         userOrders.map(async ({ order, requester, requestedBook }) => {
-          // Get owner info
-          const [owner] = await db
-            .select({
-              id: users.id,
-              fullName: users.fullName,
-              profilePictureUrl: users.profilePictureUrl,
-            })
-            .from(users)
-            .where(eq(users.id, order.ownerId))
-            .limit(1);
+          // Get owner info (only if ownerId exists - it might be null for purchase orders)
+          let owner = null;
+          if (order.ownerId) {
+            const [ownerResult] = await db
+              .select({
+                id: users.id,
+                fullName: users.fullName,
+                profilePictureUrl: users.profilePictureUrl,
+              })
+              .from(users)
+              .where(eq(users.id, order.ownerId))
+              .limit(1);
+            owner = ownerResult;
+          }
 
           // Determine other party (the person user is swapping with)
           const otherParty = order.requesterId === userId ? owner : requester;

@@ -24,13 +24,23 @@ export const users = mysqlTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
 
-    phoneNumber: varchar("phone_number", { length: 20 })
+    // Email is now the primary authentication method
+    email: varchar("email", { length: 255 })
       .notNull()
       .unique(),
 
+    // Phone number is now optional (can be added during onboarding)
+    phoneNumber: varchar("phone_number", { length: 20 })
+      .unique(),
+
     fullName: text("full_name"),
-    email: varchar("email", { length: 255 }),
     profilePictureUrl: text("profile_picture_url"),
+
+    // OAuth fields
+    googleId: varchar("google_id", { length: 255 }).unique(),
+    authProvider: varchar("auth_provider", { length: 20 })
+      .notNull()
+      .default("email"), // 'email' or 'google'
 
     role: varchar("role", { length: 20 })
       .notNull()
@@ -57,7 +67,9 @@ export const users = mysqlTable(
       .$onUpdate(() => new Date()),
   },
   (t) => ({
+    emailIdx: index("idx_users_email").on(t.email),
     phoneIdx: index("idx_users_phone").on(t.phoneNumber),
+    googleIdx: index("idx_users_google").on(t.googleId),
   })
 );
 
@@ -71,7 +83,7 @@ export const otpCodes = mysqlTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
 
-    phoneNumber: varchar("phone_number", { length: 20 }).notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
     code: varchar("code", { length: 6 }).notNull(),
 
     expiresAt: timestamp("expires_at").notNull(),
@@ -82,8 +94,8 @@ export const otpCodes = mysqlTable(
       .defaultNow(),
   },
   (t) => ({
-    phoneCodeIdx: index("idx_otp_phone_code").on(
-      t.phoneNumber,
+    emailCodeIdx: index("idx_otp_email_code").on(
+      t.email,
       t.code
     ),
     expiresIdx: index("idx_otp_expires").on(t.expiresAt),
@@ -880,17 +892,17 @@ export const insertUserSchema = createInsertSchema(users).pick({
 });
 
 export const sendOTPSchema = z.object({
-  phoneNumber: z.string().min(10).max(20),
+  email: z.string().email("Invalid email address"),
 });
 
 export const verifyOTPSchema = z.object({
-  phoneNumber: z.string().min(10).max(20),
+  email: z.string().email("Invalid email address"),
   code: z.string().length(6),
 });
 
 export const completeOnboardingSchema = z.object({
   fullName: z.string().min(2),
-  email: z.string().email(),
+  phoneNumber: z.string().optional(),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
   children: z.array(z.object({
@@ -1412,8 +1424,8 @@ export const cycleDisputes = mysqlTable(
       .references(() => users.id),
 
     // Dispute details
-    disputeType: varchar("dispute_type", { length: 50 }).notNull(), // 'book_condition', 'missing_book', 'wrong_book', 'damage', 'other'
-    status: varchar("status", { length: 30 }).notNull().default("open"), // 'open', 'investigating', 'resolved', 'escalated', 'closed'
+    disputeType: varchar("dispute_type", { length: 50 }).notNull(), // 'book_condition', 'missing_book', 'wrong_book', 'damage', 'description_mismatch', 'non_delivery', 'other'
+    status: varchar("status", { length: 30 }).notNull().default("open"), // 'open', 'awaiting_response', 'investigating', 'resolved', 'escalated', 'closed'
     priority: varchar("priority", { length: 20 }).default("medium"), // 'low', 'medium', 'high', 'urgent'
 
     // Description
@@ -1425,12 +1437,22 @@ export const cycleDisputes = mysqlTable(
     conditionReportId: varchar("condition_report_id", { length: 36 })
       .references(() => bookConditionReports.id),
 
+    // Workflow tracking (NEW)
+    respondentResponseDeadline: datetime("respondent_response_deadline"),
+    mediatorId: varchar("mediator_id", { length: 36 })
+      .references(() => users.id),
+    escalatedAt: datetime("escalated_at"),
+    autoEscalated: boolean("auto_escalated").default(false),
+    resolutionDeadline: datetime("resolution_deadline"),
+    disputeValue: decimal("dispute_value", { precision: 10, scale: 2 }), // Book value for prioritization
+
     // Resolution
     resolution: text("resolution"),
-    resolutionType: varchar("resolution_type", { length: 50 }), // 'refund', 'replacement', 'penalty', 'no_action', 'escalated'
+    resolutionType: varchar("resolution_type", { length: 50 }), // 'refund', 'replacement', 'penalty', 'account_warning', 'no_action', 'escalated'
     resolvedBy: varchar("resolved_by", { length: 36 })
       .references(() => users.id),
     resolvedAt: datetime("resolved_at"),
+    enforcementStatus: varchar("enforcement_status", { length: 30 }), // 'pending', 'completed', 'failed'
 
     // Admin notes
     adminNotes: text("admin_notes"),
@@ -1445,6 +1467,8 @@ export const cycleDisputes = mysqlTable(
     cycleIdx: index("idx_disputes_cycle").on(t.cycleId),
     statusIdx: index("idx_disputes_status").on(t.status),
     reporterIdx: index("idx_disputes_reporter").on(t.reporterId),
+    respondentIdx: index("idx_disputes_respondent").on(t.respondentId),
+    priorityIdx: index("idx_disputes_priority").on(t.priority),
   })
 );
 
@@ -1471,6 +1495,30 @@ export const disputeMessages = mysqlTable(
   },
   (t) => ({
     disputeIdx: index("idx_dispute_messages_dispute").on(t.disputeId),
+  })
+);
+
+/**
+ * Dispute Timeline
+ * Tracks all events and status changes in a dispute
+ */
+export const disputeTimeline = mysqlTable(
+  "dispute_timeline",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    disputeId: varchar("dispute_id", { length: 36 })
+      .notNull()
+      .references(() => cycleDisputes.id, { onDelete: "cascade" }),
+    eventType: varchar("event_type", { length: 50 }).notNull(), // 'created', 'responded', 'message_added', 'escalated', 'assigned', 'resolved', 'enforced'
+    actorId: varchar("actor_id", { length: 36 })
+      .references(() => users.id),
+    description: text("description").notNull(),
+    metadata: text("metadata"), // JSON for additional event data
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    disputeIdx: index("idx_timeline_dispute").on(t.disputeId),
+    eventTypeIdx: index("idx_timeline_event_type").on(t.eventType),
   })
 );
 

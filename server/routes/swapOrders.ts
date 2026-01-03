@@ -91,9 +91,18 @@ router.get("/:id", authenticateToken, async (req: Request, res: Response) => {
       return res.status(404).json({ message: result.message });
     }
 
+    if (!result.swapOrder) {
+      console.error(`[Swap Orders API] Swap order ${swapOrderId} not found for user ${userId}`);
+      return res.status(404).json({ message: "Swap order not found" });
+    }
+
     return res.json({ swapOrder: result.swapOrder });
   } catch (error) {
     console.error("[Swap Orders API] Get swap order error:", error);
+    console.error("[Swap Orders API] Error details:", error instanceof Error ? error.message : String(error));
+    if (error instanceof Error && error.stack) {
+      console.error("[Swap Orders API] Error stack:", error.stack);
+    }
     return res.status(500).json({ message: "Failed to fetch swap order" });
   }
 });

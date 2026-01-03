@@ -25,6 +25,9 @@ import {
   Camera,
   Wallet,
   Building2,
+  Shield,
+  AlertTriangle,
+  ChevronRight,
 } from "lucide-react";
 
 interface UserPreferences {
@@ -52,7 +55,7 @@ export default function Profile() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<"profile" | "children" | "notifications" | "payment">("profile");
+  const [activeSection, setActiveSection] = useState<"profile" | "children" | "disputes" | "notifications" | "payment">("profile");
 
   // Fetch user preferences with React Query
   const { data: preferencesData, isLoading: isLoadingPreferences } = useQuery({
@@ -68,7 +71,25 @@ export default function Profile() {
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
+  // Fetch user disputes with React Query
+  const { data: disputesData } = useQuery({
+    queryKey: ["user-disputes"],
+    queryFn: async () => {
+      const response = await fetch("/api/disputes", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch disputes");
+      return response.json();
+    },
+    enabled: !!user, // Only fetch when user is logged in
+    staleTime: 1000 * 60 * 1, // 1 minute
+  });
+
   const preferences = preferencesData?.preferences || null;
+  const disputes = disputesData?.disputes || [];
+  const openDisputesCount = disputes.filter((d: any) =>
+    ["open", "awaiting_response", "investigating", "escalated"].includes(d.dispute.status)
+  ).length;
 
   // Local preferences state for optimistic updates
   const [localPreferences, setLocalPreferences] = useState<UserPreferences | null>(null);
@@ -461,6 +482,20 @@ export default function Profile() {
                   <span className="text-xs sm:text-sm">Children</span>
                 </Button>
                 <Button
+                  variant={activeSection === "disputes" ? "default" : "outline"}
+                  size="sm"
+                  className="justify-start font-medium relative"
+                  onClick={() => setActiveSection("disputes")}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  <span className="text-xs sm:text-sm">Disputes</span>
+                  {openDisputesCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {openDisputesCount}
+                    </span>
+                  )}
+                </Button>
+                <Button
                   variant={activeSection === "notifications" ? "default" : "outline"}
                   size="sm"
                   className="justify-start font-medium"
@@ -503,6 +538,15 @@ export default function Profile() {
             <TabsTrigger value="children" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
               <Users className="mr-2 h-4 w-4" />
               My Children
+            </TabsTrigger>
+            <TabsTrigger value="disputes" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none relative">
+              <Shield className="mr-2 h-4 w-4" />
+              Disputes
+              {openDisputesCount > 0 && (
+                <span className="ml-2 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {openDisputesCount}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger value="notifications" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
               <Bell className="mr-2 h-4 w-4" />
@@ -591,6 +635,110 @@ export default function Profile() {
           {/* Children Management Section */}
           {activeSection === "children" && (
             <ChildrenManagement />
+          )}
+
+          {/* Disputes Section */}
+          {activeSection === "disputes" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>My Disputes</CardTitle>
+              <CardDescription>Manage and track your dispute cases.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {disputes.length === 0 ? (
+                <div className="text-center py-12">
+                  <Shield className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium">No Disputes</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    You haven't filed any disputes yet
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-primary">{disputes.length}</div>
+                          <div className="text-sm text-muted-foreground mt-1">Total Disputes</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-amber-600">{openDisputesCount}</div>
+                          <div className="text-sm text-muted-foreground mt-1">Open Cases</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-green-600">
+                            {disputes.filter((d: any) => ["resolved", "closed"].includes(d.dispute.status)).length}
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1">Resolved</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-3">
+                    {disputes.slice(0, 5).map((item: any) => {
+                      const { dispute } = item;
+                      const isOpen = ["open", "awaiting_response", "investigating", "escalated"].includes(dispute.status);
+
+                      return (
+                        <div
+                          key={dispute.id}
+                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => setLocation(`/disputes/${dispute.id}`)}
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className={`p-2 rounded-full ${isOpen ? 'bg-amber-100' : 'bg-green-100'}`}>
+                              {isOpen ? (
+                                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                              ) : (
+                                <ShieldCheck className="h-5 w-5 text-green-600" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{dispute.title}</p>
+                              <p className="text-sm text-muted-foreground capitalize">
+                                {dispute.disputeType.replace(/_/g, " ")} • {dispute.status.replace(/_/g, " ")}
+                              </p>
+                            </div>
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {disputes.length > 5 && (
+                    <div className="pt-4">
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setLocation("/disputes")}
+                      >
+                        View All Disputes ({disputes.length})
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+            <CardFooter className="flex justify-end border-t px-6 py-4">
+              <Button onClick={() => setLocation("/disputes")}>
+                <Shield className="h-4 w-4 mr-2" />
+                View All Disputes
+              </Button>
+            </CardFooter>
+          </Card>
           )}
 
           {/* Notifications Section */}
@@ -1006,6 +1154,96 @@ export default function Profile() {
 
           {activeSection === "children" && (
             <ChildrenManagement />
+          )}
+
+          {activeSection === "disputes" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>My Disputes</CardTitle>
+                <CardDescription>Manage and track your dispute cases.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {disputes.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Shield className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium">No Disputes</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      You haven't filed any disputes yet
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 mb-6">
+                      <div className="text-center p-4 bg-muted rounded-lg">
+                        <div className="text-2xl font-bold text-primary">{disputes.length}</div>
+                        <div className="text-xs text-muted-foreground mt-1">Total</div>
+                      </div>
+                      <div className="text-center p-4 bg-amber-50 rounded-lg">
+                        <div className="text-2xl font-bold text-amber-600">{openDisputesCount}</div>
+                        <div className="text-xs text-muted-foreground mt-1">Open</div>
+                      </div>
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <div className="text-2xl font-bold text-green-600">
+                          {disputes.filter((d: any) => ["resolved", "closed"].includes(d.dispute.status)).length}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">Resolved</div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      {disputes.slice(0, 5).map((item: any) => {
+                        const { dispute } = item;
+                        const isOpen = ["open", "awaiting_response", "investigating", "escalated"].includes(dispute.status);
+
+                        return (
+                          <div
+                            key={dispute.id}
+                            className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors active:bg-muted"
+                            onClick={() => setLocation(`/disputes/${dispute.id}`)}
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <div className={`p-1.5 rounded-full ${isOpen ? 'bg-amber-100' : 'bg-green-100'}`}>
+                                {isOpen ? (
+                                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                ) : (
+                                  <ShieldCheck className="h-4 w-4 text-green-600" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{dispute.title}</p>
+                                <p className="text-xs text-muted-foreground capitalize">
+                                  {dispute.status.replace(/_/g, " ")}
+                                </p>
+                              </div>
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {disputes.length > 5 && (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        size="sm"
+                        onClick={() => setLocation("/disputes")}
+                      >
+                        View All ({disputes.length})
+                      </Button>
+                    )}
+                  </>
+                )}
+              </CardContent>
+              <CardFooter className="flex justify-end border-t px-6 py-4">
+                <Button onClick={() => setLocation("/disputes")} size="sm">
+                  <Shield className="h-4 w-4 mr-2" />
+                  View All
+                </Button>
+              </CardFooter>
+            </Card>
           )}
 
           {activeSection === "notifications" && (

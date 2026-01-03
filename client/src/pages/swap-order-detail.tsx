@@ -279,11 +279,14 @@ export default function SwapOrderDetail() {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
+      pending: "bg-yellow-500",
+      awaiting_payment: "bg-orange-500",
       requirements_gathering: "bg-yellow-500",
       in_progress: "bg-blue-500",
       delivered: "bg-purple-500",
       completed: "bg-green-500",
       cancelled: "bg-red-500",
+      rejected: "bg-red-500",
       disputed: "bg-orange-500",
     };
     return colors[status] || "bg-gray-500";
@@ -291,11 +294,14 @@ export default function SwapOrderDetail() {
 
   const getStatusText = (status: string) => {
     const texts: Record<string, string> = {
+      pending: "Pending Approval",
+      awaiting_payment: "Awaiting Payment",
       requirements_gathering: "Requirements Gathering",
       in_progress: "In Progress",
       delivered: "Delivered",
       completed: "Completed",
       cancelled: "Cancelled",
+      rejected: "Rejected",
       disputed: "Disputed",
     };
     return texts[status] || status;
@@ -700,8 +706,96 @@ export default function SwapOrderDetail() {
             </>
           )}
 
+          {/* Accept/Reject for pending orders (owner/seller only) */}
+          {swapOrder.status === "pending" && !isRequester && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">
+                  {swapOrder.orderType === "purchase" ? "Purchase Request" : "Swap Request"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  {swapOrder.orderType === "purchase"
+                    ? `${swapOrder.requester.fullName} wants to buy your book for KES ${parseFloat(swapOrder.totalAmount || "0").toLocaleString()}`
+                    : `${swapOrder.requester.fullName} wants to swap books with you`
+                  }
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/swap-orders/${swapOrder.id}/reject`, {
+                          method: "POST",
+                          credentials: "include",
+                        });
+                        if (response.ok) {
+                          toast.success("Request rejected");
+                          fetchSwapOrder();
+                          fetchMessages();
+                        } else {
+                          const data = await response.json();
+                          toast.error(data.message || "Failed to reject");
+                        }
+                      } catch (error) {
+                        toast.error("Failed to reject request");
+                      }
+                    }}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Decline
+                  </Button>
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/swap-orders/${swapOrder.id}/accept`, {
+                          method: "POST",
+                          credentials: "include",
+                        });
+                        if (response.ok) {
+                          toast.success("Request accepted!");
+                          fetchSwapOrder();
+                          fetchMessages();
+                        } else {
+                          const data = await response.json();
+                          toast.error(data.message || "Failed to accept");
+                        }
+                      } catch (error) {
+                        toast.error("Failed to accept request");
+                      }
+                    }}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Accept
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Waiting for approval message for requester */}
+          {swapOrder.status === "pending" && isRequester && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Waiting for Approval
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Your {swapOrder.orderType === "purchase" ? "purchase" : "swap"} request has been sent.
+                  Waiting for {swapOrder.owner.fullName} to accept or decline.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Actions */}
-          {swapOrder.status !== "completed" && swapOrder.status !== "cancelled" && (
+          {swapOrder.status !== "completed" && swapOrder.status !== "cancelled" && swapOrder.status !== "rejected" && swapOrder.status !== "pending" && (
             <DeliveryConfirmation
               swapOrder={swapOrder}
               isRequester={isRequester}

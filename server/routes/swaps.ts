@@ -88,11 +88,18 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
     const userId = req.user!.id;
     const type = req.query.type as string | undefined;
 
+    console.log("[Swaps API] Fetching swap requests for user:", userId);
     const result = await swapRequestService.getUserSwapRequests(userId);
 
     if (!result.success) {
+      console.error("[Swaps API] Failed to get swap requests:", result.message);
       return res.status(500).json({ message: result.message });
     }
+
+    console.log("[Swaps API] Successfully fetched swap requests:", {
+      incoming: result.incoming?.length || 0,
+      outgoing: result.outgoing?.length || 0
+    });
 
     // If type is specified, return only that type
     if (type === "incoming") {

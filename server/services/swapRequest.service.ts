@@ -7,7 +7,7 @@ import {
   type CreateSwapRequestInput,
   type UpdateSwapRequestInput,
 } from "../db/schema";
-import { eq, and, or, desc } from "drizzle-orm";
+import { eq, and, or, desc, inArray } from "drizzle-orm";
 import { notificationService } from "./notification.service";
 
 export class SwapRequestService {
@@ -211,11 +211,13 @@ export class SwapRequestService {
     message?: string;
   }> {
     try {
+      console.log("[SwapRequestService] Getting swap requests for user:", userId);
+
       // Incoming requests (where user is the owner)
-      const incoming = await db
+      // First get swap requests with user and book info
+      const incomingBase = await db
         .select({
           swapRequest: swapRequests,
-          swapOrderId: swapOrders.id,
           requester: {
             id: users.id,
             fullName: users.fullName,
@@ -232,15 +234,37 @@ export class SwapRequestService {
         .from(swapRequests)
         .innerJoin(users, eq(swapRequests.requesterId, users.id))
         .innerJoin(bookListings, eq(swapRequests.requestedListingId, bookListings.id))
-        .leftJoin(swapOrders, eq(swapRequests.id, swapOrders.swapRequestId))
         .where(eq(swapRequests.ownerId, userId))
         .orderBy(desc(swapRequests.createdAt));
 
+      // Now get related swap orders separately
+      const incomingSwapRequestIds = incomingBase.map(item => item.swapRequest.id);
+      const relatedIncomingOrders = incomingSwapRequestIds.length > 0
+        ? await db
+            .select({ swapRequestId: swapOrders.swapRequestId, id: swapOrders.id })
+            .from(swapOrders)
+            .where(inArray(swapOrders.swapRequestId, incomingSwapRequestIds))
+        : [];
+
+      // Create a map for quick lookup
+      const incomingOrderMap = new Map(
+        relatedIncomingOrders.map(o => [o.swapRequestId, o.id])
+      );
+
+      // Transform to match expected structure
+      const incoming = incomingBase.map(item => ({
+        ...item,
+        swapOrder: incomingOrderMap.has(item.swapRequest.id)
+          ? { id: incomingOrderMap.get(item.swapRequest.id) }
+          : null,
+      }));
+
+      console.log("[SwapRequestService] Found incoming requests:", incoming.length);
+
       // Outgoing requests (where user is the requester)
-      const outgoingData = await db
+      const outgoingBase = await db
         .select({
           swapRequest: swapRequests,
-          swapOrderId: swapOrders.id,
           owner: {
             id: users.id,
             fullName: users.fullName,
@@ -257,9 +281,32 @@ export class SwapRequestService {
         .from(swapRequests)
         .innerJoin(users, eq(swapRequests.ownerId, users.id))
         .innerJoin(bookListings, eq(swapRequests.requestedListingId, bookListings.id))
-        .leftJoin(swapOrders, eq(swapRequests.id, swapOrders.swapRequestId))
         .where(eq(swapRequests.requesterId, userId))
         .orderBy(desc(swapRequests.createdAt));
+
+      // Now get related swap orders separately
+      const outgoingSwapRequestIds = outgoingBase.map(item => item.swapRequest.id);
+      const relatedOutgoingOrders = outgoingSwapRequestIds.length > 0
+        ? await db
+            .select({ swapRequestId: swapOrders.swapRequestId, id: swapOrders.id })
+            .from(swapOrders)
+            .where(inArray(swapOrders.swapRequestId, outgoingSwapRequestIds))
+        : [];
+
+      // Create a map for quick lookup
+      const outgoingOrderMap = new Map(
+        relatedOutgoingOrders.map(o => [o.swapRequestId, o.id])
+      );
+
+      // Transform to match expected structure
+      const outgoingData = outgoingBase.map(item => ({
+        ...item,
+        swapOrder: outgoingOrderMap.has(item.swapRequest.id)
+          ? { id: outgoingOrderMap.get(item.swapRequest.id) }
+          : null,
+      }));
+
+      console.log("[SwapRequestService] Found outgoing requests:", outgoingData.length);
 
       return {
         success: true,
@@ -268,6 +315,10 @@ export class SwapRequestService {
       };
     } catch (error) {
       console.error("[SwapRequestService] Get user swap requests error:", error);
+      console.error("[SwapRequestService] Error details:", error instanceof Error ? error.message : String(error));
+      if (error instanceof Error && error.stack) {
+        console.error("[SwapRequestService] Error stack:", error.stack);
+      }
       return {
         success: false,
         incoming: [],

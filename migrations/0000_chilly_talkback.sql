@@ -121,10 +121,17 @@ CREATE TABLE `cycle_disputes` (
 	`description` text NOT NULL,
 	`evidence_photo_urls` text,
 	`condition_report_id` varchar(36),
+	`respondent_response_deadline` datetime,
+	`mediator_id` varchar(36),
+	`escalated_at` datetime,
+	`auto_escalated` boolean DEFAULT false,
+	`resolution_deadline` datetime,
+	`dispute_value` decimal(10,2),
 	`resolution` text,
 	`resolution_type` varchar(50),
 	`resolved_by` varchar(36),
 	`resolved_at` datetime,
+	`enforcement_status` varchar(30),
 	`admin_notes` text,
 	`created_at` timestamp NOT NULL DEFAULT (now()),
 	`updated_at` timestamp NOT NULL DEFAULT (now()),
@@ -172,6 +179,17 @@ CREATE TABLE `dispute_messages` (
 	`attachment_urls` text,
 	`created_at` timestamp NOT NULL DEFAULT (now()),
 	CONSTRAINT `dispute_messages_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `dispute_timeline` (
+	`id` varchar(36) NOT NULL,
+	`dispute_id` varchar(36) NOT NULL,
+	`event_type` varchar(50) NOT NULL,
+	`actor_id` varchar(36),
+	`description` text NOT NULL,
+	`metadata` text,
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `dispute_timeline_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
 CREATE TABLE `drop_points` (
@@ -289,7 +307,7 @@ CREATE TABLE `orders` (
 --> statement-breakpoint
 CREATE TABLE `otp_codes` (
 	`id` varchar(36) NOT NULL,
-	`phone_number` varchar(20) NOT NULL,
+	`email` varchar(255) NOT NULL,
 	`code` varchar(6) NOT NULL,
 	`expires_at` timestamp NOT NULL,
 	`verified` boolean NOT NULL DEFAULT false,
@@ -521,17 +539,21 @@ CREATE TABLE `user_reliability_scores` (
 --> statement-breakpoint
 CREATE TABLE `users` (
 	`id` varchar(36) NOT NULL,
-	`phone_number` varchar(20) NOT NULL,
+	`email` varchar(255) NOT NULL,
+	`phone_number` varchar(20),
 	`full_name` text,
-	`email` varchar(255),
 	`profile_picture_url` text,
+	`google_id` varchar(255),
+	`auth_provider` varchar(20) NOT NULL DEFAULT 'email',
 	`role` varchar(20) NOT NULL DEFAULT 'PARENT',
 	`onboarding_completed` boolean NOT NULL DEFAULT false,
 	`wallet_balance` decimal(10,2) NOT NULL DEFAULT '0.00',
 	`created_at` timestamp NOT NULL DEFAULT (now()),
 	`updated_at` timestamp NOT NULL DEFAULT (now()),
 	CONSTRAINT `users_id` PRIMARY KEY(`id`),
-	CONSTRAINT `users_phone_number_unique` UNIQUE(`phone_number`)
+	CONSTRAINT `users_email_unique` UNIQUE(`email`),
+	CONSTRAINT `users_phone_number_unique` UNIQUE(`phone_number`),
+	CONSTRAINT `users_google_id_unique` UNIQUE(`google_id`)
 );
 --> statement-breakpoint
 CREATE TABLE `wallet_transactions` (
@@ -559,6 +581,7 @@ ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_cycle_id_swap_cycles
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_reporter_id_users_id_fk` FOREIGN KEY (`reporter_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_respondent_id_users_id_fk` FOREIGN KEY (`respondent_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_condition_report_id_book_condition_reports_id_fk` FOREIGN KEY (`condition_report_id`) REFERENCES `book_condition_reports`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_mediator_id_users_id_fk` FOREIGN KEY (`mediator_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_resolved_by_users_id_fk` FOREIGN KEY (`resolved_by`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_participants` ADD CONSTRAINT `cycle_participants_cycle_id_swap_cycles_id_fk` FOREIGN KEY (`cycle_id`) REFERENCES `swap_cycles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_participants` ADD CONSTRAINT `cycle_participants_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -567,6 +590,8 @@ ALTER TABLE `cycle_participants` ADD CONSTRAINT `cycle_participants_book_to_give
 ALTER TABLE `cycle_participants` ADD CONSTRAINT `cycle_participants_book_to_receive_id_book_listings_id_fk` FOREIGN KEY (`book_to_receive_id`) REFERENCES `book_listings`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `dispute_messages` ADD CONSTRAINT `dispute_messages_dispute_id_cycle_disputes_id_fk` FOREIGN KEY (`dispute_id`) REFERENCES `cycle_disputes`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `dispute_messages` ADD CONSTRAINT `dispute_messages_sender_id_users_id_fk` FOREIGN KEY (`sender_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `dispute_timeline` ADD CONSTRAINT `dispute_timeline_dispute_id_cycle_disputes_id_fk` FOREIGN KEY (`dispute_id`) REFERENCES `cycle_disputes`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `dispute_timeline` ADD CONSTRAINT `dispute_timeline_actor_id_users_id_fk` FOREIGN KEY (`actor_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `drop_points` ADD CONSTRAINT `drop_points_cycle_id_swap_cycles_id_fk` FOREIGN KEY (`cycle_id`) REFERENCES `swap_cycles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `drop_points` ADD CONSTRAINT `drop_points_school_id_schools_id_fk` FOREIGN KEY (`school_id`) REFERENCES `schools`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `escrow_accounts` ADD CONSTRAINT `escrow_accounts_book_listing_id_book_listings_id_fk` FOREIGN KEY (`book_listing_id`) REFERENCES `book_listings`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -630,11 +655,15 @@ CREATE INDEX `idx_conversations_participants` ON `conversations` (`user1_id`,`us
 CREATE INDEX `idx_disputes_cycle` ON `cycle_disputes` (`cycle_id`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_status` ON `cycle_disputes` (`status`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_reporter` ON `cycle_disputes` (`reporter_id`);--> statement-breakpoint
+CREATE INDEX `idx_disputes_respondent` ON `cycle_disputes` (`respondent_id`);--> statement-breakpoint
+CREATE INDEX `idx_disputes_priority` ON `cycle_disputes` (`priority`);--> statement-breakpoint
 CREATE INDEX `idx_cycle_participants_cycle` ON `cycle_participants` (`cycle_id`);--> statement-breakpoint
 CREATE INDEX `idx_cycle_participants_user` ON `cycle_participants` (`user_id`);--> statement-breakpoint
 CREATE INDEX `idx_cycle_participants_status` ON `cycle_participants` (`status`);--> statement-breakpoint
 CREATE INDEX `idx_cycle_participants_school` ON `cycle_participants` (`user_school_id`);--> statement-breakpoint
 CREATE INDEX `idx_dispute_messages_dispute` ON `dispute_messages` (`dispute_id`);--> statement-breakpoint
+CREATE INDEX `idx_timeline_dispute` ON `dispute_timeline` (`dispute_id`);--> statement-breakpoint
+CREATE INDEX `idx_timeline_event_type` ON `dispute_timeline` (`event_type`);--> statement-breakpoint
 CREATE INDEX `idx_drop_points_cycle` ON `drop_points` (`cycle_id`);--> statement-breakpoint
 CREATE INDEX `idx_drop_points_school` ON `drop_points` (`school_id`);--> statement-breakpoint
 CREATE INDEX `idx_drop_points_county` ON `drop_points` (`county`);--> statement-breakpoint
@@ -647,7 +676,7 @@ CREATE INDEX `idx_messages_receiver` ON `messages` (`receiver_id`);--> statement
 CREATE INDEX `idx_notifications_user_id` ON `notifications` (`user_id`);--> statement-breakpoint
 CREATE INDEX `idx_notifications_is_read` ON `notifications` (`is_read`);--> statement-breakpoint
 CREATE INDEX `idx_notifications_type` ON `notifications` (`type`);--> statement-breakpoint
-CREATE INDEX `idx_otp_phone_code` ON `otp_codes` (`phone_number`,`code`);--> statement-breakpoint
+CREATE INDEX `idx_otp_email_code` ON `otp_codes` (`email`,`code`);--> statement-breakpoint
 CREATE INDEX `idx_otp_expires` ON `otp_codes` (`expires_at`);--> statement-breakpoint
 CREATE INDEX `idx_schools_name` ON `schools` (`school_name`);--> statement-breakpoint
 CREATE INDEX `idx_schools_county` ON `schools` (`county`);--> statement-breakpoint
@@ -668,4 +697,6 @@ CREATE INDEX `idx_swap_requests_listing` ON `swap_requests` (`requested_listing_
 CREATE INDEX `idx_swap_requests_status` ON `swap_requests` (`status`);--> statement-breakpoint
 CREATE INDEX `idx_reliability_score` ON `user_reliability_scores` (`reliability_score`);--> statement-breakpoint
 CREATE INDEX `idx_reliability_user` ON `user_reliability_scores` (`user_id`);--> statement-breakpoint
-CREATE INDEX `idx_users_phone` ON `users` (`phone_number`);
+CREATE INDEX `idx_users_email` ON `users` (`email`);--> statement-breakpoint
+CREATE INDEX `idx_users_phone` ON `users` (`phone_number`);--> statement-breakpoint
+CREATE INDEX `idx_users_google` ON `users` (`google_id`);
