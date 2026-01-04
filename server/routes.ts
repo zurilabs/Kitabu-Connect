@@ -646,8 +646,24 @@ export async function registerRoutes(
     }
   });
 
+  // Get all subjects
+  app.get("/api/subjects", async (req, res) => {
+    try {
+      const { subjects } = await import("./db/schema/index");
+      const allSubjects = await db.select().from(subjects).orderBy(subjects.sortOrder);
+      return res.status(200).json({
+        success: true,
+        subjects: allSubjects,
+      });
+    } catch (error) {
+      console.error("[Route] subjects error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ISBN Lookup - search local database first, then online
-  app.get("/api/isbn/:isbn", authenticateToken, async (req, res) => {
+  // Note: Made public so wishlist form can use it without requiring full auth
+  app.get("/api/isbn/:isbn", async (req, res) => {
     try {
       const { isbn } = req.params;
 
