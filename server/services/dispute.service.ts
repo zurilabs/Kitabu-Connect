@@ -20,8 +20,10 @@ import {
   bookListings,
   notifications,
   userReliabilityScores,
+  swapOrders,
 } from "../db/schema";
-import { eq, and, or, desc, sql, inArray, alias } from "drizzle-orm";
+import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 
 /* ================================
    CONSTANTS
@@ -70,7 +72,8 @@ export type DisputeStatus = typeof DISPUTE_STATUSES[number];
 export type ResolutionType = typeof RESOLUTION_TYPES[number];
 
 interface CreateDisputeInput {
-  cycleId: string;
+  cycleId?: string;
+  swapOrderId?: number;
   reporterId: string;
   respondentId?: string;
   disputeType: DisputeType;
@@ -104,9 +107,30 @@ interface ResolveDisputeInput {
 /**
  * Create a new dispute
  * Sets deadlines and notifies respondent
+ * Can be linked to either a swap cycle (cycleId) or a swap order (swapOrderId)
  */
 export async function createDispute(input: CreateDisputeInput) {
   const now = new Date();
+
+  // Validate that at least one of cycleId or swapOrderId is provided
+  if (!input.cycleId && !input.swapOrderId) {
+    throw new Error('Either cycleId or swapOrderId must be provided');
+  }
+
+  // If swapOrderId is provided, get order info and auto-set respondentId
+  let respondentId = input.respondentId;
+  if (input.swapOrderId && !respondentId) {
+    const [order] = await db
+      .select()
+      .from(swapOrders)
+      .where(eq(swapOrders.id, input.swapOrderId))
+      .limit(1);
+
+    if (order) {
+      // Set respondent as the other party in the order
+      respondentId = order.requesterId === input.reporterId ? order.ownerId : order.requesterId;
+    }
+  }
 
   // Calculate deadlines
   const respondentDeadline = new Date(now.getTime() + RESPONDENT_RESPONSE_HOURS * 60 * 60 * 1000);
@@ -116,9 +140,10 @@ export async function createDispute(input: CreateDisputeInput) {
   const [dispute] = await db
     .insert(cycleDisputes)
     .values({
-      cycleId: input.cycleId,
+      cycleId: input.cycleId || null,
+      swapOrderId: input.swapOrderId || null,
       reporterId: input.reporterId,
-      respondentId: input.respondentId || null,
+      respondentId: respondentId || null,
       disputeType: input.disputeType,
       status: 'awaiting_response',
       priority: input.disputeValue && input.disputeValue > 1000 ? 'high' : 'medium',
@@ -179,53 +204,150 @@ export async function createDispute(input: CreateDisputeInput) {
  * Get dispute by ID with all related data
  */
 export async function getDispute(disputeId: string) {
+  // Create aliases for the users table since we need to join it multiple times
+  const reporterAlias = alias(users, 'reporter');
+  const respondentAlias = alias(users, 'respondent');
+  const mediatorAlias = alias(users, 'mediator');
+  const resolverAlias = alias(users, 'resolver');
+
   // Get dispute details
-  const [dispute] = await db
+  const [result] = await db
     .select({
       dispute: cycleDisputes,
-      reporter: users,
-      respondent: users,
-      mediator: users,
-      resolver: users,
+      reporter: {
+        id: reporterAlias.id,
+        fullName: reporterAlias.fullName,
+        email: reporterAlias.email,
+        profilePictureUrl: reporterAlias.profilePictureUrl,
+      },
     })
     .from(cycleDisputes)
-    .leftJoin(users, eq(cycleDisputes.reporterId, users.id))
-    .leftJoin(users, eq(cycleDisputes.respondentId, users.id))
-    .leftJoin(users, eq(cycleDisputes.mediatorId, users.id))
-    .leftJoin(users, eq(cycleDisputes.resolvedBy, users.id))
+    .innerJoin(reporterAlias, eq(cycleDisputes.reporterId, reporterAlias.id))
     .where(eq(cycleDisputes.id, disputeId))
     .limit(1);
 
-  if (!dispute) {
-    throw new Error('Dispute not found');
+  if (!result) {
+    return null;
   }
 
-  // Get messages
-  const messages = await db
+  // Get respondent info separately if exists
+  let respondent = null;
+  if (result.dispute.respondentId) {
+    const [respondentResult] = await db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        email: users.email,
+        profilePictureUrl: users.profilePictureUrl,
+      })
+      .from(users)
+      .where(eq(users.id, result.dispute.respondentId))
+      .limit(1);
+    respondent = respondentResult || null;
+  }
+
+  // Get mediator info separately if exists
+  let mediator = null;
+  if (result.dispute.mediatorId) {
+    const [mediatorResult] = await db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        email: users.email,
+        profilePictureUrl: users.profilePictureUrl,
+      })
+      .from(users)
+      .where(eq(users.id, result.dispute.mediatorId))
+      .limit(1);
+    mediator = mediatorResult || null;
+  }
+
+  // Get resolver info separately if exists
+  let resolver = null;
+  if (result.dispute.resolvedBy) {
+    const [resolverResult] = await db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        email: users.email,
+        profilePictureUrl: users.profilePictureUrl,
+      })
+      .from(users)
+      .where(eq(users.id, result.dispute.resolvedBy))
+      .limit(1);
+    resolver = resolverResult || null;
+  }
+
+  // Get messages with sender info
+  const messagesRaw = await db
     .select({
-      message: disputeMessages,
-      sender: users,
+      id: disputeMessages.id,
+      disputeId: disputeMessages.disputeId,
+      senderId: disputeMessages.senderId,
+      message: disputeMessages.message,
+      isAdminMessage: disputeMessages.isAdminMessage,
+      attachmentUrls: disputeMessages.attachmentUrls,
+      createdAt: disputeMessages.createdAt,
     })
     .from(disputeMessages)
-    .leftJoin(users, eq(disputeMessages.senderId, users.id))
     .where(eq(disputeMessages.disputeId, disputeId))
     .orderBy(disputeMessages.createdAt);
 
+  // Get sender info for each message
+  const senderIds = [...new Set(messagesRaw.map(m => m.senderId))];
+  const senders = senderIds.length > 0
+    ? await db
+        .select({
+          id: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          profilePictureUrl: users.profilePictureUrl,
+        })
+        .from(users)
+        .where(inArray(users.id, senderIds))
+    : [];
+
+  const senderMap = new Map(senders.map(s => [s.id, s]));
+
+  const messages = messagesRaw.map(msg => ({
+    ...msg,
+    sender: senderMap.get(msg.senderId) || { id: msg.senderId, fullName: 'Unknown', email: '', profilePictureUrl: null },
+  }));
+
   // Get timeline
-  const timeline = await db
+  const timelineRaw = await db
     .select({
-      event: disputeTimeline,
-      actor: users,
+      id: disputeTimeline.id,
+      disputeId: disputeTimeline.disputeId,
+      eventType: disputeTimeline.eventType,
+      actorId: disputeTimeline.actorId,
+      description: disputeTimeline.description,
+      metadata: disputeTimeline.metadata,
+      createdAt: disputeTimeline.createdAt,
     })
     .from(disputeTimeline)
-    .leftJoin(users, eq(disputeTimeline.actorId, users.id))
     .where(eq(disputeTimeline.disputeId, disputeId))
     .orderBy(disputeTimeline.createdAt);
 
+  // Parse evidencePhotoUrls from JSON string
+  let evidencePhotoUrls: string[] = [];
+  if (result.dispute.evidencePhotoUrls) {
+    try {
+      evidencePhotoUrls = JSON.parse(result.dispute.evidencePhotoUrls);
+    } catch (e) {
+      evidencePhotoUrls = [];
+    }
+  }
+
   return {
-    ...dispute,
+    ...result.dispute,
+    evidencePhotoUrls,
+    reporter: result.reporter,
+    respondent,
+    mediator,
+    resolver,
     messages,
-    timeline,
+    timeline: timelineRaw,
   };
 }
 
@@ -244,19 +366,68 @@ export async function getUserDisputes(userId: string, status?: DisputeStatus) {
     conditions.push(eq(cycleDisputes.status, status));
   }
 
-  const disputes = await db
-    .select({
-      dispute: cycleDisputes,
-      reporter: users,
-      respondent: users,
-      cycle: swapCycles,
-    })
+  // Get disputes first
+  const disputesRaw = await db
+    .select()
     .from(cycleDisputes)
-    .leftJoin(users, eq(cycleDisputes.reporterId, users.id))
-    .leftJoin(users, eq(cycleDisputes.respondentId, users.id))
-    .leftJoin(swapCycles, eq(cycleDisputes.cycleId, swapCycles.id))
     .where(and(...conditions))
     .orderBy(desc(cycleDisputes.createdAt));
+
+  // Get all unique user IDs (reporters and respondents)
+  const userIds = [...new Set([
+    ...disputesRaw.map(d => d.reporterId),
+    ...disputesRaw.filter(d => d.respondentId).map(d => d.respondentId!),
+  ])];
+
+  // Fetch users
+  const usersData = userIds.length > 0
+    ? await db
+        .select({
+          id: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          profilePictureUrl: users.profilePictureUrl,
+        })
+        .from(users)
+        .where(inArray(users.id, userIds))
+    : [];
+
+  const userMap = new Map(usersData.map(u => [u.id, u]));
+
+  // Get all unique cycle IDs (filter out null values)
+  const cycleIds = [...new Set(disputesRaw.filter(d => d.cycleId).map(d => d.cycleId!))];
+
+  // Fetch cycles
+  const cyclesData = cycleIds.length > 0
+    ? await db
+        .select()
+        .from(swapCycles)
+        .where(inArray(swapCycles.id, cycleIds))
+    : [];
+
+  const cycleMap = new Map(cyclesData.map(c => [c.id, c]));
+
+  // Get all unique swap order IDs (filter out null values)
+  const swapOrderIds = [...new Set(disputesRaw.filter(d => d.swapOrderId).map(d => d.swapOrderId!))];
+
+  // Fetch swap orders
+  const swapOrdersData = swapOrderIds.length > 0
+    ? await db
+        .select()
+        .from(swapOrders)
+        .where(inArray(swapOrders.id, swapOrderIds))
+    : [];
+
+  const swapOrderMap = new Map(swapOrdersData.map(o => [o.id, o]));
+
+  // Combine data
+  const disputes = disputesRaw.map(dispute => ({
+    dispute,
+    reporter: userMap.get(dispute.reporterId) || null,
+    respondent: dispute.respondentId ? userMap.get(dispute.respondentId) || null : null,
+    cycle: dispute.cycleId ? cycleMap.get(dispute.cycleId) || null : null,
+    swapOrder: dispute.swapOrderId ? swapOrderMap.get(dispute.swapOrderId) || null : null,
+  }));
 
   return disputes;
 }
@@ -285,23 +456,72 @@ export async function getAllDisputes(filters?: {
     conditions.push(eq(cycleDisputes.disputeType, filters.disputeType));
   }
 
-  const disputes = await db
-    .select({
-      dispute: cycleDisputes,
-      reporter: users,
-      respondent: users,
-      mediator: users,
-      cycle: swapCycles,
-    })
+  // Get disputes first
+  const disputesRaw = await db
+    .select()
     .from(cycleDisputes)
-    .leftJoin(users, eq(cycleDisputes.reporterId, users.id))
-    .leftJoin(users, eq(cycleDisputes.respondentId, users.id))
-    .leftJoin(users, eq(cycleDisputes.mediatorId, users.id))
-    .leftJoin(swapCycles, eq(cycleDisputes.cycleId, swapCycles.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(cycleDisputes.priority), desc(cycleDisputes.createdAt))
+    .orderBy(desc(cycleDisputes.createdAt))
     .limit(filters?.limit || 50)
     .offset(filters?.offset || 0);
+
+  // Get all unique user IDs
+  const userIds = [...new Set([
+    ...disputesRaw.map(d => d.reporterId),
+    ...disputesRaw.filter(d => d.respondentId).map(d => d.respondentId!),
+    ...disputesRaw.filter(d => d.mediatorId).map(d => d.mediatorId!),
+  ])];
+
+  // Fetch users
+  const usersData = userIds.length > 0
+    ? await db
+        .select({
+          id: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          profilePictureUrl: users.profilePictureUrl,
+        })
+        .from(users)
+        .where(inArray(users.id, userIds))
+    : [];
+
+  const userMap = new Map(usersData.map(u => [u.id, u]));
+
+  // Get all unique cycle IDs (filter out null values)
+  const cycleIds = [...new Set(disputesRaw.filter(d => d.cycleId).map(d => d.cycleId!))];
+
+  // Fetch cycles
+  const cyclesData = cycleIds.length > 0
+    ? await db
+        .select()
+        .from(swapCycles)
+        .where(inArray(swapCycles.id, cycleIds))
+    : [];
+
+  const cycleMap = new Map(cyclesData.map(c => [c.id, c]));
+
+  // Get all unique swap order IDs (filter out null values)
+  const swapOrderIds = [...new Set(disputesRaw.filter(d => d.swapOrderId).map(d => d.swapOrderId!))];
+
+  // Fetch swap orders
+  const swapOrdersData = swapOrderIds.length > 0
+    ? await db
+        .select()
+        .from(swapOrders)
+        .where(inArray(swapOrders.id, swapOrderIds))
+    : [];
+
+  const swapOrderMap = new Map(swapOrdersData.map(o => [o.id, o]));
+
+  // Combine data
+  const disputes = disputesRaw.map(dispute => ({
+    dispute,
+    reporter: userMap.get(dispute.reporterId) || null,
+    respondent: dispute.respondentId ? userMap.get(dispute.respondentId) || null : null,
+    mediator: dispute.mediatorId ? userMap.get(dispute.mediatorId) || null : null,
+    cycle: dispute.cycleId ? cycleMap.get(dispute.cycleId) || null : null,
+    swapOrder: dispute.swapOrderId ? swapOrderMap.get(dispute.swapOrderId) || null : null,
+  }));
 
   return disputes;
 }

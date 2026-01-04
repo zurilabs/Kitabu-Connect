@@ -1414,9 +1414,11 @@ export const cycleDisputes = mysqlTable(
   "cycle_disputes",
   {
     id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+    // Can be linked to either a swap cycle or a swap order
     cycleId: varchar("cycle_id", { length: 36 })
-      .notNull()
       .references(() => swapCycles.id, { onDelete: "cascade" }),
+    swapOrderId: int("swap_order_id")
+      .references(() => swapOrders.id, { onDelete: "cascade" }),
     reporterId: varchar("reporter_id", { length: 36 })
       .notNull()
       .references(() => users.id),
@@ -1465,6 +1467,7 @@ export const cycleDisputes = mysqlTable(
   },
   (t) => ({
     cycleIdx: index("idx_disputes_cycle").on(t.cycleId),
+    swapOrderIdx: index("idx_disputes_swap_order").on(t.swapOrderId),
     statusIdx: index("idx_disputes_status").on(t.status),
     reporterIdx: index("idx_disputes_reporter").on(t.reporterId),
     respondentIdx: index("idx_disputes_respondent").on(t.respondentId),
