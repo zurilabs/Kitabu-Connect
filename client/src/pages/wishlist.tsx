@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import * as React from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,8 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useWishlist, useCreateWishlistItem, useUpdateWishlistItem, useDeleteWishlistItem, type WishlistItem } from "@/hooks/useWishlist";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
-import { Plus, Edit, Trash2, BookOpen, CheckCircle2, XCircle, Bell } from "lucide-react";
+import { usePublishers } from "@/hooks/usePublishers";
+import { useSubjects } from "@/hooks/useSubjects";
+import { Plus, Edit, Trash2, BookOpen, CheckCircle2, XCircle, Bell, Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const GRADES = [
   "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6",
@@ -19,21 +23,18 @@ const GRADES = [
   "Form 1", "Form 2", "Form 3", "Form 4"
 ];
 
-const SUBJECTS = [
-  "English", "Mathematics", "Kiswahili", "Science", "Social Studies",
-  "CRE", "IRE", "HRE", "Agriculture", "Home Science", "Art and Craft",
-  "Music", "Physical Education", "French", "German", "Arabic", "Chinese"
-];
-
 export default function WishlistPage() {
   const [location, setLocation] = useLocation();
   const { children } = useActiveChild();
   const { toast } = useToast();
+  const { publishers, isLoading: isLoadingPublishers } = usePublishers();
+  const { subjects, isLoading: isLoadingSubjects } = useSubjects();
   const [activeTab, setActiveTab] = useState<"all" | "active" | "fulfilled">("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<WishlistItem | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
+  const [isSearchingISBN, setIsSearchingISBN] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -109,6 +110,59 @@ export default function WishlistPage() {
       await deleteMutation.mutateAsync(id);
     }
   };
+
+  // Debounced ISBN for auto-lookup
+  const debouncedISBN = useDebounce(formData.isbn, 1000);
+
+  // Auto-lookup ISBN when it's entered and valid
+  const handleISBNLookup = useCallback(async (isbn: string) => {
+    if (!isbn || isbn.length < 10) return; // Skip if ISBN is too short
+
+    setIsSearchingISBN(true);
+    try {
+      const response = await fetch(`/api/isbn/${isbn}`, {
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Prefill form with book data
+        setFormData((prev) => ({
+          ...prev,
+          title: data.bookData.title || prev.title,
+          author: data.bookData.author || prev.author,
+          publisher: data.bookData.publisher || prev.publisher,
+          edition: data.bookData.edition || prev.edition,
+          subject: data.bookData.subject || prev.subject,
+          grade: data.bookData.classGrade || prev.grade,
+          curriculum: data.bookData.curriculum || prev.curriculum,
+        }));
+
+        toast({
+          title: data.source === "local" ? "Book Found Locally!" : "Book Found Online!",
+          description: `Details auto-filled for "${data.bookData.title || "the book"}". Review and adjust as needed.`,
+        });
+      } else if (response.status === 404) {
+        // ISBN not found - that's okay, user can continue manually
+        console.log("ISBN not found, continuing with manual entry");
+      } else {
+        throw new Error("ISBN lookup failed");
+      }
+    } catch (error) {
+      console.error("ISBN lookup error:", error);
+      // Don't show error toast - user can continue manually
+    } finally {
+      setIsSearchingISBN(false);
+    }
+  }, [toast]);
+
+  // Trigger ISBN lookup when debounced ISBN changes
+  useEffect(() => {
+    if (debouncedISBN && debouncedISBN.length >= 10 && (isAddDialogOpen || isEditDialogOpen)) {
+      handleISBNLookup(debouncedISBN);
+    }
+  }, [debouncedISBN, isAddDialogOpen, isEditDialogOpen, handleISBNLookup]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -386,6 +440,25 @@ export default function WishlistPage() {
                 />
               </div>
 
+              <div>
+                <Label htmlFor="isbn">ISBN (Auto-fill details)</Label>
+                <div className="relative">
+                  <Input
+                    id="isbn"
+                    value={formData.isbn}
+                    onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
+                    placeholder="Enter ISBN to auto-fill book details"
+                    className="pr-10"
+                  />
+                  {isSearchingISBN && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter ISBN and we'll automatically fill in the book details
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="author">Author</Label>
@@ -398,11 +471,26 @@ export default function WishlistPage() {
                 </div>
                 <div>
                   <Label htmlFor="publisher">Publisher</Label>
+                  <Select
+                    value={formData.publisher && publishers.some(p => p.name === formData.publisher) ? formData.publisher : ""}
+                    onValueChange={(value) => setFormData({ ...formData, publisher: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={isLoadingPublishers ? "Loading..." : "Select publisher"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {publishers.map((publisher) => (
+                        <SelectItem key={publisher.id} value={publisher.name}>
+                          {publisher.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input
-                    id="publisher"
-                    value={formData.publisher}
+                    className="mt-2"
+                    placeholder="Or type custom publisher name"
+                    value={formData.publisher && !publishers.some(p => p.name === formData.publisher) ? formData.publisher : ""}
                     onChange={(e) => setFormData({ ...formData, publisher: e.target.value })}
-                    placeholder="e.g., Longhorn Publishers"
                   />
                 </div>
               </div>
@@ -413,14 +501,15 @@ export default function WishlistPage() {
                   <Select
                     value={formData.subject}
                     onValueChange={(value) => setFormData({ ...formData, subject: value })}
+                    disabled={isLoadingSubjects}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select subject" />
+                      <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select subject"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {SUBJECTS.map((subject) => (
-                        <SelectItem key={subject} value={subject}>
-                          {subject}
+                      {subjects.map((subject) => (
+                        <SelectItem key={subject.id} value={subject.name}>
+                          {subject.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -446,25 +535,14 @@ export default function WishlistPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="isbn">ISBN</Label>
-                  <Input
-                    id="isbn"
-                    value={formData.isbn}
-                    onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
-                    placeholder="ISBN number"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edition">Edition</Label>
-                  <Input
-                    id="edition"
-                    value={formData.edition}
-                    onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
-                    placeholder="e.g., 1st Edition"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="edition">Edition</Label>
+                <Input
+                  id="edition"
+                  value={formData.edition}
+                  onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
+                  placeholder="e.g., 1st Edition"
+                />
               </div>
 
               <div>
@@ -521,6 +599,25 @@ export default function WishlistPage() {
               </div>
 
               <div>
+                <Label htmlFor="edit-isbn">ISBN (Auto-fill details)</Label>
+                <div className="relative">
+                  <Input
+                    id="edit-isbn"
+                    value={formData.isbn}
+                    onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
+                    placeholder="Enter ISBN to auto-fill book details"
+                    className="pr-10"
+                  />
+                  {isSearchingISBN && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter ISBN and we'll automatically fill in the book details
+                </p>
+              </div>
+
+              <div>
                 <Label htmlFor="edit-title">Book Title *</Label>
                 <Input
                   id="edit-title"
@@ -543,11 +640,26 @@ export default function WishlistPage() {
                 </div>
                 <div>
                   <Label htmlFor="edit-publisher">Publisher</Label>
+                  <Select
+                    value={formData.publisher && publishers.some(p => p.name === formData.publisher) ? formData.publisher : ""}
+                    onValueChange={(value) => setFormData({ ...formData, publisher: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={isLoadingPublishers ? "Loading..." : "Select publisher"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {publishers.map((publisher) => (
+                        <SelectItem key={publisher.id} value={publisher.name}>
+                          {publisher.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input
-                    id="edit-publisher"
-                    value={formData.publisher}
+                    className="mt-2"
+                    placeholder="Or type custom publisher name"
+                    value={formData.publisher && !publishers.some(p => p.name === formData.publisher) ? formData.publisher : ""}
                     onChange={(e) => setFormData({ ...formData, publisher: e.target.value })}
-                    placeholder="e.g., Longhorn Publishers"
                   />
                 </div>
               </div>
@@ -558,14 +670,15 @@ export default function WishlistPage() {
                   <Select
                     value={formData.subject}
                     onValueChange={(value) => setFormData({ ...formData, subject: value })}
+                    disabled={isLoadingSubjects}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select subject" />
+                      <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select subject"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {SUBJECTS.map((subject) => (
-                        <SelectItem key={subject} value={subject}>
-                          {subject}
+                      {subjects.map((subject) => (
+                        <SelectItem key={subject.id} value={subject.name}>
+                          {subject.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -591,25 +704,14 @@ export default function WishlistPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-isbn">ISBN</Label>
-                  <Input
-                    id="edit-isbn"
-                    value={formData.isbn}
-                    onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
-                    placeholder="ISBN number"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-edition">Edition</Label>
-                  <Input
-                    id="edit-edition"
-                    value={formData.edition}
-                    onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
-                    placeholder="e.g., 1st Edition"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="edit-edition">Edition</Label>
+                <Input
+                  id="edit-edition"
+                  value={formData.edition}
+                  onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
+                  placeholder="e.g., 1st Edition"
+                />
               </div>
 
               <div>
