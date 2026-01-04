@@ -268,7 +268,7 @@ async function main() {
     { size: 5, weight: 3 }
   ];
 
-  const TARGET_USERS = 2000;
+  const TARGET_USERS = 200;
   const createdUsers: any[] = [];
   const createdChildren: any[] = [];
 
@@ -350,7 +350,7 @@ async function main() {
       });
     }
 
-    if ((i + 1) % 100 === 0) {
+    if ((i + 1) % 50 === 0) {
       console.log(`✅ Created ${i + 1}/${TARGET_USERS} users...`);
     }
   }
@@ -360,7 +360,7 @@ async function main() {
   // Create book listings
   console.log("📚 Creating book listings...\n");
 
-  const TARGET_LISTINGS = 5000;
+  const TARGET_LISTINGS = 1000;
   const createdListings: any[] = [];
 
   for (let i = 0; i < TARGET_LISTINGS; i++) {
@@ -431,7 +431,7 @@ async function main() {
       grade: child.grade
     });
 
-    if ((i + 1) % 250 === 0) {
+    if ((i + 1) % 200 === 0) {
       console.log(`✅ Created ${i + 1}/${TARGET_LISTINGS} listings...`);
     }
   }
@@ -442,7 +442,7 @@ async function main() {
   console.log("🔄 Creating swap requests...\n");
 
   const swapListings = createdListings.filter(l => l.listingType === "swap");
-  const NUM_SWAP_REQUESTS = Math.min(200, Math.floor(swapListings.length * 0.3));
+  const NUM_SWAP_REQUESTS = Math.min(50, Math.floor(swapListings.length * 0.3));
 
   for (let i = 0; i < NUM_SWAP_REQUESTS; i++) {
     const listing = randomElement(swapListings);
@@ -457,11 +457,28 @@ async function main() {
 
     const offeredBook = randomElement(requesterListings);
 
+    // Get the full book listing details for the offered book
+    const [offeredBookDetails] = await db
+      .select()
+      .from(bookListings)
+      .where(eq(bookListings.id, offeredBook.id))
+      .limit(1);
+
+    if (!offeredBookDetails || !offeredBookDetails.title || !offeredBookDetails.condition) {
+      console.log(`⚠️  Skipping swap request - missing book details for listing ${offeredBook.id}`);
+      continue;
+    }
+
     await db.insert(swapRequests).values({
       requesterId: requester.id,
       ownerId: listing.sellerId,
       requestedListingId: listing.id,
       offeredListingId: offeredBook.id,
+      offeredBookTitle: offeredBookDetails.title,
+      offeredBookAuthor: offeredBookDetails.author || null,
+      offeredBookCondition: offeredBookDetails.condition,
+      offeredBookDescription: offeredBookDetails.description || null,
+      offeredBookPhotoUrl: offeredBookDetails.primaryPhotoUrl || null,
       status: randomElement(["pending", "pending", "pending", "accepted", "rejected"]),
       message: `Hi! I'd like to swap my ${offeredBook.title} for your ${listing.title}.`,
     });
