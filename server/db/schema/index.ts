@@ -139,6 +139,57 @@ export const children = mysqlTable(
 );
 
 /* ================================
+   WISHLIST ITEMS
+================================ */
+export const wishlistItems = mysqlTable(
+  "wishlist_items",
+  {
+    id: int("id").primaryKey().autoincrement(),
+
+    childId: int("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+
+    // Book details
+    title: varchar("title", { length: 500 }).notNull(),
+    publisher: varchar("publisher", { length: 255 }),
+    author: varchar("author", { length: 255 }),
+    isbn: varchar("isbn", { length: 20 }),
+    edition: varchar("edition", { length: 50 }),
+
+    // Classification
+    subject: varchar("subject", { length: 100 }),
+    grade: varchar("grade", { length: 50 }), // Can be different from child's current grade
+    curriculum: varchar("curriculum", { length: 50 }),
+
+    // Additional notes
+    notes: text("notes"),
+
+    // Status
+    status: varchar("status", { length: 20 }).notNull().default("active"), // 'active', 'fulfilled', 'cancelled'
+
+    // Tracking
+    matchedListingId: int("matched_listing_id")
+      .references(() => bookListings.id, { onDelete: "set null" }),
+    notifiedAt: timestamp("notified_at"),
+
+    createdAt: timestamp("created_at")
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    childIdx: index("idx_wishlist_items_child").on(t.childId),
+    statusIdx: index("idx_wishlist_items_status").on(t.status),
+    gradeSubjectIdx: index("idx_wishlist_items_grade_subject").on(t.grade, t.subject),
+    titleIdx: index("idx_wishlist_items_title").on(t.title),
+  })
+);
+
+/* ================================
    SCHOOLS
 ================================ */
 export const schools = mysqlTable(
@@ -1602,3 +1653,36 @@ export const reorderChildrenSchema = z.object({
 export type CreateChildInput = z.infer<typeof createChildSchema>;
 export type UpdateChildInput = z.infer<typeof updateChildSchema>;
 export type ReorderChildrenInput = z.infer<typeof reorderChildrenSchema>;
+
+// Wishlist Types
+export type WishlistItem = typeof wishlistItems.$inferSelect;
+
+// Wishlist Schemas
+export const createWishlistItemSchema = z.object({
+  childId: z.number().min(1, "Child ID is required"),
+  title: z.string().min(1, "Title is required"),
+  publisher: z.string().optional().nullable(),
+  author: z.string().optional().nullable(),
+  isbn: z.string().optional().nullable(),
+  edition: z.string().optional().nullable(),
+  subject: z.string().optional().nullable(),
+  grade: z.string().optional().nullable(),
+  curriculum: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export const updateWishlistItemSchema = z.object({
+  title: z.string().min(1).optional(),
+  publisher: z.string().optional().nullable(),
+  author: z.string().optional().nullable(),
+  isbn: z.string().optional().nullable(),
+  edition: z.string().optional().nullable(),
+  subject: z.string().optional().nullable(),
+  grade: z.string().optional().nullable(),
+  curriculum: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.enum(["active", "fulfilled", "cancelled"]).optional(),
+});
+
+export type CreateWishlistItemInput = z.infer<typeof createWishlistItemSchema>;
+export type UpdateWishlistItemInput = z.infer<typeof updateWishlistItemSchema>;
