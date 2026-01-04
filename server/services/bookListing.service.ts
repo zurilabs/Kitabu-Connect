@@ -1,6 +1,8 @@
 import { db } from "../db.ts";
 import { bookListings, bookPhotos, users, schools, children, type CreateBookListingInput, type UpdateBookListingInput } from "../db/schema/index.ts";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { wishlistService } from "./wishlist.service.ts";
+import { notificationService } from "./notification.service.ts";
 
 class BookListingService {
   async createListing(sellerId: string, data: CreateBookListingInput) {
@@ -29,6 +31,12 @@ class BookListingService {
 
       // Fetch the complete listing with photos
       const completeListing = await this.getListingById(listingId);
+
+      // Check for wishlist matches (async, don't wait for it)
+      // Pass sellerId separately since listing might not have it in the response
+      this.checkWishlistMatches(completeListing, sellerId).catch((error) => {
+        console.error("Error checking wishlist matches:", error);
+      });
 
       return { success: true, listing: completeListing };
     } catch (error) {
@@ -908,6 +916,168 @@ class BookListingService {
       console.error("Error searching swap listings:", error);
       throw new Error("Failed to search swap listings");
     }
+  }
+
+  /**
+   * Check if a new book listing matches any active wishlist items
+   * and send notifications to parents
+   */
+  private async checkWishlistMatches(listing: any, sellerId: string): Promise<void> {
+    try {
+      // Only check active listings
+      if (listing.listingStatus !== "active") {
+        return;
+      }
+
+      // Get all active wishlist items
+      const activeWishlistItems = await wishlistService.getActiveWishlistItems();
+
+      if (activeWishlistItems.length === 0) {
+        return;
+      }
+
+      console.log(`[WishlistMatch] Checking ${activeWishlistItems.length} wishlist items against listing: ${listing.title}`);
+
+      // Check each wishlist item for matches
+      for (const wishlistItem of activeWishlistItems) {
+        const matchScore = this.calculateWishlistMatchScore(listing, wishlistItem);
+
+        // If match score is above threshold, send notification
+        if (matchScore >= 60) {
+          console.log(`[WishlistMatch] Match found! Score: ${matchScore}, Wishlist ID: ${wishlistItem.id}, Listing ID: ${listing.id}`);
+
+          // Don't notify if the listing belongs to the same parent
+          if (wishlistItem.parent.id === sellerId) {
+            console.log(`[WishlistMatch] Skipping notification - listing belongs to same parent`);
+            continue;
+          }
+
+          // Send notification to parent
+          await notificationService.createNotification({
+            userId: wishlistItem.parent.id,
+            type: "wishlist_match",
+            title: "Wishlist Match Found! 🎉",
+            message: `A book matching your wishlist for ${wishlistItem.child.name || "your child"} has been listed: "${listing.title}"`,
+            relatedBookListingId: listing.id,
+            actionUrl: `/book/${listing.id}`,
+          });
+
+          // Mark wishlist item as fulfilled (optional - you might want to keep it active for multiple matches)
+          // await wishlistService.markAsFulfilled(wishlistItem.id, listing.id);
+        }
+      }
+    } catch (error) {
+      console.error("[WishlistMatch] Error checking wishlist matches:", error);
+    }
+  }
+
+  /**
+   * Calculate match score between a book listing and a wishlist item
+   * Returns a score from 0-100
+   * 
+   * Scoring:
+   * - Grade match: 0-30 points (exact: 30, adjacent: 20, close: 10)
+   * - Subject match: 0-25 points (exact: 25)
+   * - Title similarity: 0-25 points (fuzzy match)
+   * - Publisher match: 0-20 points (exact: 20)
+   */
+  private calculateWishlistMatchScore(listing: any, wishlistItem: any): number {
+    let score = 0;
+
+    // 1. GRADE MATCH (0-30 points)
+    if (listing.classGrade && wishlistItem.grade) {
+      if (listing.classGrade === wishlistItem.grade) {
+        score += 30; // Exact match
+      } else if (this.isAdjacentGrade(listing.classGrade, wishlistItem.grade)) {
+        score += 20; // Adjacent grade
+      } else if (this.isCloseGrade(listing.classGrade, wishlistItem.grade)) {
+        score += 10; // Close grade
+      }
+    }
+
+    // 2. SUBJECT MATCH (0-25 points)
+    if (listing.subject && wishlistItem.subject) {
+      if (listing.subject.toLowerCase() === wishlistItem.subject.toLowerCase()) {
+        score += 25;
+      }
+    }
+
+    // 3. TITLE SIMILARITY (0-25 points) - Fuzzy match
+    if (listing.title && wishlistItem.title) {
+      const titleSimilarity = this.calculateStringSimilarity(
+        listing.title.toLowerCase(),
+        wishlistItem.title.toLowerCase()
+      );
+      score += Math.round(titleSimilarity * 25);
+    }
+
+    // 4. PUBLISHER MATCH (0-20 points)
+    if (listing.publisher && wishlistItem.publisher) {
+      const publisherSimilarity = this.calculateStringSimilarity(
+        listing.publisher.toLowerCase(),
+        wishlistItem.publisher.toLowerCase()
+      );
+      if (publisherSimilarity >= 0.8) {
+        score += 20;
+      } else if (publisherSimilarity >= 0.5) {
+        score += 10;
+      }
+    }
+
+    return Math.min(score, 100); // Cap at 100
+  }
+
+  /**
+   * Calculate string similarity using Levenshtein distance
+   * Returns a value between 0 and 1
+   */
+  private calculateStringSimilarity(str1: string, str2: string): number {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+
+    if (longer.length === 0) {
+      return 1.0;
+    }
+
+    // Check if one string contains the other (for partial matches)
+    if (longer.includes(shorter)) {
+      return 0.9;
+    }
+
+    // Calculate Levenshtein distance
+    const distance = this.levenshteinDistance(longer, shorter);
+    return (longer.length - distance) / longer.length;
+  }
+
+  /**
+   * Calculate Levenshtein distance between two strings
+   */
+  private levenshteinDistance(str1: string, str2: string): number {
+    const matrix: number[][] = [];
+
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+
+    return matrix[str2.length][str1.length];
   }
 }
 

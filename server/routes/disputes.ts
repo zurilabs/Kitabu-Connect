@@ -23,7 +23,8 @@ const router = Router();
 
 // Validation schemas
 const createDisputeSchema = z.object({
-  cycleId: z.string().uuid(),
+  cycleId: z.string().uuid().optional(),
+  swapOrderId: z.number().optional(),
   respondentId: z.string().uuid().optional(),
   disputeType: z.enum([
     "book_condition",
@@ -39,7 +40,10 @@ const createDisputeSchema = z.object({
   evidencePhotoUrls: z.array(z.string().url()).optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   disputeValue: z.number().optional(),
-});
+}).refine(
+  (data) => data.cycleId || data.swapOrderId,
+  { message: "Either cycleId or swapOrderId must be provided" }
+);
 
 const addMessageSchema = z.object({
   message: z.string().min(1, "Message cannot be empty"),

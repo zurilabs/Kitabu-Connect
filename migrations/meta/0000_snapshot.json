@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "503d990f-e182-424d-92b5-8bf8bd79727e",
+  "id": "502349e8-133c-4e85-98b4-2454fc7aaa86",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_condition_reports": {
@@ -1048,7 +1048,14 @@
           "name": "cycle_id",
           "type": "varchar(36)",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "swap_order_id": {
+          "name": "swap_order_id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "reporter_id": {
@@ -1226,6 +1233,13 @@
           ],
           "isUnique": false
         },
+        "idx_disputes_swap_order": {
+          "name": "idx_disputes_swap_order",
+          "columns": [
+            "swap_order_id"
+          ],
+          "isUnique": false
+        },
         "idx_disputes_status": {
           "name": "idx_disputes_status",
           "columns": [
@@ -1262,6 +1276,19 @@
           "tableTo": "swap_cycles",
           "columnsFrom": [
             "cycle_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "cycle_disputes_swap_order_id_swap_orders_id_fk": {
+          "name": "cycle_disputes_swap_order_id_swap_orders_id_fk",
+          "tableFrom": "cycle_disputes",
+          "tableTo": "swap_orders",
+          "columnsFrom": [
+            "swap_order_id"
           ],
           "columnsTo": [
             "id"

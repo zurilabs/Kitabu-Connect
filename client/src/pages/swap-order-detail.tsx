@@ -27,6 +27,7 @@ import OrderTimeline from "@/components/swap-orders/OrderTimeline";
 import DeliveryConfirmation from "@/components/swap-orders/DeliveryConfirmation";
 import CommitmentFeePayment from "@/components/swap-orders/CommitmentFeePayment";
 import PurchaseOrderPayment from "@/components/swap-orders/PurchaseOrderPayment";
+import ReportIssueDialog from "@/components/swap-orders/ReportIssueDialog";
 
 interface Message {
   message: {
@@ -801,6 +802,27 @@ export default function SwapOrderDetail() {
               isRequester={isRequester}
               onSuccess={fetchSwapOrder}
             />
+          )}
+
+          {/* Report Issue */}
+          {swapOrder.status !== "cancelled" && swapOrder.status !== "rejected" && swapOrder.status !== "pending" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Need Help?</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Having an issue with this order? Report it and our team will help resolve it.
+                </p>
+                <ReportIssueDialog
+                  swapOrderId={swapOrder.id}
+                  onSuccess={() => {
+                    toast.success("Dispute created. Redirecting to disputes page...");
+                    setTimeout(() => setLocation("/disputes"), 1500);
+                  }}
+                />
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

@@ -19,7 +19,8 @@ import { formatDistanceToNow } from "date-fns";
 
 interface Dispute {
   id: string;
-  cycleId: string;
+  cycleId: string | null;
+  swapOrderId: number | null;
   reporterId: string;
   respondentId: string | null;
   disputeType: string;

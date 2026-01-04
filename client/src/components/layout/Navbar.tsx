@@ -11,7 +11,8 @@ import {
   Heart,
   ArrowLeftRight,
   MessageSquare,
-  Users
+  Users,
+  BookMarked
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -125,6 +126,11 @@ export function Navbar() {
           <Link href="/favorites">
             <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/favorites') ? 'text-primary' : 'text-muted-foreground'}`}>
               Favorites
+            </span>
+          </Link>
+          <Link href="/wishlist">
+            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/wishlist') ? 'text-primary' : 'text-muted-foreground'}`}>
+              Wishlist
             </span>
           </Link>
           <Link href="/conversations">
@@ -245,6 +251,9 @@ export function Navbar() {
                       </Link>
                       <Link href="/favorites" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
                         Favorites
+                      </Link>
+                      <Link href="/wishlist" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                        Wishlist
                       </Link>
                       <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
                         Dashboard

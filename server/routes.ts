@@ -34,6 +34,7 @@ import cyclesRoutes from "./routes/cycles";
 import gamificationRoutes from "./routes/gamification";
 import childrenRoutes from "./routes/children";
 import disputeRoutes from "./routes/disputes";
+import wishlistRoutes from "./routes/wishlist";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -120,6 +121,11 @@ export async function registerRoutes(
   // DISPUTES ROUTES
   // ============================================
   app.use("/api/disputes", disputeRoutes);
+
+  // ============================================
+  // WISHLIST ROUTES
+  // ============================================
+  app.use("/api/wishlist", wishlistRoutes);
 
   // ============================================
   // PAYSTACK WEBHOOK

@@ -111,7 +111,8 @@ CREATE TABLE `conversations` (
 --> statement-breakpoint
 CREATE TABLE `cycle_disputes` (
 	`id` varchar(36) NOT NULL,
-	`cycle_id` varchar(36) NOT NULL,
+	`cycle_id` varchar(36),
+	`swap_order_id` int,
 	`reporter_id` varchar(36) NOT NULL,
 	`respondent_id` varchar(36),
 	`dispute_type` varchar(50) NOT NULL,
@@ -578,6 +579,7 @@ ALTER TABLE `conversations` ADD CONSTRAINT `conversations_user1_id_users_id_fk` 
 ALTER TABLE `conversations` ADD CONSTRAINT `conversations_user2_id_users_id_fk` FOREIGN KEY (`user2_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `conversations` ADD CONSTRAINT `conversations_book_listing_id_book_listings_id_fk` FOREIGN KEY (`book_listing_id`) REFERENCES `book_listings`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_cycle_id_swap_cycles_id_fk` FOREIGN KEY (`cycle_id`) REFERENCES `swap_cycles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_swap_order_id_swap_orders_id_fk` FOREIGN KEY (`swap_order_id`) REFERENCES `swap_orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_reporter_id_users_id_fk` FOREIGN KEY (`reporter_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_respondent_id_users_id_fk` FOREIGN KEY (`respondent_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `cycle_disputes` ADD CONSTRAINT `cycle_disputes_condition_report_id_book_condition_reports_id_fk` FOREIGN KEY (`condition_report_id`) REFERENCES `book_condition_reports`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -653,6 +655,7 @@ CREATE INDEX `idx_conversations_user2` ON `conversations` (`user2_id`);--> state
 CREATE INDEX `idx_conversations_book_listing` ON `conversations` (`book_listing_id`);--> statement-breakpoint
 CREATE INDEX `idx_conversations_participants` ON `conversations` (`user1_id`,`user2_id`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_cycle` ON `cycle_disputes` (`cycle_id`);--> statement-breakpoint
+CREATE INDEX `idx_disputes_swap_order` ON `cycle_disputes` (`swap_order_id`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_status` ON `cycle_disputes` (`status`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_reporter` ON `cycle_disputes` (`reporter_id`);--> statement-breakpoint
 CREATE INDEX `idx_disputes_respondent` ON `cycle_disputes` (`respondent_id`);--> statement-breakpoint
