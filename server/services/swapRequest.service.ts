@@ -179,7 +179,6 @@ export class SwapRequestService {
             id: users.id,
             fullName: users.fullName,
             profilePictureUrl: users.profilePictureUrl,
-            schoolName: users.schoolName,
           },
         })
         .from(swapRequests)
@@ -222,7 +221,6 @@ export class SwapRequestService {
             id: users.id,
             fullName: users.fullName,
             profilePictureUrl: users.profilePictureUrl,
-            schoolName: users.schoolName,
           },
           requestedBook: {
             id: bookListings.id,
@@ -269,7 +267,6 @@ export class SwapRequestService {
             id: users.id,
             fullName: users.fullName,
             profilePictureUrl: users.profilePictureUrl,
-            schoolName: users.schoolName,
           },
           requestedBook: {
             id: bookListings.id,
@@ -344,7 +341,6 @@ export class SwapRequestService {
             id: users.id,
             fullName: users.fullName,
             profilePictureUrl: users.profilePictureUrl,
-            schoolName: users.schoolName,
             phoneNumber: users.phoneNumber,
           },
           requestedBook: {

@@ -3,6 +3,7 @@ import {
   wishlistItems,
   children,
   users,
+  bookListings,
   type CreateWishlistItemInput,
   type UpdateWishlistItemInput,
 } from "../db/schema/index.ts";
@@ -60,8 +61,14 @@ export class WishlistService {
 
       const wishlistItemId = result.insertId;
 
-      // Fetch the complete wishlist item
-      const wishlistItem = await this.getWishlistItemById(wishlistItemId, parentId);
+      // Fetch the complete wishlist item with parent info
+      const wishlistItem = await this.getWishlistItemWithParent(wishlistItemId, parentId);
+
+      // IMPORTANT: Check existing book listings for matches (reverse matching)
+      // This runs asynchronously so it doesn't block the response
+      this.checkExistingListingsForMatch(wishlistItem, parentId).catch((error) => {
+        console.error("[WishlistService] Error checking existing listings:", error);
+      });
 
       return {
         success: true,
@@ -73,6 +80,123 @@ export class WishlistService {
         success: false,
         message: "Failed to create wishlist item",
       };
+    }
+  }
+
+  /**
+   * Get wishlist item with parent information (for matching)
+   */
+  private async getWishlistItemWithParent(
+    wishlistItemId: number,
+    parentId: string
+  ): Promise<any | null> {
+    try {
+      const [item] = await db
+        .select({
+          wishlistItem: wishlistItems,
+          child: children,
+          parent: users,
+        })
+        .from(wishlistItems)
+        .innerJoin(children, eq(wishlistItems.childId, children.id))
+        .innerJoin(users, eq(children.parentId, users.id))
+        .where(
+          and(
+            eq(wishlistItems.id, wishlistItemId),
+            eq(children.parentId, parentId)
+          )
+        )
+        .limit(1);
+
+      if (!item) {
+        return null;
+      }
+
+      return {
+        ...item.wishlistItem,
+        child: {
+          id: item.child.id,
+          parentId: item.child.parentId,
+          name: item.child.name,
+          grade: item.child.grade,
+        },
+        parent: {
+          id: item.parent.id,
+          fullName: item.parent.fullName,
+          email: item.parent.email,
+        },
+      };
+    } catch (error) {
+      console.error("Error fetching wishlist item with parent:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Check existing book listings for matches when a new wishlist item is created
+   * This is "reverse matching" - checking listings against a new wishlist item
+   */
+  private async checkExistingListingsForMatch(wishlistItem: any, parentId: string): Promise<void> {
+    try {
+      // Dynamic import to avoid circular dependency
+      const { bookListingService } = await import("./bookListing.service.ts");
+
+      console.log(`[WishlistService] 🔍 Checking existing listings for new wishlist item: "${wishlistItem.title}"`);
+
+      // Get all active book listings (excluding the parent's own listings)
+      const activeListings = await db
+        .select()
+        .from(bookListings)
+        .where(
+          and(
+            eq(bookListings.listingStatus, "active"),
+            sql`${bookListings.quantityAvailable} > 0`,
+            sql`${bookListings.sellerId} != ${parentId}`
+          )
+        )
+        .orderBy(desc(bookListings.createdAt))
+        .limit(200); // Check up to 200 most recent listings
+
+      console.log(`[WishlistService] Found ${activeListings.length} active listings to check against wishlist item`);
+
+      let matchCount = 0;
+
+      // Check each listing against the wishlist item
+      for (const listing of activeListings) {
+        // Use the same matching algorithm from bookListingService
+        const matchResult = (bookListingService as any).calculateWishlistMatchScore(listing, wishlistItem);
+
+        if (matchResult.score >= 60) {
+          console.log(`[WishlistService] ✅ Match found! Listing: "${listing.title}" (ID: ${listing.id}), Score: ${matchResult.score}`);
+
+          matchCount++;
+
+          // Determine match quality
+          let matchQuality: string;
+          if (matchResult.score >= 100) {
+            matchQuality = "excellent";
+          } else if (matchResult.score >= 80) {
+            matchQuality = "good";
+          } else {
+            matchQuality = "fair";
+          }
+
+          // Send notification using the bookListingService method
+          await (bookListingService as any).sendWishlistMatchNotification(
+            {
+              wishlistItem,
+              score: matchResult.score,
+              matchQuality,
+              matchReasons: matchResult.matchReasons,
+            },
+            listing
+          );
+        }
+      }
+
+      console.log(`[WishlistService] ✨ Completed reverse matching for wishlist item ${wishlistItem.id}. Found ${matchCount} matches.`);
+    } catch (error) {
+      console.error("[WishlistService] Error in checkExistingListingsForMatch:", error);
     }
   }
 
@@ -383,6 +507,42 @@ export class WishlistService {
     } catch (error) {
       console.error("Error fetching active wishlist items:", error);
       return [];
+    }
+  }
+
+  /**
+   * Update wishlist notification timestamp
+   * Called when a match notification is sent to track the latest notification
+   * Note: Does NOT mark as fulfilled - allows multiple matches for same wishlist item
+   */
+  async updateWishlistNotificationTime(
+    wishlistItemId: number,
+    listingId: number
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    try {
+      await db
+        .update(wishlistItems)
+        .set({
+          notifiedAt: new Date(),
+          matchedListingId: listingId, // Track the most recent match
+          updatedAt: new Date(),
+        })
+        .where(eq(wishlistItems.id, wishlistItemId));
+
+      console.log(`[WishlistService] Updated notification time for wishlist item ${wishlistItemId} with listing ${listingId}`);
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      console.error("Error updating wishlist notification time:", error);
+      return {
+        success: false,
+        message: "Failed to update notification time",
+      };
     }
   }
 }

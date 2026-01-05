@@ -81,8 +81,9 @@ interface Dispute {
 
 interface DisputeDetailResponse {
   success: boolean;
-  dispute: Dispute;
-  messages: DisputeMessage[];
+  dispute: Dispute & {
+    messages: DisputeMessage[];
+  };
 }
 
 export default function DisputeDetail() {
@@ -96,7 +97,10 @@ export default function DisputeDetail() {
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [showRespondForm, setShowRespondForm] = useState(false);
   const [respondText, setRespondText] = useState("");
+  const [showResolveForm, setShowResolveForm] = useState(false);
+  const [resolutionText, setResolutionText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const previousMessageCountRef = useRef<number>(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -115,7 +119,12 @@ export default function DisputeDetail() {
   }, [id]);
 
   useEffect(() => {
-    scrollToBottom();
+    // Only scroll if a new message was added (count increased)
+    // This prevents auto-scroll when just refetching the same data
+    if (messages.length > previousMessageCountRef.current) {
+      scrollToBottom();
+    }
+    previousMessageCountRef.current = messages.length;
   }, [messages]);
 
   const fetchCurrentUser = async () => {
@@ -142,7 +151,7 @@ export default function DisputeDetail() {
 
       const data: DisputeDetailResponse = await response.json();
       setDispute(data.dispute);
-      setMessages(data.messages || []);
+      setMessages(data.dispute.messages || []);
     } catch (error) {
       console.error("Error fetching dispute:", error);
       toast.error("Failed to load dispute details");
@@ -205,6 +214,38 @@ export default function DisputeDetail() {
     } catch (error: any) {
       console.error("Error submitting response:", error);
       toast.error(error.message || "Failed to submit response");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSelfResolve = async () => {
+    if (!resolutionText.trim()) {
+      toast.error("Please describe the resolution");
+      return;
+    }
+
+    setSending(true);
+    try {
+      const response = await fetch(`/api/disputes/${id}/self-resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ resolution: resolutionText }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to resolve dispute");
+      }
+
+      setResolutionText("");
+      setShowResolveForm(false);
+      toast.success("Dispute resolved successfully");
+      await fetchDispute();
+    } catch (error: any) {
+      console.error("Error resolving dispute:", error);
+      toast.error(error.message || "Failed to resolve dispute");
     } finally {
       setSending(false);
     }
@@ -303,6 +344,8 @@ export default function DisputeDetail() {
   const isReporter = currentUserId === dispute.reporterId;
   const isRespondent = currentUserId === dispute.respondentId;
   const canRespond = isRespondent && dispute.status === "awaiting_response";
+  const canSelfResolve = (isReporter || isRespondent) &&
+    !["resolved", "closed"].includes(dispute.status);
   const canEscalate = (isReporter || isRespondent) &&
     !["resolved", "closed", "escalated"].includes(dispute.status);
 
@@ -401,6 +444,63 @@ export default function DisputeDetail() {
                 <Button onClick={handleRespond} disabled={sending || !respondText.trim()}>
                   {sending ? "Submitting..." : "Submit Response"}
                 </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Self-Resolution Form */}
+          {canSelfResolve && !showResolveForm && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Reached an Agreement?</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  If you and the other party have resolved this dispute through discussion,
+                  you can mark it as resolved here.
+                </p>
+                <Button onClick={() => setShowResolveForm(true)} variant="default">
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Mark as Resolved
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {canSelfResolve && showResolveForm && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Resolve Dispute</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="resolution">Resolution Summary</Label>
+                  <Textarea
+                    id="resolution"
+                    placeholder="Briefly describe how this dispute was resolved (e.g., 'We agreed to exchange the book', 'Issue was a misunderstanding - resolved')..."
+                    value={resolutionText}
+                    onChange={(e) => setResolutionText(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSelfResolve}
+                    disabled={sending || !resolutionText.trim()}
+                  >
+                    {sending ? "Resolving..." : "Confirm Resolution"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowResolveForm(false);
+                      setResolutionText("");
+                    }}
+                    disabled={sending}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}

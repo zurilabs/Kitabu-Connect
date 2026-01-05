@@ -31,8 +31,14 @@ export function useConversation() {
 
         return response.json();
       },
-      refetchInterval: 5000, // Poll every 5 seconds for new messages
-      refetchIntervalInBackground: true, // Continue polling even when tab is not focused
+      // OPTIMIZED POLLING STRATEGY:
+      // - Poll every 30 seconds (down from 5 seconds) to reduce server load
+      // - Only poll when tab is focused (users actively viewing the app)
+      // - For real-time messaging, consider implementing WebSocket/SSE in the future
+      refetchInterval: 30000, // Poll every 30 seconds (was 5 seconds)
+      refetchIntervalInBackground: false, // Don't poll when tab is not active (was true)
+      // Cache for 20 seconds to reduce redundant queries
+      staleTime: 20000,
     });
   };
 
@@ -85,8 +91,12 @@ export function useConversation() {
         return response.json();
       },
       enabled: !!conversationId,
-      refetchInterval: 3000, // Poll every 3 seconds for new messages in active conversation
+      // OPTIMIZED: Poll every 10 seconds for new messages (down from 3 seconds)
+      // This is acceptable for messaging - 10 seconds is still responsive enough
+      refetchInterval: 10000, // Poll every 10 seconds (was 3 seconds)
       refetchIntervalInBackground: false, // Only poll when user is viewing the conversation
+      // Cache for 5 seconds
+      staleTime: 5000,
     });
   };
 

@@ -478,7 +478,7 @@ export default function WishlistPage() {
                     <SelectTrigger>
                       <SelectValue placeholder={isLoadingPublishers ? "Loading..." : "Select publisher"} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px] overflow-y-auto">
                       {publishers.map((publisher) => (
                         <SelectItem key={publisher.id} value={publisher.name}>
                           {publisher.name}
@@ -506,7 +506,7 @@ export default function WishlistPage() {
                     <SelectTrigger>
                       <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select subject"} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px] overflow-y-auto">
                       {subjects.map((subject) => (
                         <SelectItem key={subject.id} value={subject.name}>
                           {subject.name}
@@ -647,7 +647,7 @@ export default function WishlistPage() {
                     <SelectTrigger>
                       <SelectValue placeholder={isLoadingPublishers ? "Loading..." : "Select publisher"} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px] overflow-y-auto">
                       {publishers.map((publisher) => (
                         <SelectItem key={publisher.id} value={publisher.name}>
                           {publisher.name}
@@ -675,7 +675,7 @@ export default function WishlistPage() {
                     <SelectTrigger>
                       <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select subject"} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px] overflow-y-auto">
                       {subjects.map((subject) => (
                         <SelectItem key={subject.id} value={subject.name}>
                           {subject.name}

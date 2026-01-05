@@ -24,6 +24,7 @@ import {
 } from "../db/schema";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
+import { notificationService } from "./notification.service";
 
 /* ================================
    CONSTANTS
@@ -168,12 +169,12 @@ export async function createDispute(input: CreateDisputeInput) {
 
   // Notify respondent if specified
   if (input.respondentId) {
-    await db.insert(notifications).values({
+    await notificationService.createNotification({
       userId: input.respondentId,
       type: 'dispute_created',
       title: 'New Dispute Filed',
       message: `A dispute has been filed regarding your swap. Please respond within 48 hours.`,
-      metadata: JSON.stringify({ disputeId: dispute.id }),
+      actionUrl: `/disputes/${dispute.id}`,
     });
   }
 
@@ -185,12 +186,12 @@ export async function createDispute(input: CreateDisputeInput) {
     .limit(1);
 
   // Notify reporter of successful creation
-  await db.insert(notifications).values({
+  await notificationService.createNotification({
     userId: input.reporterId,
     type: 'dispute_filed',
     title: 'Dispute Filed Successfully',
     message: `Your dispute "${input.title}" has been filed. ${input.respondentId ? 'The other party has 48 hours to respond.' : 'Our team will review it soon.'}`,
-    metadata: JSON.stringify({ disputeId: dispute.id }),
+    actionUrl: `/disputes/${dispute.id}`,
   });
 
   return dispute.id;
@@ -571,12 +572,12 @@ export async function addDisputeMessage(input: AddMessageInput) {
     : dispute.reporterId;
 
   if (recipientId) {
-    await db.insert(notifications).values({
+    await notificationService.createNotification({
       userId: recipientId,
       type: 'dispute_message',
       title: 'New Dispute Message',
       message: `You have a new message in dispute: ${dispute.title}`,
-      metadata: JSON.stringify({ disputeId: input.disputeId }),
+      actionUrl: `/disputes/${input.disputeId}`,
     });
   }
 
@@ -631,14 +632,99 @@ export async function respondToDispute(
     .limit(1);
 
   if (dispute) {
-    await db.insert(notifications).values({
+    await notificationService.createNotification({
       userId: dispute.reporterId,
       type: 'dispute_response',
       title: 'Response to Your Dispute',
       message: `The other party has responded to your dispute: ${dispute.title}`,
-      metadata: JSON.stringify({ disputeId }),
+      actionUrl: `/disputes/${disputeId}`,
     });
   }
+}
+
+/**
+ * Self-resolve dispute (both parties agree)
+ */
+export async function selfResolveDispute(
+  disputeId: string,
+  userId: string,
+  resolution: string
+) {
+  const now = new Date();
+
+  // Get dispute to verify user is involved
+  const [dispute] = await db
+    .select()
+    .from(cycleDisputes)
+    .where(eq(cycleDisputes.id, disputeId))
+    .limit(1);
+
+  if (!dispute) {
+    throw new Error('Dispute not found');
+  }
+
+  // Check if user is reporter or respondent
+  const isReporter = dispute.reporterId === userId;
+  const isRespondent = dispute.respondentId === userId;
+
+  if (!isReporter && !isRespondent) {
+    throw new Error('You are not authorized to resolve this dispute');
+  }
+
+  // Check if dispute is in a state that can be self-resolved
+  if (['resolved', 'closed'].includes(dispute.status)) {
+    throw new Error('This dispute is already resolved');
+  }
+
+  // Update dispute to resolved
+  await db
+    .update(cycleDisputes)
+    .set({
+      status: 'resolved',
+      resolution,
+      resolutionType: 'no_action', // Self-resolved means no penalties
+      resolvedBy: userId,
+      resolvedAt: now,
+      enforcementStatus: 'completed',
+    })
+    .where(eq(cycleDisputes.id, disputeId));
+
+  // Get user info for timeline
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  // Add timeline event
+  await addTimelineEvent({
+    disputeId,
+    eventType: 'resolved',
+    actorId: userId,
+    description: `Dispute self-resolved by ${user?.fullName || 'user'}`,
+    metadata: JSON.stringify({ resolutionType: 'self_resolved' }),
+  });
+
+  // Notify both parties
+  const parties = [dispute.reporterId];
+  if (dispute.respondentId) {
+    parties.push(dispute.respondentId);
+  }
+
+  for (const partyId of parties) {
+    // Don't notify the user who resolved it
+    if (partyId !== userId) {
+      await notificationService.createNotification({
+        userId: partyId,
+        type: 'dispute_resolved',
+        title: 'Dispute Resolved',
+        message: `The dispute "${dispute.title}" has been resolved by mutual agreement.`,
+        actionUrl: `/disputes/${disputeId}`,
+      });
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -693,12 +779,12 @@ export async function assignMediator(disputeId: string, mediatorId: string) {
     .limit(1);
 
   if (dispute) {
-    await db.insert(notifications).values({
+    await notificationService.createNotification({
       userId: mediatorId,
       type: 'dispute_assigned',
       title: 'Dispute Assigned to You',
       message: `You have been assigned to mediate: ${dispute.title}`,
-      metadata: JSON.stringify({ disputeId }),
+      actionUrl: `/disputes/${disputeId}`,
     });
   }
 }
@@ -753,15 +839,12 @@ export async function resolveDispute(input: ResolveDisputeInput) {
     }
 
     for (const userId of parties) {
-      await db.insert(notifications).values({
+      await notificationService.createNotification({
         userId,
         type: 'dispute_resolved',
         title: 'Dispute Resolved',
         message: `The dispute "${dispute.title}" has been resolved. Resolution: ${input.resolutionType}`,
-        metadata: JSON.stringify({
-          disputeId: input.disputeId,
-          resolutionType: input.resolutionType,
-        }),
+        actionUrl: `/disputes/${input.disputeId}`,
       });
     }
   }

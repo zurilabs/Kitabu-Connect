@@ -9,6 +9,7 @@ import {
   escalateDispute,
   assignMediator,
   resolveDispute,
+  selfResolveDispute,
   isAdmin,
   getDisputeStats,
 } from "../services/dispute.service";
@@ -53,6 +54,10 @@ const addMessageSchema = z.object({
 const respondToDisputeSchema = z.object({
   response: z.string().min(10, "Response must be at least 10 characters"),
   evidencePhotoUrls: z.array(z.string().url()).optional(),
+});
+
+const selfResolveDisputeSchema = z.object({
+  resolution: z.string().min(10, "Resolution must be at least 10 characters"),
 });
 
 const resolveDisputeSchema = z.object({
@@ -275,6 +280,35 @@ router.post("/:id/respond", authenticateToken, async (req, res) => {
   } catch (error: any) {
     console.error("[Route] respond-to-dispute error:", error);
     return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+/**
+ * POST /api/disputes/:id/self-resolve
+ * Self-resolve a dispute (both parties agree)
+ */
+router.post("/:id/self-resolve", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const disputeId = req.params.id;
+
+    const validation = selfResolveDisputeSchema.safeParse(req.body);
+    if (!validation.success) {
+      const error = fromZodError(validation.error);
+      return res.status(400).json({ message: error.message });
+    }
+
+    await selfResolveDispute(disputeId, userId, validation.data.resolution);
+
+    return res.status(200).json({
+      success: true,
+      message: "Dispute resolved successfully",
+    });
+  } catch (error: any) {
+    console.error("[Route] self-resolve-dispute error:", error);
+    return res.status(400).json({
+      message: error.message || "Failed to resolve dispute"
+    });
   }
 });
 

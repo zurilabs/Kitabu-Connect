@@ -100,3 +100,5 @@ async function dropAllTables() {
 // Run the script
 dropAllTables();
 
+
+

@@ -926,6 +926,7 @@ class BookListingService {
     try {
       // Only check active listings
       if (listing.listingStatus !== "active") {
+        console.log(`[WishlistMatch] Skipping inactive listing: ${listing.id}`);
         return;
       }
 
@@ -933,98 +934,247 @@ class BookListingService {
       const activeWishlistItems = await wishlistService.getActiveWishlistItems();
 
       if (activeWishlistItems.length === 0) {
+        console.log(`[WishlistMatch] No active wishlist items to check`);
         return;
       }
 
-      console.log(`[WishlistMatch] Checking ${activeWishlistItems.length} wishlist items against listing: ${listing.title}`);
+      console.log(`[WishlistMatch] Checking ${activeWishlistItems.length} wishlist items against listing: ${listing.title} (ID: ${listing.id})`);
+      console.log(`[WishlistMatch] Listing details - ISBN: ${listing.isbn || 'N/A'}, Grade: ${listing.classGrade || 'N/A'}, Subject: ${listing.subject || 'N/A'}, Publisher: ${listing.publisher || 'N/A'}`);
+
+      const matches: Array<{ wishlistItem: any; score: number; matchQuality: string; matchReasons: string[] }> = [];
 
       // Check each wishlist item for matches
       for (const wishlistItem of activeWishlistItems) {
-        const matchScore = this.calculateWishlistMatchScore(listing, wishlistItem);
+        const { score, matchReasons } = this.calculateWishlistMatchScore(listing, wishlistItem);
 
-        // If match score is above threshold, send notification
-        if (matchScore >= 60) {
-          console.log(`[WishlistMatch] Match found! Score: ${matchScore}, Wishlist ID: ${wishlistItem.id}, Listing ID: ${listing.id}`);
+        // Determine match quality based on score
+        let matchQuality: string;
+        if (score >= 100) {
+          matchQuality = "excellent";
+        } else if (score >= 80) {
+          matchQuality = "good";
+        } else if (score >= 60) {
+          matchQuality = "fair";
+        } else {
+          matchQuality = "poor";
+        }
+
+        // If match score is above threshold (60), consider it a match
+        if (score >= 60) {
+          console.log(`[WishlistMatch] Match found! Score: ${score}, Quality: ${matchQuality}, Wishlist ID: ${wishlistItem.id}, Child: ${wishlistItem.child.name}`);
+          console.log(`[WishlistMatch] Match reasons: ${matchReasons.join(', ')}`);
 
           // Don't notify if the listing belongs to the same parent
           if (wishlistItem.parent.id === sellerId) {
-            console.log(`[WishlistMatch] Skipping notification - listing belongs to same parent`);
+            console.log(`[WishlistMatch] Skipping notification - listing belongs to same parent (${sellerId})`);
             continue;
           }
 
-          // Send notification to parent
-          await notificationService.createNotification({
-            userId: wishlistItem.parent.id,
-            type: "wishlist_match",
-            title: "Wishlist Match Found! 🎉",
-            message: `A book matching your wishlist for ${wishlistItem.child.name || "your child"} has been listed: "${listing.title}"`,
-            relatedBookListingId: listing.id,
-            actionUrl: `/book/${listing.id}`,
-          });
-
-          // Mark wishlist item as fulfilled (optional - you might want to keep it active for multiple matches)
-          // await wishlistService.markAsFulfilled(wishlistItem.id, listing.id);
+          matches.push({ wishlistItem, score, matchQuality, matchReasons });
         }
       }
+
+      // Send notifications for all matches
+      for (const match of matches) {
+        await this.sendWishlistMatchNotification(match, listing);
+      }
+
+      console.log(`[WishlistMatch] Completed matching for listing ${listing.id}. Found ${matches.length} matches.`);
     } catch (error) {
       console.error("[WishlistMatch] Error checking wishlist matches:", error);
+      // Don't throw - we don't want matching failures to block listing creation
+    }
+  }
+
+  /**
+   * Send notification for a wishlist match
+   */
+  private async sendWishlistMatchNotification(
+    match: { wishlistItem: any; score: number; matchQuality: string; matchReasons: string[] },
+    listing: any
+  ): Promise<void> {
+    try {
+      const { wishlistItem, score, matchQuality, matchReasons } = match;
+
+      // Craft notification message based on match quality
+      let notificationTitle: string;
+      let notificationMessage: string;
+
+      if (matchQuality === "excellent") {
+        notificationTitle = "Perfect Match Found! 🎯";
+        notificationMessage = `Great news! We found an exact match for "${wishlistItem.title}" on your wishlist for ${wishlistItem.child.name}. The book "${listing.title}" is now available!`;
+      } else if (matchQuality === "good") {
+        notificationTitle = "Great Match Found! ⭐";
+        notificationMessage = `Good news! We found a strong match for "${wishlistItem.title}" on your wishlist for ${wishlistItem.child.name}. Check out "${listing.title}"!`;
+      } else {
+        notificationTitle = "Possible Match Found 📚";
+        notificationMessage = `We found a book that might match your wishlist for ${wishlistItem.child.name}: "${listing.title}". ${matchReasons[0] || 'Similar to what you were looking for'}.`;
+      }
+
+      // Add match details to message
+      const matchDetails = matchReasons.slice(0, 2).join('. ');
+      if (matchDetails) {
+        notificationMessage += ` (${matchDetails})`;
+      }
+
+      // Send notification to parent
+      await notificationService.createNotification({
+        userId: wishlistItem.parent.id,
+        type: "wishlist_match",
+        title: notificationTitle,
+        message: notificationMessage,
+        relatedBookListingId: listing.id,
+        actionUrl: `/book/${listing.id}`,
+      });
+
+      console.log(`[WishlistMatch] Notification sent to parent ${wishlistItem.parent.id} (${wishlistItem.parent.email})`);
+
+      // Update wishlist item to track that we notified about this match
+      // Note: We're NOT marking as fulfilled because the parent might want multiple matches
+      // We just update the notifiedAt timestamp to track the latest notification
+      await wishlistService.updateWishlistNotificationTime(wishlistItem.id, listing.id);
+    } catch (error) {
+      console.error(`[WishlistMatch] Error sending notification for wishlist item ${match.wishlistItem.id}:`, error);
     }
   }
 
   /**
    * Calculate match score between a book listing and a wishlist item
-   * Returns a score from 0-100
-   * 
-   * Scoring:
-   * - Grade match: 0-30 points (exact: 30, adjacent: 20, close: 10)
-   * - Subject match: 0-25 points (exact: 25)
-   * - Title similarity: 0-25 points (fuzzy match)
-   * - Publisher match: 0-20 points (exact: 20)
+   * Returns score and detailed match reasons
+   *
+   * ENHANCED SCORING SYSTEM (0-200 points):
+   * - ISBN match: 0-100 points (exact: 100) - HIGHEST PRIORITY
+   * - Title similarity: 0-40 points (exact: 40, high: 35, good: 25)
+   * - Grade match: 0-25 points (exact: 25, adjacent: 15, close: 5)
+   * - Subject match: 0-20 points (exact: 20)
+   * - Publisher match: 0-10 points (exact/similar: 10)
+   * - Author match: 0-5 points (exact/similar: 5)
+   *
+   * MATCH QUALITY THRESHOLDS:
+   * - Excellent: ≥100 (ISBN match or very strong metadata match)
+   * - Good: ≥80 (strong match across multiple fields)
+   * - Fair: ≥60 (reasonable match)
    */
-  private calculateWishlistMatchScore(listing: any, wishlistItem: any): number {
+  private calculateWishlistMatchScore(listing: any, wishlistItem: any): {
+    score: number;
+    matchReasons: string[]
+  } {
     let score = 0;
+    const matchReasons: string[] = [];
 
-    // 1. GRADE MATCH (0-30 points)
-    if (listing.classGrade && wishlistItem.grade) {
-      if (listing.classGrade === wishlistItem.grade) {
-        score += 30; // Exact match
-      } else if (this.isAdjacentGrade(listing.classGrade, wishlistItem.grade)) {
-        score += 20; // Adjacent grade
-      } else if (this.isCloseGrade(listing.classGrade, wishlistItem.grade)) {
-        score += 10; // Close grade
+    // 1. ISBN MATCH (0-100 points) - HIGHEST PRIORITY
+    // ISBN is the most reliable identifier - if ISBNs match, it's the EXACT same book
+    if (listing.isbn && wishlistItem.isbn) {
+      const listingISBN = this.normalizeISBN(listing.isbn);
+      const wishlistISBN = this.normalizeISBN(wishlistItem.isbn);
+
+      if (listingISBN === wishlistISBN) {
+        score += 100; // Perfect match!
+        matchReasons.push(`Exact ISBN match (${listing.isbn})`);
+        console.log(`[WishlistMatch] ISBN MATCH! Listing ISBN: ${listingISBN}, Wishlist ISBN: ${wishlistISBN}`);
       }
     }
 
-    // 2. SUBJECT MATCH (0-25 points)
-    if (listing.subject && wishlistItem.subject) {
-      if (listing.subject.toLowerCase() === wishlistItem.subject.toLowerCase()) {
-        score += 25;
-      }
-    }
-
-    // 3. TITLE SIMILARITY (0-25 points) - Fuzzy match
+    // 2. TITLE SIMILARITY (0-40 points)
     if (listing.title && wishlistItem.title) {
       const titleSimilarity = this.calculateStringSimilarity(
         listing.title.toLowerCase(),
         wishlistItem.title.toLowerCase()
       );
-      score += Math.round(titleSimilarity * 25);
+
+      let titleScore = 0;
+      if (titleSimilarity >= 0.95) {
+        titleScore = 40; // Exact or nearly exact match
+        matchReasons.push("Exact title match");
+      } else if (titleSimilarity >= 0.85) {
+        titleScore = 35; // Very high similarity
+        matchReasons.push("Very similar title");
+      } else if (titleSimilarity >= 0.70) {
+        titleScore = 25; // High similarity
+        matchReasons.push("Similar title");
+      } else if (titleSimilarity >= 0.50) {
+        titleScore = 15; // Moderate similarity
+        matchReasons.push("Partially matching title");
+      }
+
+      score += titleScore;
+      console.log(`[WishlistMatch] Title similarity: ${(titleSimilarity * 100).toFixed(1)}% (${titleScore} points)`);
     }
 
-    // 4. PUBLISHER MATCH (0-20 points)
+    // 3. GRADE MATCH (0-25 points)
+    if (listing.classGrade && wishlistItem.grade) {
+      if (listing.classGrade === wishlistItem.grade) {
+        score += 25; // Exact match
+        matchReasons.push(`Matches grade ${wishlistItem.grade}`);
+      } else if (this.isAdjacentGrade(listing.classGrade, wishlistItem.grade)) {
+        score += 15; // Adjacent grade (±1)
+        matchReasons.push(`Close grade (${listing.classGrade} vs ${wishlistItem.grade})`);
+      } else if (this.isCloseGrade(listing.classGrade, wishlistItem.grade)) {
+        score += 5; // Close grade (±2)
+      }
+    }
+
+    // 4. SUBJECT MATCH (0-20 points)
+    if (listing.subject && wishlistItem.subject) {
+      if (listing.subject.toLowerCase() === wishlistItem.subject.toLowerCase()) {
+        score += 20;
+        matchReasons.push(`Same subject (${listing.subject})`);
+      }
+    }
+
+    // 5. PUBLISHER MATCH (0-10 points)
     if (listing.publisher && wishlistItem.publisher) {
       const publisherSimilarity = this.calculateStringSimilarity(
         listing.publisher.toLowerCase(),
         wishlistItem.publisher.toLowerCase()
       );
       if (publisherSimilarity >= 0.8) {
-        score += 20;
-      } else if (publisherSimilarity >= 0.5) {
         score += 10;
+        matchReasons.push(`Same publisher (${listing.publisher})`);
+      } else if (publisherSimilarity >= 0.5) {
+        score += 5;
       }
     }
 
-    return Math.min(score, 100); // Cap at 100
+    // 6. AUTHOR MATCH (0-5 points)
+    if (listing.author && wishlistItem.author) {
+      const authorSimilarity = this.calculateStringSimilarity(
+        listing.author.toLowerCase(),
+        wishlistItem.author.toLowerCase()
+      );
+      if (authorSimilarity >= 0.8) {
+        score += 5;
+        matchReasons.push(`Same author (${listing.author})`);
+      }
+    }
+
+    // 7. EDITION BONUS (additional context)
+    if (listing.edition && wishlistItem.edition) {
+      if (listing.edition.toLowerCase() === wishlistItem.edition.toLowerCase()) {
+        // Don't add to score, but add to reasons for context
+        matchReasons.push(`Same edition (${listing.edition})`);
+      }
+    }
+
+    // 8. CURRICULUM BONUS (additional context)
+    if (listing.curriculum && wishlistItem.curriculum) {
+      if (listing.curriculum.toLowerCase() === wishlistItem.curriculum.toLowerCase()) {
+        matchReasons.push(`Same curriculum (${listing.curriculum})`);
+      }
+    }
+
+    return {
+      score: Math.round(score),
+      matchReasons: matchReasons.length > 0 ? matchReasons : ["Multiple matching criteria"]
+    };
+  }
+
+  /**
+   * Normalize ISBN for comparison
+   * Removes hyphens, spaces, and converts to uppercase
+   */
+  private normalizeISBN(isbn: string): string {
+    return isbn.replace(/[\s-]/g, '').toUpperCase();
   }
 
   /**
@@ -1082,3 +1232,4 @@ class BookListingService {
 }
 
 export const bookListingService = new BookListingService();
+
