@@ -35,6 +35,8 @@ export function BookCard({ book }: BookCardProps) {
           <img
             src={book.image}
             alt={book.title}
+            width="400"
+            height="300"
             loading="lazy"
             decoding="async"
             className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
