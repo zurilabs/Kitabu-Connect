@@ -2,15 +2,9 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Home, Search, ArrowLeft, BookOpen } from "lucide-react";
 import { PageMeta } from "@/components/seo/PageMeta";
-import { useEffect, useState } from "react";
 
 export default function NotFound() {
-  const [floatingBooks, setFloatingBooks] = useState<number[]>([]);
-
-  useEffect(() => {
-    // Generate random positions for floating books
-    setFloatingBooks(Array.from({ length: 6 }, (_, i) => i));
-  }, []);
+  const floatingBooks = [0, 1, 2, 3, 4, 5];
 
   return (
     <>
@@ -79,10 +73,10 @@ export default function NotFound() {
             }}
           >
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900">
-              Oops! This Page is Lost
+              Oops! Seems you are Lost !
             </h2>
             <p className="text-lg text-gray-600 max-w-md mx-auto">
-              Looks like this book has been checked out or never existed in our library.
+            
               Let's help you find your way back!
             </p>
           </div>
