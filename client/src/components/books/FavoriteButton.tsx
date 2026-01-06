@@ -39,8 +39,14 @@ export function FavoriteButton({
       return response.json();
     },
     onMutate: async () => {
+      // Store the current state for potential rollback
+      const previousValue = isFavorited;
+
       // Optimistic update
       setIsFavorited(!isFavorited);
+
+      // Return context with previous value
+      return { previousValue };
     },
     onSuccess: (data) => {
       // Update actual state from server response
@@ -56,10 +62,13 @@ export function FavoriteButton({
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["favorites"] });
       queryClient.invalidateQueries({ queryKey: ["favoriteIds"] });
+      queryClient.invalidateQueries({ queryKey: ["favoritesCount"] });
     },
     onError: (error: Error, variables, context) => {
-      // Revert optimistic update on error
-      setIsFavorited(!isFavorited);
+      // Revert to the previous value stored in context
+      if (context?.previousValue !== undefined) {
+        setIsFavorited(context.previousValue);
+      }
 
       toast({
         title: "Error",

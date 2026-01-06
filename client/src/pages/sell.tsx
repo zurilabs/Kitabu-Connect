@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,17 +94,54 @@ const GRADES = [
 const CURRICULA = ["CBC (Competency Based)", "8-4-4 System", "IGCSE", "IB"];
 const TERMS = ["Term 1", "Term 2", "Term 3", "All Terms"];
 
+const STORAGE_KEY = 'kitabu_book_listing_draft';
+
 export default function SellBook() {
   const [step, setStep] = useState<Step>('isbn');
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [formData, setFormData] = useState<FormData>(() => {
+    // Try to restore from localStorage on mount
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Only restore if it's recent (within 24 hours)
+        if (parsed.timestamp && Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+          return parsed.data;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to restore form data:', error);
+    }
+    return initialFormData;
+  });
   const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { createListing } = useBookListing();
   const { publishers, isLoading: isLoadingPublishers } = usePublishers();
 
+  // Save form data to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        data: formData,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      console.error('Failed to save form data:', error);
+    }
+  }, [formData]);
+
   const updateFormData = (field: keyof FormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.error('Failed to clear draft:', error);
+    }
   };
 
   const handleISBNSearch = async (e: React.FormEvent) => {
@@ -239,6 +276,7 @@ export default function SellBook() {
 
     createListing.mutate(bookData, {
       onSuccess: () => {
+        clearDraft(); // Clear saved draft on successful submission
         setLocation('/dashboard');
       },
     });

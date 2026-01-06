@@ -15,6 +15,8 @@ interface ImageUploadProps {
 export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
   const [preview, setPreview] = useState<string | null>(value || null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -49,8 +51,18 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
     };
     reader.readAsDataURL(file);
 
+    // Store file for potential retry
+    setPendingFile(file);
+    setUploadError(null);
+
     // Upload to Cloudinary
+    await uploadFile(file);
+  };
+
+  const uploadFile = async (file: File) => {
     setIsUploading(true);
+    setUploadError(null);
+
     try {
       const formData = new FormData();
       formData.append('image', file);
@@ -79,6 +91,8 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
       // Update with Cloudinary URL
       setPreview(data.url);
       onChange?.(data.url);
+      setPendingFile(null);
+      setUploadError(null);
 
       toast({
         title: "Image uploaded",
@@ -86,16 +100,25 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
       });
     } catch (error) {
       console.error('Upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload image.";
+      setUploadError(errorMessage);
+
       toast({
         title: "Upload failed",
-        description: error instanceof Error ? error.message : "Failed to upload image.",
+        description: errorMessage + " Preview preserved - you can retry.",
         variant: "destructive",
       });
-      // Clear preview on error
-      setPreview(null);
-      onChange?.("");
+
+      // DON'T clear preview - keep it for retry
+      // DON'T notify parent to clear - preserve form state
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const retryUpload = () => {
+    if (pendingFile) {
+      uploadFile(pendingFile);
     }
   };
 
@@ -103,6 +126,8 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
     e.stopPropagation();
     setPreview(null);
     onChange?.("");
+    setPendingFile(null);
+    setUploadError(null);
     if (inputRef.current) {
       inputRef.current.value = "";
     }
@@ -123,6 +148,7 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
           ref={inputRef}
           type="file"
           accept="image/*"
+          capture="environment"
           className="hidden"
           onChange={handleFileChange}
           disabled={isUploading}
@@ -141,6 +167,31 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
               alt="Upload preview"
               className="w-full h-full object-cover"
             />
+            {uploadError && (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center p-4">
+                <div className="text-center space-y-3">
+                  <p className="text-sm text-white font-medium">Upload failed</p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      retryUpload();
+                    }}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Retrying...
+                      </>
+                    ) : (
+                      "Retry Upload"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="absolute top-2 right-2">
               <Button
                 variant="destructive"

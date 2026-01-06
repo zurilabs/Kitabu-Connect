@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Heart, BookOpen, Loader2, ShoppingCart } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,9 +31,34 @@ function BookImage({ src, alt }: { src: string | null; alt: string }) {
 }
 
 export default function Favorites() {
-  const { data, isLoading, error } = useFavorites(50, 0);
+  const [allFavorites, setAllFavorites] = useState<any[]>([]);
+  const [offset, setOffset] = useState(0);
+  const limit = 50;
+  const { data, isLoading, error } = useFavorites(limit, offset);
 
-  if (isLoading) {
+  // Accumulate favorites as we load more
+  useEffect(() => {
+    if (data?.favorites) {
+      setAllFavorites((prev) => {
+        // If offset is 0, replace all (fresh load)
+        if (offset === 0) {
+          return data.favorites;
+        }
+        // Otherwise, append new favorites avoiding duplicates
+        const existingIds = new Set(prev.map((f) => f.favoriteId));
+        const newFavorites = data.favorites.filter(
+          (f: any) => !existingIds.has(f.favoriteId)
+        );
+        return [...prev, ...newFavorites];
+      });
+    }
+  }, [data, offset]);
+
+  const loadMore = () => {
+    setOffset((prev) => prev + limit);
+  };
+
+  if (isLoading && offset === 0) {
     return (
       <div className="min-h-screen bg-muted/10 flex items-center justify-center">
         <div className="text-center">
@@ -57,8 +82,8 @@ export default function Favorites() {
     );
   }
 
-  const favorites = data?.favorites || [];
-  const isEmpty = favorites.length === 0;
+  const favorites = allFavorites;
+  const isEmpty = favorites.length === 0 && !isLoading;
 
   return (
     <div className="min-h-screen bg-muted/10 pb-20">
@@ -183,7 +208,16 @@ export default function Favorites() {
 
         {data?.hasMore && (
           <div className="mt-8 text-center">
-            <Button variant="outline">Load More</Button>
+            <Button variant="outline" onClick={loadMore} disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                "Load More"
+              )}
+            </Button>
           </div>
         )}
       </div>

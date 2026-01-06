@@ -40,17 +40,27 @@ export class FavoritesService {
         };
       }
 
-      // Add to favorites
-      const result = await db.insert(favorites).values({
-        userId,
-        listingId,
+      // Add to favorites and update count in transaction
+      const result = await db.transaction(async (tx) => {
+        const insertResult = await tx.insert(favorites).values({
+          userId,
+          listingId,
+        });
+
+        // Increment favoritesCount
+        await tx
+          .update(bookListings)
+          .set({ favoritesCount: sql`${bookListings.favoritesCount} + 1` })
+          .where(eq(bookListings.id, listingId));
+
+        return insertResult[0].insertId;
       });
 
       console.log(`[FavoritesService] User ${userId} favorited listing ${listingId}`);
 
       return {
         success: true,
-        favoriteId: result[0].insertId,
+        favoriteId: result,
         message: "Book added to favorites",
       };
     } catch (error) {
@@ -70,11 +80,26 @@ export class FavoritesService {
     message?: string;
   }> {
     try {
-      const result = await db
-        .delete(favorites)
-        .where(and(eq(favorites.userId, userId), eq(favorites.listingId, listingId)));
+      // Remove favorite and update count in transaction
+      const affectedRows = await db.transaction(async (tx) => {
+        const result = await tx
+          .delete(favorites)
+          .where(and(eq(favorites.userId, userId), eq(favorites.listingId, listingId)));
 
-      if (result[0].affectedRows === 0) {
+        if (result[0].affectedRows === 0) {
+          return 0;
+        }
+
+        // Decrement favoritesCount
+        await tx
+          .update(bookListings)
+          .set({ favoritesCount: sql`GREATEST(0, ${bookListings.favoritesCount} - 1)` })
+          .where(eq(bookListings.id, listingId));
+
+        return result[0].affectedRows;
+      });
+
+      if (affectedRows === 0) {
         return {
           success: false,
           message: "Favorite not found",
@@ -98,6 +123,7 @@ export class FavoritesService {
 
   /**
    * Toggle favorite status for a book
+   * Uses atomic operation to prevent race conditions
    */
   async toggleFavorite(userId: string, listingId: number): Promise<{
     success: boolean;
@@ -105,37 +131,52 @@ export class FavoritesService {
     message?: string;
   }> {
     try {
-      // Check if already favorited
-      const existing = await db
-        .select()
-        .from(favorites)
-        .where(and(eq(favorites.userId, userId), eq(favorites.listingId, listingId)))
-        .limit(1);
+      // Use a transaction to ensure atomicity
+      const result = await db.transaction(async (tx) => {
+        // Check if already favorited
+        const existing = await tx
+          .select()
+          .from(favorites)
+          .where(and(eq(favorites.userId, userId), eq(favorites.listingId, listingId)))
+          .limit(1);
 
-      if (existing.length > 0) {
-        // Remove from favorites
-        await db
-          .delete(favorites)
-          .where(and(eq(favorites.userId, userId), eq(favorites.listingId, listingId)));
+        if (existing.length > 0) {
+          // Remove from favorites
+          await tx
+            .delete(favorites)
+            .where(and(eq(favorites.userId, userId), eq(favorites.listingId, listingId)));
 
-        return {
-          success: true,
-          isFavorited: false,
-          message: "Removed from favorites",
-        };
-      } else {
-        // Add to favorites
-        await db.insert(favorites).values({
-          userId,
-          listingId,
-        });
+          // Decrement favoritesCount on the book listing
+          await tx
+            .update(bookListings)
+            .set({ favoritesCount: sql`GREATEST(0, ${bookListings.favoritesCount} - 1)` })
+            .where(eq(bookListings.id, listingId));
 
-        return {
-          success: true,
-          isFavorited: true,
-          message: "Added to favorites",
-        };
-      }
+          return { isFavorited: false, message: "Removed from favorites" };
+        } else {
+          // Add to favorites
+          await tx.insert(favorites).values({
+            userId,
+            listingId,
+          });
+
+          // Increment favoritesCount on the book listing
+          await tx
+            .update(bookListings)
+            .set({ favoritesCount: sql`${bookListings.favoritesCount} + 1` })
+            .where(eq(bookListings.id, listingId));
+
+          return { isFavorited: true, message: "Added to favorites" };
+        }
+      });
+
+      console.log(`[FavoritesService] User ${userId} toggled favorite for listing ${listingId}, now ${result.isFavorited ? 'favorited' : 'unfavorited'}`);
+
+      return {
+        success: true,
+        isFavorited: result.isFavorited,
+        message: result.message,
+      };
     } catch (error) {
       console.error("[FavoritesService] Toggle favorite error:", error);
       return {

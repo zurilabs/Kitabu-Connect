@@ -9,6 +9,8 @@ interface UploadedImage {
   url: string;
   publicId?: string;
   preview: string;
+  error?: string;
+  file?: File;
 }
 
 interface MultiImageUploadProps {
@@ -75,6 +77,7 @@ export function MultiImageUpload({
             resolve({
               url: '', // Will be filled after upload
               preview: reader.result as string,
+              file: file, // Store file for retry
             });
           };
           reader.readAsDataURL(file);
@@ -132,18 +135,98 @@ export function MultiImageUpload({
       });
     } catch (error) {
       console.error('Upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload images.";
+
       toast({
         title: "Upload failed",
-        description: error instanceof Error ? error.message : "Failed to upload images.",
+        description: errorMessage + " Previews preserved - you can retry.",
         variant: "destructive",
       });
-      // Remove failed uploads
-      setImages(prev => prev.filter(img => img.url !== ''));
+
+      // Mark images as failed but keep the previews
+      setImages(prev => prev.map(img => {
+        if (img.url === '') {
+          return { ...img, error: errorMessage };
+        }
+        return img;
+      }));
     } finally {
       setIsUploading(false);
       if (inputRef.current) {
         inputRef.current.value = '';
       }
+    }
+  };
+
+  const retryUpload = async (index: number) => {
+    const image = images[index];
+    if (!image.file) return;
+
+    // Clear error state
+    setImages(prev => prev.map((img, i) =>
+      i === index ? { ...img, error: undefined } : img
+    ));
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('images', image.file);
+
+      const response = await fetch('/api/upload/book-images', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Upload failed';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || error.message || 'Upload failed';
+        } catch {
+          errorMessage = `Upload failed (${response.status} ${response.statusText})`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+
+      // Update with Cloudinary URL
+      setImages(prev => prev.map((img, i) =>
+        i === index ? {
+          ...img,
+          url: data.images[0].url,
+          publicId: data.images[0].publicId,
+          error: undefined,
+          file: undefined,
+        } : img
+      ));
+
+      // Update parent
+      const allUrls = images.map((img, i) =>
+        i === index ? data.images[0].url : img.url
+      ).filter(Boolean);
+      onChange?.(allUrls);
+
+      toast({
+        title: "Image uploaded",
+        description: "Image uploaded successfully.",
+      });
+    } catch (error) {
+      console.error('Retry upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload image.";
+
+      setImages(prev => prev.map((img, i) =>
+        i === index ? { ...img, error: errorMessage } : img
+      ));
+
+      toast({
+        title: "Upload failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -170,9 +253,29 @@ export function MultiImageUpload({
                 alt={`Upload ${index + 1}`}
                 className="w-full h-full object-cover"
               />
-              {!image.url && (
+              {!image.url && !image.error && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <Loader2 className="w-6 h-6 animate-spin text-white" />
+                </div>
+              )}
+              {image.error && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center p-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="text-xs h-7"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      retryUpload(index);
+                    }}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      "Retry"
+                    )}
+                  </Button>
                 </div>
               )}
               <Button
@@ -203,6 +306,7 @@ export function MultiImageUpload({
             ref={inputRef}
             type="file"
             accept="image/*"
+            capture="environment"
             multiple
             className="hidden"
             onChange={handleFileChange}
