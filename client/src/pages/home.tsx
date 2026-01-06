@@ -3,6 +3,8 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { BookCard } from "@/components/ui/book-card";
 import { SwapCalculator } from "@/components/ui/swap-calculator";
+import { PageMeta } from "@/components/seo/PageMeta";
+import { OrganizationSchema, WebsiteSchema } from "@/components/seo/StructuredData";
 import { ArrowRight, BookOpen, ShieldCheck, Users, Loader2 } from "lucide-react";
 import heroImage from "@assets/generated_images/students_exchanging_books_on_campus.png";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,6 +45,26 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <PageMeta
+        title="Buy, Sell & Swap School Textbooks in Kenya"
+        description="Kenya's leading peer-to-peer textbook marketplace. Buy affordable used textbooks, sell your old books, or swap within your school community. Secure escrow payments, verified transactions, CBC & 8-4-4 curriculum books available."
+        keywords="textbooks Kenya, buy used textbooks, sell textbooks, textbook marketplace Kenya, CBC books, 8-4-4 textbooks, school books Kenya, peer-to-peer textbooks, swap textbooks, affordable school books, Nairobi textbooks"
+      />
+      <OrganizationSchema
+        name="Kitabu Connect"
+        url="https://kitabu.com"
+        logo="https://kitabu.com/icon-512.png"
+        description="Kenya's leading peer-to-peer textbook marketplace connecting students, parents and schools"
+        socialMedia={[
+          "https://twitter.com/kitabuconnect",
+          "https://facebook.com/kitabuconnect",
+        ]}
+      />
+      <WebsiteSchema
+        name="Kitabu Connect"
+        url="https://kitabu.com"
+        description="Buy, sell and swap textbooks within your school community"
+      />
       {/* Hero Section */}
       <section className="relative pt-12 pb-20 lg:pt-20 lg:pb-28 overflow-hidden">
         <div className="container px-4 md:px-6 lg:px-8">

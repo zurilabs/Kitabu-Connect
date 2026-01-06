@@ -1,0 +1,23 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /marketplace
+Allow: /book/
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /favorites
+Disallow: /wishlist
+Disallow: /sell
+Disallow: /edit-book/
+Disallow: /swaps
+Disallow: /orders/
+Disallow: /conversations
+Disallow: /notifications
+Disallow: /disputes
+
+# Allow search engines to crawl images
+User-agent: Googlebot-Image
+Allow: /
+
+# Sitemap location
+Sitemap: https://kitabu.com/sitemap.xml

@@ -35,6 +35,7 @@ import gamificationRoutes from "./routes/gamification";
 import childrenRoutes from "./routes/children";
 import disputeRoutes from "./routes/disputes";
 import wishlistRoutes from "./routes/wishlist";
+import sitemapRoutes from "./routes/sitemap";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -126,6 +127,11 @@ export async function registerRoutes(
   // WISHLIST ROUTES
   // ============================================
   app.use("/api/wishlist", wishlistRoutes);
+
+  // ============================================
+  // SITEMAP ROUTE (for SEO)
+  // ============================================
+  app.use("/", sitemapRoutes);
 
   // ============================================
   // PAYSTACK WEBHOOK

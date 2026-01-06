@@ -5,6 +5,8 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BookPlaceholder } from "@/components/ui/book-placeholder";
+import { PageMeta } from "@/components/seo/PageMeta";
+import { ProductSchema, BreadcrumbSchema } from "@/components/seo/StructuredData";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -89,8 +91,41 @@ export default function BookDetails() {
     setLocation(`/swaps/new?listingId=${book.id}`);
   };
 
+  const bookDescription = book.description || `${book.title} by ${book.author}. ${book.condition} condition. ${book.subject ? `Subject: ${book.subject}.` : ''} ${book.classGrade ? `Grade: ${book.classGrade}.` : ''}`;
+  const baseUrl = 'https://kitabu.com';
+  const bookUrl = `${baseUrl}/book/${bookId}`;
+  const ogImage = book.primaryPhotoUrl || book.photos?.[0]?.photoUrl || `${baseUrl}/placeholder-book.png`;
+
   return (
     <div className="container px-4 py-8 max-w-5xl mx-auto">
+      <PageMeta
+        title={`${book.title} - ${book.author}`}
+        description={bookDescription}
+        keywords={`${book.title}, ${book.author}, ${book.subject || 'textbook'}, ${book.classGrade || 'school book'}, buy textbook, ${book.condition} condition`}
+        ogImage={ogImage}
+        canonicalUrl={bookUrl}
+      />
+      <ProductSchema
+        name={book.title}
+        description={bookDescription}
+        image={ogImage}
+        price={bookPrice}
+        currency="KES"
+        availability={book.listingStatus === 'active' ? 'InStock' : 'OutOfStock'}
+        condition={book.condition === 'New' ? 'NewCondition' : 'UsedCondition'}
+        seller={{
+          name: book.seller?.fullName || 'Anonymous',
+          type: 'Person',
+        }}
+        url={bookUrl}
+      />
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: baseUrl },
+          { name: 'Marketplace', url: `${baseUrl}/marketplace` },
+          { name: book.title, url: bookUrl },
+        ]}
+      />
       <Button variant="ghost" className="mb-6 pl-0 hover:pl-2 transition-all" onClick={() => window.history.back()}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Marketplace
       </Button>

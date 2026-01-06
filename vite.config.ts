@@ -8,12 +8,26 @@ import runtimeErrorModal from "@replit/vite-plugin-runtime-error-modal";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Custom plugin to replace Google Analytics ID in HTML
+function htmlEnvPlugin() {
+  return {
+    name: 'html-env-plugin',
+    transformIndexHtml(html: string) {
+      return html.replace(
+        /__GA_MEASUREMENT_ID__/g,
+        process.env.VITE_GA_MEASUREMENT_ID || ''
+      );
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     devBanner(),
     runtimeErrorModal(),
+    htmlEnvPlugin(),
   ],
   resolve: {
     alias: {

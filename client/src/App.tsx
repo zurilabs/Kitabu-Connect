@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ActiveChildProvider } from "@/contexts/ActiveChildContext";
+import { usePageTracking } from "@/hooks/useAnalytics";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Marketplace from "@/pages/marketplace";
@@ -35,6 +36,8 @@ import Profile from "@/pages/profile";
 
 function Router() {
   const [location] = useLocation();
+  // Track page views with Google Analytics
+  usePageTracking();
   // Hide navbar on auth pages, onboarding, sell, edit, and swap form pages
   const shouldHideNavbar = location === "/login" || location === "/signup" || location === "/forgot-password" || location === "/onboarding" || location === "/sell" || location.startsWith("/edit-book") || location.startsWith("/swaps/new");
 

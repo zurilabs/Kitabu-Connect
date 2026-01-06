@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { PageMeta } from "@/components/seo/PageMeta";
 import { Link } from "wouter";
 import {
   Select,
@@ -370,6 +371,11 @@ export default function Marketplace() {
 
   return (
     <div className="min-h-screen bg-muted/10 pb-20">
+      <PageMeta
+        title="Marketplace - Browse Affordable School Textbooks"
+        description="Browse thousands of affordable used textbooks in Kenya. CBC, 8-4-4, IGCSE and IB curriculum books. Filter by grade, subject, condition and price. Secure escrow payments."
+        keywords="buy textbooks Kenya, used textbooks marketplace, CBC books for sale, 8-4-4 textbooks, IGCSE books Kenya, IB textbooks, affordable school books"
+      />
       {/* Child Selector Banner */}
       {children.length > 0 && (
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 border-b sticky top-0 z-40">
