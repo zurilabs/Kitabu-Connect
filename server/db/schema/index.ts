@@ -1003,8 +1003,8 @@ const baseBookListingSchema = z.object({
   publicationYear: z.number().min(1900).max(new Date().getFullYear() + 1).nullable().optional(),
 
   // Classification (Step 2)
-  subject: z.string().min(1, "Subject is required"),
-  classGrade: z.string().min(1, "Grade/Class is required"),
+  subject: z.string().nullable().optional(),
+  classGrade: z.string().nullable().optional(),
   curriculum: z.string().nullable().optional(),
   term: z.string().nullable().optional(),
   language: z.string().default("English"),

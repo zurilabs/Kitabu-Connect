@@ -174,14 +174,7 @@ export default function SellBook() {
         }
         break;
       case 'classification':
-        if (!formData.subject || !formData.classGrade) {
-          toast({
-            title: "Missing Information",
-            description: "Please select a subject and grade/class.",
-            variant: "destructive",
-          });
-          return false;
-        }
+        // Subject and Grade are now optional for non-school books
         break;
       case 'pricing':
         if (!formData.condition) {
@@ -446,10 +439,10 @@ export default function SellBook() {
 
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="subject">Subject *</Label>
+                      <Label htmlFor="subject">Subject</Label>
                       <Select value={formData.subject} onValueChange={(value) => updateFormData('subject', value)}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select subject" />
+                          <SelectValue placeholder="Select subject (optional for non-school books)" />
                         </SelectTrigger>
                         <SelectContent>
                           {SUBJECTS.map(subject => (
@@ -461,10 +454,10 @@ export default function SellBook() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="grade">Grade/Class *</Label>
+                        <Label htmlFor="grade">Grade/Class</Label>
                         <Select value={formData.classGrade} onValueChange={(value) => updateFormData('classGrade', value)}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select grade" />
+                            <SelectValue placeholder="Select grade (optional)" />
                           </SelectTrigger>
                           <SelectContent>
                             {GRADES.map(grade => (
