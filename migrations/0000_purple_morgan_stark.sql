@@ -569,6 +569,26 @@ CREATE TABLE `wallet_transactions` (
 	CONSTRAINT `wallet_transactions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
+CREATE TABLE `wishlist_items` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`child_id` int NOT NULL,
+	`title` varchar(500) NOT NULL,
+	`publisher` varchar(255),
+	`author` varchar(255),
+	`isbn` varchar(20),
+	`edition` varchar(50),
+	`subject` varchar(100),
+	`grade` varchar(50),
+	`curriculum` varchar(50),
+	`notes` text,
+	`status` varchar(20) NOT NULL DEFAULT 'active',
+	`matched_listing_id` int,
+	`notified_at` timestamp,
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	`updated_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `wishlist_items_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
 ALTER TABLE `book_condition_reports` ADD CONSTRAINT `book_condition_reports_cycle_id_swap_cycles_id_fk` FOREIGN KEY (`cycle_id`) REFERENCES `swap_cycles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `book_condition_reports` ADD CONSTRAINT `book_condition_reports_participant_id_cycle_participants_id_fk` FOREIGN KEY (`participant_id`) REFERENCES `cycle_participants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `book_condition_reports` ADD CONSTRAINT `book_condition_reports_reporter_id_users_id_fk` FOREIGN KEY (`reporter_id`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -631,6 +651,8 @@ ALTER TABLE `user_preferences` ADD CONSTRAINT `user_preferences_user_id_users_id
 ALTER TABLE `user_reliability_scores` ADD CONSTRAINT `user_reliability_scores_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_transaction_id_transactions_id_fk` FOREIGN KEY (`transaction_id`) REFERENCES `transactions`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `wishlist_items` ADD CONSTRAINT `wishlist_items_child_id_children_id_fk` FOREIGN KEY (`child_id`) REFERENCES `children`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `wishlist_items` ADD CONSTRAINT `wishlist_items_matched_listing_id_book_listings_id_fk` FOREIGN KEY (`matched_listing_id`) REFERENCES `book_listings`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX `idx_condition_reports_cycle` ON `book_condition_reports` (`cycle_id`);--> statement-breakpoint
 CREATE INDEX `idx_condition_reports_participant` ON `book_condition_reports` (`participant_id`);--> statement-breakpoint
 CREATE INDEX `idx_book_listings_seller` ON `book_listings` (`seller_id`);--> statement-breakpoint
@@ -702,4 +724,8 @@ CREATE INDEX `idx_reliability_score` ON `user_reliability_scores` (`reliability_
 CREATE INDEX `idx_reliability_user` ON `user_reliability_scores` (`user_id`);--> statement-breakpoint
 CREATE INDEX `idx_users_email` ON `users` (`email`);--> statement-breakpoint
 CREATE INDEX `idx_users_phone` ON `users` (`phone_number`);--> statement-breakpoint
-CREATE INDEX `idx_users_google` ON `users` (`google_id`);
+CREATE INDEX `idx_users_google` ON `users` (`google_id`);--> statement-breakpoint
+CREATE INDEX `idx_wishlist_items_child` ON `wishlist_items` (`child_id`);--> statement-breakpoint
+CREATE INDEX `idx_wishlist_items_status` ON `wishlist_items` (`status`);--> statement-breakpoint
+CREATE INDEX `idx_wishlist_items_grade_subject` ON `wishlist_items` (`grade`,`subject`);--> statement-breakpoint
+CREATE INDEX `idx_wishlist_items_title` ON `wishlist_items` (`title`);
