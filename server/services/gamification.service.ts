@@ -114,6 +114,42 @@ const BADGES: Badge[] = [
     icon: "✨",
     condition: (stats) => stats.penaltyPoints === 0 && stats.totalSwapsCompleted >= 3,
   },
+  // Referral badges
+  {
+    id: "invited_member",
+    name: "Invited Member",
+    description: "Joined via a friend's referral",
+    icon: "🎁",
+    condition: () => false, // Manually granted
+  },
+  {
+    id: "networker_3",
+    name: "Networker",
+    description: "Successfully referred 3 active users",
+    icon: "🌐",
+    condition: () => false, // Manually granted via referral system
+  },
+  {
+    id: "community_builder_5",
+    name: "Community Builder",
+    description: "Successfully referred 5 active users",
+    icon: "🏘️",
+    condition: () => false, // Manually granted via referral system
+  },
+  {
+    id: "community_builder_10",
+    name: "Community Champion",
+    description: "Successfully referred 10 active users",
+    icon: "🎖️",
+    condition: () => false, // Manually granted via referral system
+  },
+  {
+    id: "campus_legend_25",
+    name: "Campus Legend",
+    description: "Successfully referred 25 active users",
+    icon: "👑",
+    condition: () => false, // Manually granted via referral system
+  },
 ];
 
 /* ================================

@@ -6,9 +6,14 @@ import {
   submitRequirementsSchema,
   sendMessageSchema,
   markMessagesAsReadSchema,
+  cycleDisputes,
+  escrowAccounts,
+  swapOrders,
 } from "../db/schema";
 import { initializePayment, verifyPayment } from "../config/paystack";
 import type { Request, Response } from "express";
+import { db } from "../db";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -709,6 +714,174 @@ router.get("/purchase/:id/pay/verify/:reference", authenticateToken, async (req:
   } catch (error) {
     console.error("[Swap Orders API] Verify purchase payment error:", error);
     return res.status(500).json({ message: "Failed to verify payment" });
+  }
+});
+
+/**
+ * POST /api/swap-orders/:id/refund
+ * Request a refund for a swap order
+ */
+router.post("/:id/refund", authenticateToken, async (req, res) => {
+  try {
+    const swapOrderId = parseInt(req.params.id);
+    const userId = req.user!.id;
+    const { reason, description } = req.body;
+
+    if (!reason || !description) {
+      return res.status(400).json({
+        message: "Refund reason and description are required"
+      });
+    }
+
+    // Get the swap order
+    const [swapOrder] = await db
+      .select()
+      .from(swapOrders)
+      .where(eq(swapOrders.id, swapOrderId))
+      .limit(1);
+
+    if (!swapOrder) {
+      return res.status(404).json({ message: "Swap order not found" });
+    }
+
+    // Verify user is the requester (buyer in swap context)
+    if (swapOrder.requesterId !== userId) {
+      return res.status(403).json({
+        message: "Only the requester can request a refund"
+      });
+    }
+
+    // Check if order has an active escrow
+    if (!swapOrder.escrowId) {
+      return res.status(400).json({
+        message: "No escrow account found for this order"
+      });
+    }
+
+    // Get escrow details
+    const [escrow] = await db
+      .select()
+      .from(escrowAccounts)
+      .where(eq(escrowAccounts.id, swapOrder.escrowId))
+      .limit(1);
+
+    if (!escrow) {
+      return res.status(404).json({ message: "Escrow account not found" });
+    }
+
+    if (escrow.status !== "active") {
+      return res.status(400).json({
+        message: "Can only request refund for orders with active escrow"
+      });
+    }
+
+    // Create a dispute for the refund request
+    const [dispute] = await db
+      .insert(cycleDisputes)
+      .values({
+        swapOrderId: swapOrderId,
+        reporterId: userId,
+        respondentId: swapOrder.ownerId,
+        disputeType: reason,
+        title: `Refund Request - ${reason}`,
+        description: description,
+        status: "open",
+        priority: "high",
+      })
+      .returning();
+
+    return res.status(201).json({
+      success: true,
+      message: "Refund request submitted successfully. Our team will review it within 24-48 hours.",
+      disputeId: dispute.id,
+    });
+  } catch (error: any) {
+    console.error("[Route] swap-order-refund error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+/**
+ * POST /api/swap-orders/purchase/:id/refund
+ * Request a refund for a purchase order (which is a swap order with orderType='purchase')
+ */
+router.post("/purchase/:id/refund", authenticateToken, async (req, res) => {
+  try {
+    const purchaseOrderId = parseInt(req.params.id);
+    const userId = req.user!.id;
+    const { reason, description } = req.body;
+
+    if (!reason || !description) {
+      return res.status(400).json({
+        message: "Refund reason and description are required"
+      });
+    }
+
+    // Get the purchase order (which is actually a swap order)
+    const [purchaseOrder] = await db
+      .select()
+      .from(swapOrders)
+      .where(eq(swapOrders.id, purchaseOrderId))
+      .limit(1);
+
+    if (!purchaseOrder) {
+      return res.status(404).json({ message: "Purchase order not found" });
+    }
+
+    // Verify user is the buyer (requester in purchase orders)
+    if (purchaseOrder.requesterId !== userId) {
+      return res.status(403).json({
+        message: "Only the buyer can request a refund"
+      });
+    }
+
+    // Check if order has an active escrow
+    if (!purchaseOrder.escrowId) {
+      return res.status(400).json({
+        message: "No escrow account found for this order"
+      });
+    }
+
+    // Get escrow details
+    const [escrow] = await db
+      .select()
+      .from(escrowAccounts)
+      .where(eq(escrowAccounts.id, purchaseOrder.escrowId))
+      .limit(1);
+
+    if (!escrow) {
+      return res.status(404).json({ message: "Escrow account not found" });
+    }
+
+    if (escrow.status !== "active") {
+      return res.status(400).json({
+        message: "Can only request refund for orders with active escrow"
+      });
+    }
+
+    // Create a dispute for the refund request
+    const [dispute] = await db
+      .insert(cycleDisputes)
+      .values({
+        swapOrderId: purchaseOrderId,
+        reporterId: userId,
+        respondentId: purchaseOrder.ownerId,
+        disputeType: reason,
+        title: `Purchase Refund Request - ${reason}`,
+        description: description,
+        status: "open",
+        priority: "high",
+      })
+      .returning();
+
+    return res.status(201).json({
+      success: true,
+      message: "Refund request submitted successfully. Our team will review it within 24-48 hours.",
+      disputeId: dispute.id,
+    });
+  } catch (error: any) {
+    console.error("[Route] purchase-order-refund error:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
 

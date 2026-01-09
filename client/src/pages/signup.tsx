@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { School, Mail, KeyRound, ArrowRight, ArrowLeft } from "lucide-react";
+import { School, Mail, KeyRound, ArrowRight, ArrowLeft, Gift } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import onboardingHero from "@assets/generated_images/friendly_parents_talking_at_school_gate.png";
 
 export default function Signup() {
@@ -19,6 +20,20 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [referrerName, setReferrerName] = useState("");
+  const [isValidatingReferral, setIsValidatingReferral] = useState(false);
+
+  // Check for referral code in URL on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get("ref");
+
+    if (refCode) {
+      setReferralCode(refCode);
+      validateReferralCode(refCode);
+    }
+  }, []);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -30,6 +45,42 @@ export default function Signup() {
       }
     }
   }, [user, isLoading, setLocation]);
+
+  // Validate referral code
+  const validateReferralCode = async (code: string) => {
+    if (!code.trim()) {
+      setReferrerName("");
+      return;
+    }
+
+    setIsValidatingReferral(true);
+    try {
+      const response = await fetch(`/api/referrals/validate/${code}`, {
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.isValid) {
+          setReferrerName(data.referrerName);
+        } else {
+          setReferrerName("");
+          toast({
+            title: "Invalid referral code",
+            description: data.message || "The referral code you entered is not valid",
+            variant: "destructive",
+          });
+        }
+      } else {
+        setReferrerName("");
+      }
+    } catch (error) {
+      console.error("Failed to validate referral code:", error);
+      setReferrerName("");
+    } finally {
+      setIsValidatingReferral(false);
+    }
+  };
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,6 +275,40 @@ export default function Signup() {
                       autoFocus
                       className="text-lg"
                     />
+                  </div>
+
+                  {/* Referral Code Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="referralCode" className="flex items-center gap-2">
+                      <Gift className="w-4 h-4" />
+                      Referral Code (Optional)
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="referralCode"
+                        type="text"
+                        placeholder="Enter referral code"
+                        value={referralCode}
+                        onChange={(e) => {
+                          const code = e.target.value.toUpperCase();
+                          setReferralCode(code);
+                        }}
+                        onBlur={(e) => validateReferralCode(e.target.value)}
+                        className="uppercase"
+                      />
+                      {isValidatingReferral && (
+                        <div className="absolute right-3 top-2.5">
+                          <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                        </div>
+                      )}
+                    </div>
+                    {referrerName && (
+                      <div className="flex items-center gap-2 text-sm text-green-600">
+                        <Badge variant="secondary" className="bg-green-100 text-green-700">
+                          Valid code from {referrerName}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
 
                   <Alert>

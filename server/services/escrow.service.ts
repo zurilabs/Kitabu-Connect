@@ -154,6 +154,20 @@ export class EscrowService {
         })
         .where(eq(orders.escrowId, escrowId));
 
+      // Check if buyer or seller should qualify referrals (first transaction)
+      try {
+        const { qualifyReferral } = await import("./referral.service");
+
+        // Check buyer's first transaction
+        await qualifyReferral(escrowData.buyerId, "order");
+
+        // Check seller's first transaction
+        await qualifyReferral(escrowData.sellerId, "order");
+      } catch (refError) {
+        console.error("[EscrowService] Referral qualification error:", refError);
+        // Don't fail escrow release if referral qualification fails
+      }
+
       console.log(`[EscrowService] Released escrow ${escrowId}. Amount: ${sellerAmount} to seller ${escrowData.sellerId}`);
 
       return {

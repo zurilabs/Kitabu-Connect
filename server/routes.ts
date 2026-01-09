@@ -36,6 +36,10 @@ import childrenRoutes from "./routes/children";
 import disputeRoutes from "./routes/disputes";
 import wishlistRoutes from "./routes/wishlist";
 import sitemapRoutes from "./routes/sitemap";
+import ratingsRoutes from "./routes/ratings";
+import referralRoutes from "./routes/referrals";
+import ordersRoutes from "./routes/orders";
+import escrowRoutes from "./routes/escrow";
 import { paymentService } from "./services/payment.service";
 
 export async function registerRoutes(
@@ -134,12 +138,34 @@ export async function registerRoutes(
   app.use("/", sitemapRoutes);
 
   // ============================================
+  // RATINGS ROUTES
+  // ============================================
+  app.use("/api/ratings", ratingsRoutes);
+
+  // ============================================
+  // REFERRAL ROUTES
+  // ============================================
+  app.use("/api/referrals", referralRoutes);
+
+  // ============================================
+  // ORDERS ROUTES
+  // ============================================
+  app.use("/api/orders", ordersRoutes);
+
+  // ============================================
+  // ESCROW ROUTES
+  // ============================================
+  app.use("/api/escrow", escrowRoutes);
+
+  // ============================================
   // PAYSTACK WEBHOOK
   // ============================================
   app.post("/api/webhooks/paystack", async (req, res) => {
     try {
       const { verifyWebhookSignature } = await import("./config/paystack");
       const { withdrawalService } = await import("./services/withdrawal.service");
+      const { notificationService } = await import("./services/notification.service");
+      const { transactions } = await import("./db/schema");
 
       // Verify webhook signature
       const signature = req.headers["x-paystack-signature"] as string;
@@ -162,16 +188,50 @@ export async function registerRoutes(
         const reference = event.data.reference;
         const transactionId = parseInt(reference.split("-")[1]); // Extract from WD-{txId}-{timestamp}
 
-        await withdrawalService.completeWithdrawal(transactionId, reference);
-        console.log(`[Webhook] Transfer successful: ${reference}`);
+        if (!isNaN(transactionId)) {
+          // Get transaction to find user
+          const [tx] = await db.select().from(transactions).where(eq(transactions.id, transactionId)).limit(1);
+
+          if (tx) {
+            await withdrawalService.completeWithdrawal(transactionId, reference);
+
+            // Send notification to user
+            await notificationService.createNotification({
+              userId: tx.userId,
+              type: 'withdrawal_completed',
+              title: 'Withdrawal Completed',
+              message: `Your withdrawal of KES ${parseFloat(tx.amount).toLocaleString()} has been completed successfully.`,
+              actionUrl: '/dashboard',
+            });
+
+            console.log(`[Webhook] Transfer successful: ${reference}`);
+          }
+        }
       } else if (event.event === "transfer.failed" || event.event === "transfer.reversed") {
         // Withdrawal failed
         const reference = event.data.reference;
         const transactionId = parseInt(reference.split("-")[1]);
         const reason = event.data.reason || "Transfer failed";
 
-        await withdrawalService.failWithdrawal(transactionId, reason);
-        console.log(`[Webhook] Transfer failed: ${reference}, Reason: ${reason}`);
+        if (!isNaN(transactionId)) {
+          // Get transaction to find user
+          const [tx] = await db.select().from(transactions).where(eq(transactions.id, transactionId)).limit(1);
+
+          if (tx) {
+            await withdrawalService.failWithdrawal(transactionId, reason);
+
+            // Send notification to user
+            await notificationService.createNotification({
+              userId: tx.userId,
+              type: 'withdrawal_failed',
+              title: event.event === "transfer.reversed" ? 'Withdrawal Reversed' : 'Withdrawal Failed',
+              message: `Your withdrawal of KES ${parseFloat(tx.amount).toLocaleString()} ${event.event === "transfer.reversed" ? 'was reversed' : 'failed'}. The amount has been refunded to your wallet. Reason: ${reason}`,
+              actionUrl: '/dashboard',
+            });
+
+            console.log(`[Webhook] Transfer ${event.event}: ${reference}, Reason: ${reason}`);
+          }
+        }
       }
 
       return res.status(200).send("OK");

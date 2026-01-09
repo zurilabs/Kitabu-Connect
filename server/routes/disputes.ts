@@ -63,7 +63,8 @@ const selfResolveDisputeSchema = z.object({
 const resolveDisputeSchema = z.object({
   resolution: z.string().min(10, "Resolution must be at least 10 characters"),
   resolutionType: z.enum([
-    "refund",
+    "full_refund",
+    "partial_refund",
     "replacement",
     "penalty",
     "account_warning",
@@ -71,6 +72,7 @@ const resolveDisputeSchema = z.object({
     "escalated",
   ]),
   adminNotes: z.string().optional(),
+  refundPercentage: z.number().min(0).max(100).optional(), // For partial refunds
 });
 
 /**
@@ -402,6 +404,7 @@ router.put("/:id/resolve", authenticateToken, async (req, res) => {
       resolution: validation.data.resolution,
       resolutionType: validation.data.resolutionType,
       adminNotes: validation.data.adminNotes,
+      refundPercentage: validation.data.refundPercentage,
     });
 
     return res.status(200).json({

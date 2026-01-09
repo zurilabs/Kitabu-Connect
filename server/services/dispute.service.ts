@@ -56,7 +56,8 @@ const DISPUTE_STATUSES = [
 ] as const;
 
 const RESOLUTION_TYPES = [
-  'refund',
+  'full_refund',
+  'partial_refund',
   'replacement',
   'penalty',
   'account_warning',
@@ -99,6 +100,7 @@ interface ResolveDisputeInput {
   resolutionType: ResolutionType;
   resolution: string;
   adminNotes?: string;
+  refundPercentage?: number; // For partial refunds (0-100)
 }
 
 /* ================================
@@ -823,7 +825,7 @@ export async function resolveDispute(input: ResolveDisputeInput) {
   });
 
   // Enforce resolution
-  await enforceResolution(input.disputeId, input.resolutionType);
+  await enforceResolution(input.disputeId, input.resolutionType, input.refundPercentage);
 
   // Notify both parties
   const [dispute] = await db
@@ -855,7 +857,11 @@ export async function resolveDispute(input: ResolveDisputeInput) {
 /**
  * Enforce resolution (apply penalties, refunds, etc.)
  */
-async function enforceResolution(disputeId: string, resolutionType: ResolutionType) {
+async function enforceResolution(
+  disputeId: string,
+  resolutionType: ResolutionType,
+  refundPercentage?: number
+) {
   const [dispute] = await db
     .select()
     .from(cycleDisputes)
@@ -867,9 +873,152 @@ async function enforceResolution(disputeId: string, resolutionType: ResolutionTy
   }
 
   try {
+    // Import escrow service for refund processing
+    const { escrowService } = await import('./escrow.service');
+    const { orders, escrowAccounts } = await import('../db/schema');
+
     switch (resolutionType) {
+      case 'full_refund':
+        // Process full refund through escrow system
+        if (dispute.swapOrderId) {
+          // Get the order to find escrow
+          const [order] = await db
+            .select()
+            .from(orders)
+            .where(eq(orders.id, dispute.swapOrderId))
+            .limit(1);
+
+          if (order && order.escrowId) {
+            // Refund the escrow
+            const refundResult = await escrowService.refundEscrow(
+              order.escrowId,
+              `Dispute resolved: Full refund - ${dispute.title}`
+            );
+
+            if (!refundResult.success) {
+              throw new Error(`Escrow refund failed: ${refundResult.message}`);
+            }
+
+            console.log(`[Dispute] Full refund processed for escrow ${order.escrowId}`);
+          }
+        }
+
+        // Apply penalty to seller
+        if (dispute.respondentId) {
+          await db
+            .update(userReliabilityScores)
+            .set({
+              penaltyPoints: sql`${userReliabilityScores.penaltyPoints} + 15`,
+              reliabilityScore: sql`${userReliabilityScores.reliabilityScore} - 15`,
+            })
+            .where(eq(userReliabilityScores.userId, dispute.respondentId));
+        }
+        break;
+
+      case 'partial_refund':
+        // Process partial refund
+        const percentage = refundPercentage || 50; // Default to 50% if not specified
+
+        if (dispute.swapOrderId) {
+          const [order] = await db
+            .select()
+            .from(orders)
+            .where(eq(orders.id, dispute.swapOrderId))
+            .limit(1);
+
+          if (order && order.escrowId) {
+            // Get escrow amount
+            const [escrow] = await db
+              .select()
+              .from(escrowAccounts)
+              .where(eq(escrowAccounts.id, order.escrowId))
+              .limit(1);
+
+            if (escrow) {
+              const fullAmount = parseFloat(escrow.amount);
+              const refundAmount = (fullAmount * percentage) / 100;
+              const sellerAmount = fullAmount - refundAmount;
+
+              // Import wallet service for partial processing
+              const { walletService } = await import('./wallet.service');
+
+              // Create refund transaction for buyer
+              const txResult = await walletService.createTransaction({
+                userId: escrow.buyerId,
+                type: 'refund',
+                amount: refundAmount,
+                status: 'completed',
+                description: `Partial refund (${percentage}%) - Dispute resolved`,
+                bookListingId: escrow.bookListingId,
+                metadata: {
+                  escrowId: order.escrowId,
+                  disputeId,
+                  percentage,
+                },
+              });
+
+              if (txResult.success && txResult.transactionId) {
+                // Credit buyer wallet
+                await walletService.creditWallet({
+                  userId: escrow.buyerId,
+                  amount: refundAmount,
+                  transactionId: txResult.transactionId,
+                  description: `Partial refund for order`,
+                });
+
+                // Release remaining amount to seller
+                const sellerTxResult = await walletService.createTransaction({
+                  userId: escrow.sellerId,
+                  type: 'escrow_release',
+                  amount: sellerAmount,
+                  status: 'completed',
+                  description: `Partial payment (${100 - percentage}%) - Dispute resolved`,
+                  bookListingId: escrow.bookListingId,
+                  metadata: {
+                    escrowId: order.escrowId,
+                    disputeId,
+                    percentage: 100 - percentage,
+                  },
+                });
+
+                if (sellerTxResult.success && sellerTxResult.transactionId) {
+                  await walletService.creditWallet({
+                    userId: escrow.sellerId,
+                    amount: sellerAmount,
+                    transactionId: sellerTxResult.transactionId,
+                    description: `Partial payment received`,
+                  });
+                }
+
+                // Update escrow status
+                await db
+                  .update(escrowAccounts)
+                  .set({
+                    status: 'resolved',
+                    releasedAt: new Date(),
+                  })
+                  .where(eq(escrowAccounts.id, order.escrowId));
+
+                console.log(`[Dispute] Partial refund processed: ${refundAmount} to buyer, ${sellerAmount} to seller`);
+              }
+            }
+          }
+        }
+
+        // Minor penalty to seller
+        if (dispute.respondentId) {
+          await db
+            .update(userReliabilityScores)
+            .set({
+              penaltyPoints: sql`${userReliabilityScores.penaltyPoints} + 5`,
+              reliabilityScore: sql`${userReliabilityScores.reliabilityScore} - 5`,
+            })
+            .where(eq(userReliabilityScores.userId, dispute.respondentId));
+        }
+        break;
+
       case 'penalty':
-        // Deduct reliability score from respondent
+        // Deduct reliability score from respondent (no refund)
         if (dispute.respondentId) {
           await db
             .update(userReliabilityScores)
@@ -893,10 +1042,9 @@ async function enforceResolution(disputeId: string, resolutionType: ResolutionTy
         }
         break;
 
-      case 'refund':
       case 'replacement':
-        // These would be handled by escrow/cycle services
-        // Just mark as pending enforcement for manual processing
+        // Mark as pending for manual coordination
+        // No automatic action, admin handles this separately
         break;
 
       case 'no_action':
@@ -915,7 +1063,8 @@ async function enforceResolution(disputeId: string, resolutionType: ResolutionTy
     await addTimelineEvent({
       disputeId,
       eventType: 'enforced',
-      description: `Resolution enforced: ${resolutionType}`,
+      description: `Resolution enforced: ${resolutionType}${refundPercentage ? ` (${refundPercentage}%)` : ''}`,
+      metadata: refundPercentage ? JSON.stringify({ refundPercentage }) : null,
     });
 
   } catch (error) {

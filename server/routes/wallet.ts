@@ -276,6 +276,62 @@ router.get('/withdrawal/history', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * Get list of banks from Paystack
+ * GET /api/wallet/banks
+ */
+router.get('/banks', authenticateToken, async (req, res) => {
+  try {
+    const { getBanks } = await import('../config/paystack');
+    const result = await getBanks();
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.json({
+      success: true,
+      banks: result.data,
+    });
+  } catch (error) {
+    console.error('[Wallet] Get banks error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+/**
+ * Verify bank account number
+ * POST /api/wallet/verify-account
+ */
+router.post('/verify-account', authenticateToken, async (req, res) => {
+  try {
+    const { accountNumber, bankCode } = req.body;
+
+    if (!accountNumber || !bankCode) {
+      return res.status(400).json({ message: 'Account number and bank code are required' });
+    }
+
+    const { resolveAccountNumber } = await import('../config/paystack');
+    const result = await resolveAccountNumber({
+      account_number: accountNumber,
+      bank_code: bankCode,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message || 'Account verification failed' });
+    }
+
+    return res.json({
+      success: true,
+      accountName: result.data.account_name,
+      accountNumber: result.data.account_number,
+    });
+  } catch (error) {
+    console.error('[Wallet] Verify account error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 /* ================================
    ESCROW ROUTES
 ================================ */

@@ -28,6 +28,9 @@ import DeliveryConfirmation from "@/components/swap-orders/DeliveryConfirmation"
 import CommitmentFeePayment from "@/components/swap-orders/CommitmentFeePayment";
 import PurchaseOrderPayment from "@/components/swap-orders/PurchaseOrderPayment";
 import ReportIssueDialog from "@/components/swap-orders/ReportIssueDialog";
+import { RateUserModal } from "@/components/ratings/RateUserModal";
+import { EscrowStatusCard } from "@/components/escrow/EscrowStatusCard";
+import { RefundRequestDialog } from "@/components/escrow/RefundRequestDialog";
 
 interface Message {
   message: {
@@ -68,6 +71,18 @@ interface SwapOrder {
   convenienceFee?: string;
   totalAmount?: string;
   createdAt: string;
+  escrowId?: number;
+  escrow?: {
+    id: number;
+    amount: string;
+    status: "active" | "released" | "refunded" | "disputed";
+    releaseAt: string;
+    releasedAt?: string | null;
+    refundedAt?: string | null;
+    holdPeriodDays: number;
+    buyerId: string;
+    sellerId: string;
+  };
   requester: {
     id: string;
     fullName: string;
@@ -113,6 +128,8 @@ export default function SwapOrderDetail() {
   const [showRequirementsForm, setShowRequirementsForm] = useState(false);
   const previousMessageCountRef = useRef<number>(0);
   const verifiedPaymentsRef = useRef<Set<string>>(new Set());
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [hasCheckedForRating, setHasCheckedForRating] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -152,6 +169,42 @@ export default function SwapOrderDetail() {
     }
     previousMessageCountRef.current = messages.length;
   }, [messages]);
+
+  // Check if order is completed and prompt for rating
+  useEffect(() => {
+    const checkForRating = async () => {
+      if (!swapOrder || !currentUserId || hasCheckedForRating) return;
+
+      // Only show rating modal if order is completed
+      if (swapOrder.status === "completed") {
+        const otherUserId = currentUserId === swapOrder.requesterId
+          ? swapOrder.ownerId
+          : swapOrder.requesterId;
+
+        // Check if user has already rated the other party
+        try {
+          const response = await fetch(
+            `/api/ratings/check?swapOrderId=${swapOrder.id}&revieweeId=${otherUserId}`,
+            { credentials: "include" }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            // Show modal if user hasn't rated yet
+            if (!data.hasRated) {
+              setShowRatingModal(true);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to check rating status:", error);
+        }
+
+        setHasCheckedForRating(true);
+      }
+    };
+
+    checkForRating();
+  }, [swapOrder, currentUserId, hasCheckedForRating]);
 
   const verifyPayment = async (reference: string) => {
     try {
@@ -804,6 +857,42 @@ export default function SwapOrderDetail() {
             />
           )}
 
+          {/* Escrow Status - Show when order is completed and has escrow */}
+          {swapOrder.status === "completed" && swapOrder.escrow && (
+            <EscrowStatusCard
+              escrowId={swapOrder.escrow.id}
+              amount={swapOrder.escrow.amount}
+              status={swapOrder.escrow.status}
+              releaseAt={swapOrder.escrow.releaseAt}
+              releasedAt={swapOrder.escrow.releasedAt}
+              refundedAt={swapOrder.escrow.refundedAt}
+              holdPeriodDays={swapOrder.escrow.holdPeriodDays}
+              isSeller={swapOrder.orderType === "purchase" ? swapOrder.ownerId === currentUserId : false}
+              buyerName={swapOrder.orderType === "purchase" ? swapOrder.requester.fullName : ""}
+              sellerName={swapOrder.orderType === "purchase" ? swapOrder.owner.fullName : ""}
+              onRefresh={fetchSwapOrder}
+            />
+          )}
+
+          {/* Refund Request - Show for buyers when escrow is active */}
+          {swapOrder.status === "completed" &&
+           swapOrder.escrow &&
+           swapOrder.escrow.status === "active" &&
+           swapOrder.orderType === "purchase" &&
+           swapOrder.requesterId === currentUserId && (
+            <Card>
+              <CardContent className="pt-6">
+                <RefundRequestDialog
+                  orderId={swapOrder.id}
+                  orderType="purchase"
+                  amount={swapOrder.escrow.amount}
+                  sellerName={swapOrder.owner.fullName}
+                  onSuccess={fetchSwapOrder}
+                />
+              </CardContent>
+            </Card>
+          )}
+
           {/* Report Issue */}
           {swapOrder.status !== "cancelled" && swapOrder.status !== "rejected" && swapOrder.status !== "pending" && (
             <Card>
@@ -826,6 +915,22 @@ export default function SwapOrderDetail() {
           )}
         </div>
       </div>
+
+      {/* Rating Modal */}
+      {swapOrder.status === "completed" && (
+        <RateUserModal
+          open={showRatingModal}
+          onOpenChange={setShowRatingModal}
+          swapOrderId={swapOrder.id}
+          revieweeId={isRequester ? swapOrder.ownerId : swapOrder.requesterId}
+          revieweeName={isRequester ? swapOrder.owner.fullName : swapOrder.requester.fullName}
+          ratingType={
+            swapOrder.orderType === "purchase"
+              ? (isRequester ? "buyer" : "seller")
+              : "swapper"
+          }
+        />
+      )}
     </div>
   );
 }

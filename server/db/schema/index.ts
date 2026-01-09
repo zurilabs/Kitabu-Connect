@@ -10,6 +10,7 @@ import {
   int,
   text,
   index,
+  unique,
 } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1400,6 +1401,271 @@ export const userReliabilityScores = mysqlTable(
   (t) => ({
     reliabilityScoreIdx: index("idx_reliability_score").on(t.reliabilityScore),
     userIdx: index("idx_reliability_user").on(t.userId),
+  })
+);
+
+/* ================================
+   USER RATINGS & REVIEWS
+================================ */
+
+/**
+ * User Ratings - Mutual rating system for transactions
+ * Similar to Airbnb/Upwork where both parties rate each other
+ */
+export const userRatings = mysqlTable(
+  "user_ratings",
+  {
+    id: int("id").primaryKey().autoincrement(),
+
+    // Transaction reference - can be swap order, swap cycle, or purchase order
+    orderId: int("order_id").references(() => orders.id, { onDelete: "cascade" }),
+    swapOrderId: int("swap_order_id").references(() => swapOrders.id, { onDelete: "cascade" }),
+    cycleId: varchar("cycle_id", { length: 36 }).references(() => swapCycles.id, { onDelete: "cascade" }),
+
+    // Rating parties
+    reviewerId: varchar("reviewer_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    revieweeId: varchar("reviewee_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // Rating type
+    ratingType: varchar("rating_type", { length: 20 }).notNull(), // 'seller', 'buyer', 'swapper'
+
+    // Overall rating (1-5 stars)
+    overallRating: int("overall_rating").notNull(), // 1-5
+
+    // Detailed ratings (optional, 1-5 stars each)
+    communicationRating: int("communication_rating"), // How well they communicated
+    accuracyRating: int("accuracy_rating"), // Item matched description
+    timelinesRating: int("timeliness_rating"), // On-time delivery/pickup
+    conditionRating: int("condition_rating"), // Item condition
+    professionalismRating: int("professionalism_rating"), // Professional behavior
+
+    // Written review (optional)
+    reviewText: text("review_text"),
+
+    // Review visibility
+    isPublic: boolean("is_public").default(true),
+    isAnonymous: boolean("is_anonymous").default(false),
+
+    // Admin moderation
+    isFlagged: boolean("is_flagged").default(false),
+    flagReason: text("flag_reason"),
+    isApproved: boolean("is_approved").default(true),
+    moderatedBy: varchar("moderated_by", { length: 36 }).references(() => users.id),
+    moderatedAt: datetime("moderated_at"),
+
+    // Response from reviewee (optional)
+    responseText: text("response_text"),
+    respondedAt: datetime("responded_at"),
+
+    // Metadata
+    tags: text("tags"), // JSON array: ["fast_delivery", "great_communication", "book_as_described"]
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    reviewerIdx: index("idx_ratings_reviewer").on(t.reviewerId),
+    revieweeIdx: index("idx_ratings_reviewee").on(t.revieweeId),
+    orderIdx: index("idx_ratings_order").on(t.orderId),
+    swapOrderIdx: index("idx_ratings_swap_order").on(t.swapOrderId),
+    cycleIdx: index("idx_ratings_cycle").on(t.cycleId),
+    ratingTypeIdx: index("idx_ratings_type").on(t.ratingType),
+    // Ensure one rating per transaction per user
+    uniqueRating: unique("unique_rating_per_transaction")
+      .on(t.reviewerId, t.revieweeId, t.orderId, t.swapOrderId, t.cycleId),
+  })
+);
+
+/**
+ * Rating Reminders - Track when to remind users to leave ratings
+ */
+export const ratingReminders = mysqlTable(
+  "rating_reminders",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    orderId: int("order_id").references(() => orders.id, { onDelete: "cascade" }),
+    swapOrderId: int("swap_order_id").references(() => swapOrders.id, { onDelete: "cascade" }),
+    cycleId: varchar("cycle_id", { length: 36 }).references(() => swapCycles.id, { onDelete: "cascade" }),
+
+    reminderType: varchar("reminder_type", { length: 20 }).notNull(), // 'initial', 'followup'
+    sentAt: timestamp("sent_at").notNull().defaultNow(),
+    clicked: boolean("clicked").default(false),
+    rated: boolean("rated").default(false),
+  },
+  (t) => ({
+    userIdx: index("idx_reminders_user").on(t.userId),
+  })
+);
+
+/* ================================
+   REFERRAL SYSTEM
+================================ */
+
+/**
+ * User Referrals - Track referral relationships and rewards
+ */
+export const referrals = mysqlTable(
+  "referrals",
+  {
+    id: int("id").primaryKey().autoincrement(),
+
+    // Referral code (unique per user, format: firstname-ABC123)
+    referralCode: varchar("referral_code", { length: 50 })
+      .notNull()
+      .unique(),
+
+    // The user who owns this referral code
+    referrerId: varchar("referrer_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // The user who signed up using this code (null until signup)
+    refereeId: varchar("referee_id", { length: 36 }).references(() => users.id, {
+      onDelete: "cascade",
+    }),
+
+    // Tracking timestamps
+    codeCreatedAt: timestamp("code_created_at").notNull().defaultNow(),
+    signupCompletedAt: timestamp("signup_completed_at"), // When referee completed signup
+    firstTransactionAt: timestamp("first_transaction_at"), // When referee completed first swap/sale
+
+    // Qualification status
+    status: varchar("status", { length: 20 })
+      .notNull()
+      .default("pending"), // 'pending', 'qualified', 'rewarded', 'invalid'
+
+    // Non-monetary rewards tracking
+    referrerRewardsBadges: text("referrer_rewards_badges"), // JSON array of badge IDs earned
+    referrerRewardsFeatures: text("referrer_rewards_features"), // JSON array of features unlocked
+    refereeRewardsBadges: text("referee_rewards_badges"), // JSON array of badge IDs earned
+
+    // Fraud prevention
+    refereeIpAddress: varchar("referee_ip_address", { length: 45 }), // IPv4/IPv6
+    refereeDeviceFingerprint: varchar("referee_device_fingerprint", {
+      length: 128,
+    }), // Browser fingerprint
+    refereeUserAgent: text("referee_user_agent"), // Browser user agent
+    isFraudulent: boolean("is_fraudulent").default(false), // Flagged as suspicious
+    fraudReason: text("fraud_reason"), // Why flagged
+
+    // Source tracking
+    source: varchar("source", { length: 50 }).default("link"), // 'link', 'manual', 'qr', 'social'
+    utmSource: varchar("utm_source", { length: 100 }), // Marketing source
+    utmMedium: varchar("utm_medium", { length: 100 }), // Marketing medium
+    utmCampaign: varchar("utm_campaign", { length: 100 }), // Campaign name
+
+    // School tracking (optional)
+    referrerSchoolId: varchar("referrer_school_id", { length: 36 }).references(() => schools.id, {
+      onDelete: "set null",
+    }),
+    refereeSchoolId: varchar("referee_school_id", { length: 36 }).references(() => schools.id, {
+      onDelete: "set null",
+    }),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    referrerIdx: index("idx_referrals_referrer").on(t.referrerId),
+    refereeIdx: index("idx_referrals_referee").on(t.refereeId),
+    statusIdx: index("idx_referrals_status").on(t.status),
+    codeIdx: index("idx_referrals_code").on(t.referralCode),
+    schoolIdx: index("idx_referrals_school").on(
+      t.referrerSchoolId,
+      t.refereeSchoolId
+    ),
+  })
+);
+
+/**
+ * Referral Stats - Aggregate stats per user for quick access
+ */
+export const referralStats = mysqlTable(
+  "referral_stats",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // Referral counts
+    totalReferrals: int("total_referrals").default(0), // Total signups
+    qualifiedReferrals: int("qualified_referrals").default(0), // Completed first transaction
+    pendingReferrals: int("pending_referrals").default(0), // Signed up but no transaction
+    invalidReferrals: int("invalid_referrals").default(0), // Flagged as fraud
+
+    // Monthly tracking (for rate limiting)
+    referralsThisMonth: int("referrals_this_month").default(0),
+    lastReferralMonthReset: timestamp("last_referral_month_reset")
+      .notNull()
+      .defaultNow(),
+
+    // Last referral timestamp (for cooldown checks)
+    lastReferralAt: timestamp("last_referral_at"),
+
+    // Unlocked features (non-monetary rewards)
+    hasReducedEscrowHold: boolean("has_reduced_escrow_hold").default(false), // 5 days instead of 7
+    hasFeaturedSeller: boolean("has_featured_seller").default(false), // Featured badge
+    hasPriorityListing: boolean("has_priority_listing").default(false), // Higher search ranking
+    hasVerifiedCommunityBadge: boolean("has_verified_community_badge").default(
+      false
+    ),
+
+    // Leaderboard position
+    schoolRank: int("school_rank"), // Rank within their school
+    globalRank: int("global_rank"), // Platform-wide rank
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    userIdx: index("idx_referral_stats_user").on(t.userId),
+    schoolRankIdx: index("idx_referral_stats_school_rank").on(t.schoolRank),
+    globalRankIdx: index("idx_referral_stats_global_rank").on(t.globalRank),
+  })
+);
+
+/**
+ * Referral Activity Log - Detailed audit trail for fraud detection
+ */
+export const referralActivityLog = mysqlTable(
+  "referral_activity_log",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    referralId: int("referral_id")
+      .notNull()
+      .references(() => referrals.id, { onDelete: "cascade" }),
+
+    eventType: varchar("event_type", { length: 50 }).notNull(), // 'code_generated', 'link_clicked', 'signup_completed', 'transaction_completed', 'reward_granted', 'fraud_flagged'
+    eventDescription: text("event_description"),
+
+    // Context data
+    ipAddress: varchar("ip_address", { length: 45 }),
+    userAgent: text("user_agent"),
+    metadata: text("metadata"), // JSON for additional context
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    referralIdx: index("idx_activity_log_referral").on(t.referralId),
+    eventTypeIdx: index("idx_activity_log_event_type").on(t.eventType),
   })
 );
 

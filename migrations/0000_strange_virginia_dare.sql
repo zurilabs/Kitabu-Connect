@@ -343,6 +343,82 @@ CREATE TABLE `publishers` (
 	CONSTRAINT `publishers_name_unique` UNIQUE(`name`)
 );
 --> statement-breakpoint
+CREATE TABLE `rating_reminders` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`user_id` varchar(36) NOT NULL,
+	`order_id` int,
+	`swap_order_id` int,
+	`cycle_id` varchar(36),
+	`reminder_type` varchar(20) NOT NULL,
+	`sent_at` timestamp NOT NULL DEFAULT (now()),
+	`clicked` boolean DEFAULT false,
+	`rated` boolean DEFAULT false,
+	CONSTRAINT `rating_reminders_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `referral_activity_log` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`referral_id` int NOT NULL,
+	`event_type` varchar(50) NOT NULL,
+	`event_description` text,
+	`ip_address` varchar(45),
+	`user_agent` text,
+	`metadata` text,
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `referral_activity_log_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `referral_stats` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`user_id` varchar(36) NOT NULL,
+	`total_referrals` int DEFAULT 0,
+	`qualified_referrals` int DEFAULT 0,
+	`pending_referrals` int DEFAULT 0,
+	`invalid_referrals` int DEFAULT 0,
+	`referrals_this_month` int DEFAULT 0,
+	`last_referral_month_reset` timestamp NOT NULL DEFAULT (now()),
+	`last_referral_at` timestamp,
+	`has_reduced_escrow_hold` boolean DEFAULT false,
+	`has_featured_seller` boolean DEFAULT false,
+	`has_priority_listing` boolean DEFAULT false,
+	`has_verified_community_badge` boolean DEFAULT false,
+	`school_rank` int,
+	`global_rank` int,
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	`updated_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `referral_stats_id` PRIMARY KEY(`id`),
+	CONSTRAINT `referral_stats_user_id_unique` UNIQUE(`user_id`)
+);
+--> statement-breakpoint
+CREATE TABLE `referrals` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`referral_code` varchar(50) NOT NULL,
+	`referrer_id` varchar(36) NOT NULL,
+	`referee_id` varchar(36),
+	`code_created_at` timestamp NOT NULL DEFAULT (now()),
+	`signup_completed_at` timestamp,
+	`first_transaction_at` timestamp,
+	`status` varchar(20) NOT NULL DEFAULT 'pending',
+	`referrer_rewards_badges` text,
+	`referrer_rewards_features` text,
+	`referee_rewards_badges` text,
+	`referee_ip_address` varchar(45),
+	`referee_device_fingerprint` varchar(128),
+	`referee_user_agent` text,
+	`is_fraudulent` boolean DEFAULT false,
+	`fraud_reason` text,
+	`source` varchar(50) DEFAULT 'link',
+	`utm_source` varchar(100),
+	`utm_medium` varchar(100),
+	`utm_campaign` varchar(100),
+	`referrer_school_id` varchar(36),
+	`referee_school_id` varchar(36),
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	`updated_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `referrals_id` PRIMARY KEY(`id`),
+	CONSTRAINT `referrals_referral_code_unique` UNIQUE(`referral_code`)
+);
+--> statement-breakpoint
 CREATE TABLE `schools` (
 	`id` varchar(36) NOT NULL,
 	`code` int,
@@ -514,6 +590,37 @@ CREATE TABLE `user_preferences` (
 	CONSTRAINT `user_preferences_user_id_unique` UNIQUE(`user_id`)
 );
 --> statement-breakpoint
+CREATE TABLE `user_ratings` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`order_id` int,
+	`swap_order_id` int,
+	`cycle_id` varchar(36),
+	`reviewer_id` varchar(36) NOT NULL,
+	`reviewee_id` varchar(36) NOT NULL,
+	`rating_type` varchar(20) NOT NULL,
+	`overall_rating` int NOT NULL,
+	`communication_rating` int,
+	`accuracy_rating` int,
+	`timeliness_rating` int,
+	`condition_rating` int,
+	`professionalism_rating` int,
+	`review_text` text,
+	`is_public` boolean DEFAULT true,
+	`is_anonymous` boolean DEFAULT false,
+	`is_flagged` boolean DEFAULT false,
+	`flag_reason` text,
+	`is_approved` boolean DEFAULT true,
+	`moderated_by` varchar(36),
+	`moderated_at` datetime,
+	`response_text` text,
+	`responded_at` datetime,
+	`tags` text,
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	`updated_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `user_ratings_id` PRIMARY KEY(`id`),
+	CONSTRAINT `unique_rating_per_transaction` UNIQUE(`reviewer_id`,`reviewee_id`,`order_id`,`swap_order_id`,`cycle_id`)
+);
+--> statement-breakpoint
 CREATE TABLE `user_reliability_scores` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`user_id` varchar(36) NOT NULL,
@@ -634,6 +741,16 @@ ALTER TABLE `orders` ADD CONSTRAINT `orders_seller_id_users_id_fk` FOREIGN KEY (
 ALTER TABLE `orders` ADD CONSTRAINT `orders_book_listing_id_book_listings_id_fk` FOREIGN KEY (`book_listing_id`) REFERENCES `book_listings`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `orders` ADD CONSTRAINT `orders_escrow_id_escrow_accounts_id_fk` FOREIGN KEY (`escrow_id`) REFERENCES `escrow_accounts`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `paystack_recipients` ADD CONSTRAINT `paystack_recipients_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `rating_reminders` ADD CONSTRAINT `rating_reminders_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `rating_reminders` ADD CONSTRAINT `rating_reminders_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `rating_reminders` ADD CONSTRAINT `rating_reminders_swap_order_id_swap_orders_id_fk` FOREIGN KEY (`swap_order_id`) REFERENCES `swap_orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `rating_reminders` ADD CONSTRAINT `rating_reminders_cycle_id_swap_cycles_id_fk` FOREIGN KEY (`cycle_id`) REFERENCES `swap_cycles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `referral_activity_log` ADD CONSTRAINT `referral_activity_log_referral_id_referrals_id_fk` FOREIGN KEY (`referral_id`) REFERENCES `referrals`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `referral_stats` ADD CONSTRAINT `referral_stats_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `referrals` ADD CONSTRAINT `referrals_referrer_id_users_id_fk` FOREIGN KEY (`referrer_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `referrals` ADD CONSTRAINT `referrals_referee_id_users_id_fk` FOREIGN KEY (`referee_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `referrals` ADD CONSTRAINT `referrals_referrer_school_id_schools_id_fk` FOREIGN KEY (`referrer_school_id`) REFERENCES `schools`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `referrals` ADD CONSTRAINT `referrals_referee_school_id_schools_id_fk` FOREIGN KEY (`referee_school_id`) REFERENCES `schools`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `swap_orders` ADD CONSTRAINT `swap_orders_swap_request_id_swap_requests_id_fk` FOREIGN KEY (`swap_request_id`) REFERENCES `swap_requests`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `swap_orders` ADD CONSTRAINT `swap_orders_requester_id_users_id_fk` FOREIGN KEY (`requester_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `swap_orders` ADD CONSTRAINT `swap_orders_owner_id_users_id_fk` FOREIGN KEY (`owner_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -648,6 +765,12 @@ ALTER TABLE `swap_requests` ADD CONSTRAINT `swap_requests_escrow_id_escrow_accou
 ALTER TABLE `transactions` ADD CONSTRAINT `transactions_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `transactions` ADD CONSTRAINT `transactions_book_listing_id_book_listings_id_fk` FOREIGN KEY (`book_listing_id`) REFERENCES `book_listings`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `user_preferences` ADD CONSTRAINT `user_preferences_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `user_ratings` ADD CONSTRAINT `user_ratings_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `user_ratings` ADD CONSTRAINT `user_ratings_swap_order_id_swap_orders_id_fk` FOREIGN KEY (`swap_order_id`) REFERENCES `swap_orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `user_ratings` ADD CONSTRAINT `user_ratings_cycle_id_swap_cycles_id_fk` FOREIGN KEY (`cycle_id`) REFERENCES `swap_cycles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `user_ratings` ADD CONSTRAINT `user_ratings_reviewer_id_users_id_fk` FOREIGN KEY (`reviewer_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `user_ratings` ADD CONSTRAINT `user_ratings_reviewee_id_users_id_fk` FOREIGN KEY (`reviewee_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `user_ratings` ADD CONSTRAINT `user_ratings_moderated_by_users_id_fk` FOREIGN KEY (`moderated_by`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `user_reliability_scores` ADD CONSTRAINT `user_reliability_scores_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_transaction_id_transactions_id_fk` FOREIGN KEY (`transaction_id`) REFERENCES `transactions`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -703,6 +826,17 @@ CREATE INDEX `idx_notifications_is_read` ON `notifications` (`is_read`);--> stat
 CREATE INDEX `idx_notifications_type` ON `notifications` (`type`);--> statement-breakpoint
 CREATE INDEX `idx_otp_email_code` ON `otp_codes` (`email`,`code`);--> statement-breakpoint
 CREATE INDEX `idx_otp_expires` ON `otp_codes` (`expires_at`);--> statement-breakpoint
+CREATE INDEX `idx_reminders_user` ON `rating_reminders` (`user_id`);--> statement-breakpoint
+CREATE INDEX `idx_activity_log_referral` ON `referral_activity_log` (`referral_id`);--> statement-breakpoint
+CREATE INDEX `idx_activity_log_event_type` ON `referral_activity_log` (`event_type`);--> statement-breakpoint
+CREATE INDEX `idx_referral_stats_user` ON `referral_stats` (`user_id`);--> statement-breakpoint
+CREATE INDEX `idx_referral_stats_school_rank` ON `referral_stats` (`school_rank`);--> statement-breakpoint
+CREATE INDEX `idx_referral_stats_global_rank` ON `referral_stats` (`global_rank`);--> statement-breakpoint
+CREATE INDEX `idx_referrals_referrer` ON `referrals` (`referrer_id`);--> statement-breakpoint
+CREATE INDEX `idx_referrals_referee` ON `referrals` (`referee_id`);--> statement-breakpoint
+CREATE INDEX `idx_referrals_status` ON `referrals` (`status`);--> statement-breakpoint
+CREATE INDEX `idx_referrals_code` ON `referrals` (`referral_code`);--> statement-breakpoint
+CREATE INDEX `idx_referrals_school` ON `referrals` (`referrer_school_id`,`referee_school_id`);--> statement-breakpoint
 CREATE INDEX `idx_schools_name` ON `schools` (`school_name`);--> statement-breakpoint
 CREATE INDEX `idx_schools_county` ON `schools` (`county`);--> statement-breakpoint
 CREATE INDEX `idx_schools_level` ON `schools` (`level`);--> statement-breakpoint
@@ -720,6 +854,12 @@ CREATE INDEX `idx_swap_requests_requester` ON `swap_requests` (`requester_id`);-
 CREATE INDEX `idx_swap_requests_owner` ON `swap_requests` (`owner_id`);--> statement-breakpoint
 CREATE INDEX `idx_swap_requests_listing` ON `swap_requests` (`requested_listing_id`);--> statement-breakpoint
 CREATE INDEX `idx_swap_requests_status` ON `swap_requests` (`status`);--> statement-breakpoint
+CREATE INDEX `idx_ratings_reviewer` ON `user_ratings` (`reviewer_id`);--> statement-breakpoint
+CREATE INDEX `idx_ratings_reviewee` ON `user_ratings` (`reviewee_id`);--> statement-breakpoint
+CREATE INDEX `idx_ratings_order` ON `user_ratings` (`order_id`);--> statement-breakpoint
+CREATE INDEX `idx_ratings_swap_order` ON `user_ratings` (`swap_order_id`);--> statement-breakpoint
+CREATE INDEX `idx_ratings_cycle` ON `user_ratings` (`cycle_id`);--> statement-breakpoint
+CREATE INDEX `idx_ratings_type` ON `user_ratings` (`rating_type`);--> statement-breakpoint
 CREATE INDEX `idx_reliability_score` ON `user_reliability_scores` (`reliability_score`);--> statement-breakpoint
 CREATE INDEX `idx_reliability_user` ON `user_reliability_scores` (`user_id`);--> statement-breakpoint
 CREATE INDEX `idx_users_email` ON `users` (`email`);--> statement-breakpoint

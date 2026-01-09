@@ -28,7 +28,9 @@ import {
   Shield,
   AlertTriangle,
   ChevronRight,
+  Star,
 } from "lucide-react";
+import { UserRatingsDisplay } from "@/components/ratings/UserRatingsDisplay";
 
 interface UserPreferences {
   emailNotifications: boolean;
@@ -55,7 +57,7 @@ export default function Profile() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<"profile" | "children" | "disputes" | "notifications" | "payment">("profile");
+  const [activeSection, setActiveSection] = useState<"profile" | "children" | "disputes" | "notifications" | "payment" | "ratings">("profile");
 
   // Fetch user preferences with React Query
   const { data: preferencesData, isLoading: isLoadingPreferences } = useQuery({
@@ -85,8 +87,38 @@ export default function Profile() {
     staleTime: 1000 * 60 * 1, // 1 minute
   });
 
+  // Fetch user rating stats
+  const { data: ratingStatsData } = useQuery({
+    queryKey: ["user-rating-stats", user?.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/ratings/user/${user?.id}/stats`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch rating stats");
+      return response.json();
+    },
+    enabled: !!user,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // Fetch user's completed orders count
+  const { data: ordersCountData } = useQuery({
+    queryKey: ["user-orders-count", user?.id],
+    queryFn: async () => {
+      const response = await fetch("/api/orders/count", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch orders count");
+      return response.json();
+    },
+    enabled: !!user,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
   const preferences = preferencesData?.preferences || null;
   const disputes = disputesData?.disputes || [];
+  const ratingStats = ratingStatsData?.stats;
+  const ordersCount = ordersCountData?.count || 0;
   const openDisputesCount = disputes.filter((d: any) =>
     ["open", "awaiting_response", "investigating", "escalated"].includes(d.dispute.status)
   ).length;
@@ -445,12 +477,14 @@ export default function Profile() {
               {/* Stats */}
               <div className="flex gap-4 lg:gap-6 pb-2">
                 <div className="text-center">
-                  <div className="font-bold text-3xl lg:text-4xl text-primary">4.9</div>
+                  <div className="font-bold text-3xl lg:text-4xl text-primary">
+                    {ratingStats?.averageRating ? ratingStats.averageRating.toFixed(1) : "—"}
+                  </div>
                   <div className="text-muted-foreground text-xs lg:text-sm font-medium mt-1">Rating</div>
                 </div>
                 <Separator orientation="vertical" className="h-16" />
                 <div className="text-center">
-                  <div className="font-bold text-3xl lg:text-4xl text-primary">12</div>
+                  <div className="font-bold text-3xl lg:text-4xl text-primary">{ordersCount}</div>
                   <div className="text-muted-foreground text-xs lg:text-sm font-medium mt-1">Deals</div>
                 </div>
               </div>
@@ -513,6 +547,15 @@ export default function Profile() {
                   <CreditCard className="mr-2 h-4 w-4" />
                   <span className="text-xs sm:text-sm">Payment</span>
                 </Button>
+                <Button
+                  variant={activeSection === "ratings" ? "default" : "outline"}
+                  size="sm"
+                  className="justify-start font-medium"
+                  onClick={() => setActiveSection("ratings")}
+                >
+                  <Star className="mr-2 h-4 w-4" />
+                  <span className="text-xs sm:text-sm">Ratings</span>
+                </Button>
               </div>
               <Separator className="my-3" />
               <Button
@@ -555,6 +598,10 @@ export default function Profile() {
             <TabsTrigger value="payment" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
               <CreditCard className="mr-2 h-4 w-4" />
               Payment Methods
+            </TabsTrigger>
+            <TabsTrigger value="ratings" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+              <Star className="mr-2 h-4 w-4" />
+              Ratings & Reviews
             </TabsTrigger>
             <div className="ml-auto">
               <Button
@@ -1588,6 +1635,11 @@ export default function Profile() {
                 </Button>
               </CardFooter>
             </Card>
+          )}
+
+          {/* Ratings & Reviews Section */}
+          {activeSection === "ratings" && user && (
+            <UserRatingsDisplay userId={user.id} limit={20} />
           )}
         </div>
       </div>
