@@ -40,6 +40,7 @@ interface CreateBookListingData {
 interface BookListing extends CreateBookListingData {
   id: number;
   sellerId: string;
+  sellerName: string;
   listingStatus: string;
   listingType: "sell" | "swap";
   viewsCount: number;

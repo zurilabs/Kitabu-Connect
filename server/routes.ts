@@ -41,6 +41,7 @@ import referralRoutes from "./routes/referrals";
 import ordersRoutes from "./routes/orders";
 import escrowRoutes from "./routes/escrow";
 import { paymentService } from "./services/payment.service";
+import { log } from "console";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -846,6 +847,8 @@ export async function registerRoutes(
           if (payload) {
             const [user] = await db.select().from(users).where(eq(users.id, payload.userId));
             currentUser = user;
+            console.log(currentUser);
+            
           }
         } catch (error) {
           // User is not authenticated, that's fine - continue as guest

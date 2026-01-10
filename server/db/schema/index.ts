@@ -744,8 +744,11 @@ export const swapOrders = mysqlTable("swap_orders", {
 
   // Purchase order fields (for purchase orders)
   bookPrice: decimal("book_price", { precision: 10, scale: 2 }),
-  convenienceFee: decimal("convenience_fee", { precision: 10, scale: 2 }),
-  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }),
+  serviceFee: decimal("service_fee", { precision: 10, scale: 2 }), // Platform service fee (5% of book price)
+  convenienceFee: decimal("convenience_fee", { precision: 10, scale: 2 }), // DEPRECATED: Use serviceFee instead
+  paystackTransactionFee: decimal("paystack_transaction_fee", { precision: 10, scale: 2 }), // Paystack 1.5% + KES 100
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }), // Book price + service fee (before Paystack)
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }), // Final amount including all fees
 
   // Order status: 'active', 'requirements_gathering', 'awaiting_payment', 'in_progress', 'delivered', 'revision_requested', 'completed', 'cancelled', 'disputed'
   status: varchar("status", { length: 30 }).notNull().default("requirements_gathering"),
@@ -768,7 +771,10 @@ export const swapOrders = mysqlTable("swap_orders", {
   ownerReceivedBook: boolean("owner_received_book").default(false),
 
   // Escrow/Commitment (small fee to ensure commitment)
-  commitmentFee: decimal("commitment_fee", { precision: 10, scale: 2 }).default("50.00"),
+  // For swaps: Exchange fee per party
+  commitmentFee: decimal("commitment_fee", { precision: 10, scale: 2 }).default("50.00"), // DEPRECATED: Use exchangeFee
+  exchangeFee: decimal("exchange_fee", { precision: 10, scale: 2 }).default("50.00"), // Exchange fee per party for swaps (KES 50)
+  exchangePaystackFee: decimal("exchange_paystack_fee", { precision: 10, scale: 2 }), // Paystack fee for exchange (per party)
   escrowId: int("escrow_id").references(() => escrowAccounts.id),
 
   // Payment tracking for commitment fees

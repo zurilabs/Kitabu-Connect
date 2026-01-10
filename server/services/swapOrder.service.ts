@@ -15,6 +15,7 @@ import {
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { notificationService } from "./notification.service";
 import { messageService } from "./message.service";
+import { calculatePurchaseOrderFees, calculateSwapOrderFees } from "../utils/paystackFees";
 
 export class SwapOrderService {
   /**
@@ -68,6 +69,9 @@ export class SwapOrderService {
       const autoCompleteAt = new Date(deliveryDeadline);
       autoCompleteAt.setDate(autoCompleteAt.getDate() + 3);
 
+      // Calculate exchange fees
+      const exchangeFees = calculateSwapOrderFees(50); // KES 50 exchange fee per party
+
       // Create the swap order
       const [result] = await db.insert(swapOrders).values({
         orderNumber,
@@ -81,6 +85,9 @@ export class SwapOrderService {
         meetupLocation: swapRequest.meetupLocation,
         deliveryDeadline,
         autoCompleteAt,
+        exchangeFee: exchangeFees.exchangeFee.toFixed(2),
+        exchangePaystackFee: exchangeFees.paystackFee.toFixed(2),
+        commitmentFee: exchangeFees.totalPerParty.toFixed(2), // DEPRECATED: Total amount for backward compatibility
       });
 
       const swapOrderId = result.insertId;
@@ -187,10 +194,11 @@ export class SwapOrderService {
         };
       }
 
-      // Calculate costs
+      // Calculate costs using new fee structure
       const bookPrice = parseFloat(listing.price);
-      const convenienceFee = bookPrice * 0.05; // 5% convenience fee
-      const totalAmount = bookPrice + convenienceFee;
+      const fees = calculatePurchaseOrderFees(bookPrice, 0.05); // 5% service fee
+
+      // fees contains: { bookPrice, serviceFee, subtotal, paystackFee, totalAmount }
 
       // Generate order number (format: PUR-YYYYMMDD-XXXX)
       const orderNumber = `PUR-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -204,9 +212,12 @@ export class SwapOrderService {
         ownerId: listing.sellerId, // Seller
         requestedListingId: listing.id,
         offeredListingId: null, // No offered book for purchases
-        bookPrice: bookPrice.toFixed(2),
-        convenienceFee: convenienceFee.toFixed(2),
-        totalAmount: totalAmount.toFixed(2),
+        bookPrice: fees.bookPrice.toFixed(2),
+        serviceFee: fees.serviceFee.toFixed(2),
+        convenienceFee: fees.serviceFee.toFixed(2), // DEPRECATED: kept for backward compatibility
+        paystackTransactionFee: fees.paystackFee.toFixed(2),
+        subtotal: fees.subtotal.toFixed(2),
+        totalAmount: fees.totalAmount.toFixed(2),
         status: "pending", // Pending seller acceptance (like swap flow)
         deliveryMethod: data.deliveryMethod || "meetup",
         meetupLocation: data.deliveryAddress,
@@ -219,9 +230,11 @@ export class SwapOrderService {
         purchaseOrderId,
         `🛒 Purchase request created!\n\n` +
         `Book: ${listing.title}\n` +
-        `Price: KES ${bookPrice.toLocaleString()}\n` +
-        `Platform Fee (5%): KES ${convenienceFee.toLocaleString()}\n` +
-        `Total: KES ${totalAmount.toLocaleString()}\n\n` +
+        `Book Price: KES ${fees.bookPrice.toLocaleString()}\n` +
+        `Service Fee (5%): KES ${fees.serviceFee.toLocaleString()}\n` +
+        `Paystack Transaction Fee: KES ${fees.paystackFee.toLocaleString()}\n` +
+        `───────────────────────\n` +
+        `Total: KES ${fees.totalAmount.toLocaleString()}\n\n` +
         `Waiting for seller to accept your purchase request.`,
         "system"
       );
@@ -237,7 +250,7 @@ export class SwapOrderService {
         userId: listing.sellerId,
         type: "swap_request",
         title: "New Purchase Request! 🛒",
-        message: `${buyer.fullName} wants to buy "${listing.title}" for KES ${totalAmount.toLocaleString()}`,
+        message: `${buyer.fullName} wants to buy "${listing.title}" for KES ${fees.totalAmount.toLocaleString()}`,
         relatedBookListingId: listing.id,
         actionUrl: `/orders/${purchaseOrderId}/messages`,
       });
@@ -605,7 +618,12 @@ export class SwapOrderService {
       // Send different messages for purchases vs swaps
       const systemMessage = isPurchase
         ? "✅ Delivery details approved! The seller can now prepare and dispatch your book. You will be notified once the book is on its way."
-        : "✅ Requirements approved! Both parties need to pay a commitment fee of KES 50 to proceed. This fee will be refunded when the swap is completed successfully.";
+        : `✅ Requirements approved! Both parties need to pay an exchange fee to proceed.\n\n` +
+          `Exchange Fee: KES 50\n` +
+          `Paystack Fee (1.5%): KES ${swapOrder.exchangePaystackFee || '1'}\n` +
+          `───────────────────────\n` +
+          `Total per party: KES ${swapOrder.commitmentFee || '51'}\n\n` +
+          `This fee goes to the platform for facilitating the swap.`;
 
       await messageService.sendSystemMessage(
         swapOrderId,
@@ -699,22 +717,27 @@ export class SwapOrderService {
         .where(eq(swapOrders.id, swapOrderId));
 
       // Record transaction in transaction history (held in escrow until swap completes)
-      const commitmentFeeAmount = parseFloat(swapOrder.commitmentFee || "50.00");
+      const totalFeeAmount = parseFloat(swapOrder.commitmentFee || "152.00"); // Total including Paystack
+      const exchangeFee = parseFloat(swapOrder.exchangeFee || "50.00");
+      const paystackFee = parseFloat(swapOrder.exchangePaystackFee || "102.00");
+
       await db.insert(transactions).values({
         userId: userId,
         type: "escrow_hold",
         status: "pending",
-        amount: commitmentFeeAmount.toString(),
+        amount: totalFeeAmount.toString(),
         currency: "KES",
         paymentMethod: "paystack",
         paymentReference: paymentReference,
         bookListingId: swapOrder.requestedListingId,
-        description: `Service fee held in escrow for swap order #${swapOrder.orderNumber}`,
+        description: `Exchange fee (KES ${exchangeFee}) + Paystack fee (KES ${paystackFee}) held for swap order #${swapOrder.orderNumber}`,
         metadata: JSON.stringify({
           swapOrderId: swapOrderId,
           orderNumber: swapOrder.orderNumber,
           role: isRequester ? "requester" : "owner",
-          feeType: "swap_service_fee",
+          feeType: "swap_exchange_fee",
+          exchangeFee: exchangeFee,
+          paystackFee: paystackFee,
         }),
         createdAt: new Date(),
       });
@@ -729,9 +752,9 @@ export class SwapOrderService {
       const bothPaid = updatedOrder.requesterPaidFee && updatedOrder.ownerPaidFee;
 
       if (bothPaid) {
-        // Create escrow account to hold the commitment fees
-        const commitmentFeeAmount = parseFloat(swapOrder.commitmentFee || "50.00");
-        const totalEscrowAmount = commitmentFeeAmount * 2; // Both parties' fees
+        // Create escrow account to hold the exchange fees (platform revenue)
+        const totalFeePerParty = parseFloat(swapOrder.commitmentFee || "152.00");
+        const totalEscrowAmount = totalFeePerParty * 2; // Both parties' total fees
 
         const [escrowAccount] = await db
           .insert(escrowAccounts)
@@ -760,15 +783,18 @@ export class SwapOrderService {
         // Send system message
         await messageService.sendSystemMessage(
           swapOrderId,
-          "💰 Both parties have paid their commitment fees! The swap is now in progress. Please proceed with the book exchange at the agreed meetup location and time.",
+          `💰 Both parties have paid their exchange fees! The swap is now in progress.\n\n` +
+          `Total collected: KES ${totalEscrowAmount.toLocaleString()}\n\n` +
+          `Please proceed with the book exchange at the agreed meetup location and time.`,
           "system"
         );
       } else {
         // Send confirmation message for individual payment
         const userName = isRequester ? "Requester" : "Owner";
+        const totalAmount = parseFloat(swapOrder.commitmentFee || "152.00");
         await messageService.sendSystemMessage(
           swapOrderId,
-          `💳 ${userName} has paid their KES 50 commitment fee. Waiting for the other party to pay their fee before the swap can proceed.`,
+          `💳 ${userName} has paid their exchange fee of KES ${totalAmount.toLocaleString()}. Waiting for the other party to pay their fee before the swap can proceed.`,
           "system"
         );
       }
@@ -840,7 +866,9 @@ export class SwapOrderService {
 
       const totalAmount = parseFloat(purchaseOrder.totalAmount || "0");
       const bookPrice = parseFloat(purchaseOrder.bookPrice || "0");
-      const convenienceFee = parseFloat(purchaseOrder.convenienceFee || "0");
+      const serviceFee = parseFloat(purchaseOrder.serviceFee || purchaseOrder.convenienceFee || "0");
+      const paystackFee = parseFloat(purchaseOrder.paystackTransactionFee || "0");
+      const subtotal = parseFloat(purchaseOrder.subtotal || "0");
 
       // Create escrow account to hold the payment
       const [escrowAccount] = await db
@@ -851,7 +879,7 @@ export class SwapOrderService {
           sellerId: purchaseOrder.ownerId,
           amount: bookPrice.toFixed(2), // Only book price goes to seller
           currency: "KES",
-          platformFee: convenienceFee.toFixed(2), // Convenience fee is platform fee
+          platformFee: serviceFee.toFixed(2), // Service fee is platform revenue
           status: "active",
           holdPeriodDays: 7,
           releaseAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
@@ -869,12 +897,14 @@ export class SwapOrderService {
         paymentReference: paymentReference,
         bookListingId: purchaseOrder.requestedListingId,
         escrowId: escrowAccount.id,
-        description: `Purchase of book - Order #${purchaseOrder.orderNumber}`,
+        description: `Purchase: Book (KES ${bookPrice}) + Service Fee (KES ${serviceFee}) + Paystack Fee (KES ${paystackFee}) - Order #${purchaseOrder.orderNumber}`,
         metadata: JSON.stringify({
           purchaseOrderId: purchaseOrderId,
           orderNumber: purchaseOrder.orderNumber,
           bookPrice: bookPrice,
-          convenienceFee: convenienceFee,
+          serviceFee: serviceFee,
+          paystackFee: paystackFee,
+          subtotal: subtotal,
         }),
         completedAt: new Date(),
       });
@@ -1208,10 +1238,10 @@ export class SwapOrderService {
 
               console.log(`[SwapOrderService] Released KES ${bookPrice.toFixed(2)} from escrow to seller ${swapOrder.ownerId}. New balance: KES ${newBalance.toFixed(2)}`);
 
-              // Credit platform account with convenience fee
-              const platformFee = parseFloat(escrowAccount?.platformFee || swapOrder.convenienceFee || "0");
+              // Credit platform account with service fee (not Paystack fee - that goes to Paystack)
+              const serviceFee = parseFloat(swapOrder.serviceFee || swapOrder.convenienceFee || "0");
 
-              if (platformFee > 0) {
+              if (serviceFee > 0) {
                 const PLATFORM_EMAIL = "platform@kitabuconnect.com";
 
                 // Get platform account by email (works regardless of ID)
@@ -1223,14 +1253,14 @@ export class SwapOrderService {
 
                 if (platformUser) {
                   const platformCurrentBalance = parseFloat(platformUser.walletBalance || "0");
-                  const platformNewBalance = platformCurrentBalance + platformFee;
+                  const platformNewBalance = platformCurrentBalance + serviceFee;
 
                   // Create platform revenue transaction
                   const [platformRevenueResult] = await db.insert(transactions).values({
                     userId: platformUser.id,
                     type: "platform_revenue",
                     status: "completed",
-                    amount: platformFee.toFixed(2),
+                    amount: serviceFee.toFixed(2),
                     currency: "KES",
                     paymentMethod: "paystack",
                     paymentReference: swapOrder.requesterPaymentReference,
@@ -1259,19 +1289,23 @@ export class SwapOrderService {
                   await db.insert(walletTransactions).values({
                     userId: platformUser.id,
                     type: "credit",
-                    amount: platformFee.toFixed(2),
+                    amount: serviceFee.toFixed(2),
                     balanceAfter: platformNewBalance.toFixed(2),
                     transactionId: platformRevenueResult.id,
-                    description: `Platform fee collected - Order #${swapOrder.orderNumber}`,
+                    description: `Service fee collected (5%) - Order #${swapOrder.orderNumber}`,
                   });
 
-                  console.log(`[SwapOrderService] Collected KES ${platformFee.toFixed(2)} platform fee. Platform balance: KES ${platformNewBalance.toFixed(2)}`);
+                  console.log(`[SwapOrderService] Collected KES ${serviceFee.toFixed(2)} service fee. Platform balance: KES ${platformNewBalance.toFixed(2)}`);
+
+                  // Note: Paystack transaction fee (KES ${swapOrder.paystackTransactionFee || '0'}) was deducted by Paystack automatically
                 }
               }
             }
           } else {
-            // For swap orders: release commitment fees to platform
-            const commitmentFeeAmount = parseFloat(swapOrder.commitmentFee || "50.00");
+            // For swap orders: release exchange fees to platform
+            // Total per party includes: Exchange fee (KES 50) + Paystack fee
+            const totalFeePerParty = parseFloat(swapOrder.commitmentFee || "152.00");
+            const exchangeFee = parseFloat(swapOrder.exchangeFee || "50.00");
 
             // Complete the escrow hold transaction for requester (transfer to platform)
             await db
@@ -1279,7 +1313,7 @@ export class SwapOrderService {
               .set({
                 status: "completed",
                 completedAt: new Date(),
-                description: `Service fee released to platform for swap order #${swapOrder.orderNumber}`,
+                description: `Exchange fee (KES ${exchangeFee}) released to platform for swap order #${swapOrder.orderNumber}`,
               })
               .where(
                 and(
@@ -1296,7 +1330,7 @@ export class SwapOrderService {
               .set({
                 status: "completed",
                 completedAt: new Date(),
-                description: `Service fee released to platform for swap order #${swapOrder.orderNumber}`,
+                description: `Exchange fee (KES ${exchangeFee}) released to platform for swap order #${swapOrder.orderNumber}`,
               })
               .where(
                 and(
@@ -1306,6 +1340,9 @@ export class SwapOrderService {
                   eq(transactions.status, "pending")
                 )
               );
+
+            // Note: Paystack fees were already deducted by Paystack when each party paid
+            console.log(`[SwapOrderService] Swap completed. Exchange fees (KES ${exchangeFee} x 2 = KES ${exchangeFee * 2}) collected as platform revenue.`);
           }
         }
 

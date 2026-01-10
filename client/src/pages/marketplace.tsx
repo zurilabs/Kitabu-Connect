@@ -96,7 +96,7 @@ export default function Marketplace() {
   }, [debouncedSearchTerm, selectedGrade, selectedSubject, selectedCondition, listingType, priceRange, sortBy, sameSchoolOnly, activeChild, curriculum, negotiableOnly, maxDistance, user, page]);
 
   // Fetch books with React Query
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isSuccess } = useQuery({
     queryKey: ["marketplace-books", filterParams],
     queryFn: async () => {
       const response = await fetch(`/api/books?${filterParams}`, {
@@ -105,7 +105,9 @@ export default function Marketplace() {
       if (!response.ok) throw new Error("Failed to fetch books");
       return response.json();
     },
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 0, // Consider data stale immediately - always refetch
+    refetchOnMount: "always", // Always refetch when component mounts, even if data is fresh
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
 
   // Update accumulated books when new data arrives
@@ -114,10 +116,12 @@ export default function Marketplace() {
       hasData: !!data,
       hasListings: !!data?.listings,
       listingsLength: data?.listings?.length,
-      page
+      page,
+      currentAllBooksLength: allBooks.length,
+      isSuccess
     });
 
-    if (data?.listings) {
+    if (data?.listings && data.listings.length > 0) {
       console.log('[Marketplace] Data received:', {
         page,
         newBooks: data.listings.length,
@@ -126,22 +130,50 @@ export default function Marketplace() {
       });
 
       if (page === 1) {
-        // Reset books on filter change
+        // Reset books on filter change or initial load
+        // Always update on page 1 to ensure fresh data after navigation
         console.log('[Marketplace] Setting allBooks (page 1):', data.listings.length);
         setAllBooks(data.listings);
       } else {
         // Append new books for pagination
         setAllBooks(prev => {
-          const combined = [...prev, ...data.listings];
-          console.log('[Marketplace] Combined books:', combined.length);
+          // Prevent duplicate books by checking if the first book from data already exists
+          const firstNewBookId = data.listings[0]?.id;
+          const alreadyHasBook = prev.some(book => book.id === firstNewBookId);
+
+          if (alreadyHasBook) {
+            console.log('[Marketplace] Books already loaded, skipping append');
+            return prev;
+          }
+
+          // Create a Set of existing book IDs for efficient deduplication
+          const existingIds = new Set(prev.map(book => book.id));
+
+          // Filter out any books that already exist
+          const newBooks = data.listings.filter(book => !existingIds.has(book.id));
+
+          if (newBooks.length === 0) {
+            console.log('[Marketplace] No new books to add (all duplicates)');
+            return prev;
+          }
+
+          const combined = [...prev, ...newBooks];
+          console.log('[Marketplace] Combined books:', combined.length, 'Added:', newBooks.length);
           return combined;
         });
       }
       setHasMore(data.pagination?.hasMore || false);
+    } else if (data?.listings && data.listings.length === 0) {
+      // Handle empty results - clear books on page 1
+      if (page === 1) {
+        console.log('[Marketplace] Empty results on page 1, clearing books');
+        setAllBooks([]);
+        setHasMore(false);
+      }
     } else {
       console.log('[Marketplace] No data or listings to process');
     }
-  }, [data, page]);
+  }, [data, isSuccess]);
 
   // Reset to page 1 when filters change (including search term)
   useEffect(() => {
@@ -376,68 +408,97 @@ export default function Marketplace() {
         description="Browse thousands of affordable used textbooks in Kenya. CBC, 8-4-4, IGCSE and IB curriculum books. Filter by grade, subject, condition and price. Secure escrow payments."
         keywords="buy textbooks Kenya, used textbooks marketplace, CBC books for sale, 8-4-4 textbooks, IGCSE books Kenya, IB textbooks, affordable school books"
       />
-      {/* Child Selector Banner */}
+
+      {/* Prominent Search Section - Jiji Style */}
+      <div className="bg-primary py-8 md:py-12">
+        <div className="container px-4 lg:px-8">
+          <h1 className="text-white text-center text-2xl md:text-3xl font-bold mb-6">
+            What books are you looking for?
+          </h1>
+          <div className="max-w-4xl mx-auto">
+            <div className="flex flex-col md:flex-row gap-2 bg-white rounded-lg p-1.5 shadow-lg">
+              {/* Location/Grade Dropdown */}
+              <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+                <SelectTrigger className="md:w-[180px] h-11 border-0 bg-transparent hover:bg-muted/50">
+                  <SelectValue placeholder="All Grades" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Grades</SelectItem>
+                  {grades.map(grade => (
+                    <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Search Input */}
+              <div className="flex-1 relative">
+                <Input
+                  placeholder="I am looking for..."
+                  className="h-11 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setSearchTerm('');
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Search Button */}
+              <Button className="h-11 px-8" size="lg">
+                <Search className="w-5 h-5 mr-2" />
+                Search
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Child Selector Banner - Compact */}
       {children.length > 0 && (
-        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 border-b sticky top-0 z-40">
-          <div className="container px-4 lg:px-8 py-3">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <SchoolIcon className="w-4 h-4 text-primary" />
-                  <span className="text-muted-foreground">Shopping for:</span>
-                </div>
+        <div className="bg-background border-b sticky top-16 z-40">
+          <div className="container px-4 lg:px-8 py-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Shopping for:</span>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 border-primary/20 hover:border-primary/40 bg-background/80"
+                  className="h-7 text-xs border-primary/20 hover:border-primary/40"
                   onClick={() => setShowChildSelector(!showChildSelector)}
                 >
                   {activeChild ? (
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{activeChild.displayName}</span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-sm">{activeChild.grade}</span>
-                      {activeChild.schoolName && (
-                        <>
-                          <span className="text-muted-foreground">·</span>
-                          <span className="text-xs text-muted-foreground max-w-[150px] truncate">{activeChild.schoolName}</span>
-                        </>
-                      )}
-                    </div>
+                    <span className="font-medium">{activeChild.displayName} · {activeChild.grade}</span>
                   ) : (
                     <span>Select a child</span>
                   )}
-                  <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${showChildSelector ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showChildSelector ? "rotate-180" : ""}`} />
                 </Button>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {data?.pagination?.total && (
-                  <>
-                    <MapPin className="w-3 h-3" />
-                    <span>{data.pagination.total} books available</span>
-                  </>
-                )}
-              </div>
+              <span className="text-xs text-muted-foreground">
+                {data?.pagination?.total && `${data.pagination.total} books available`}
+              </span>
             </div>
 
             {/* Child Selector Dropdown */}
             {showChildSelector && (
-              <div className="mt-3 p-3 bg-background rounded-lg border shadow-lg animate-in slide-in-from-top-2 duration-200">
+              <div className="mt-2 p-2 bg-background rounded-lg border shadow-lg animate-in slide-in-from-top-2 duration-200">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                   {children.map((child) => (
                     <Button
                       key={child.id}
                       variant={activeChild?.id === child.id ? "default" : "outline"}
-                      className="justify-start h-auto py-3 px-4"
+                      size="sm"
+                      className="justify-start h-auto py-2 px-3"
                       onClick={() => {
                         setActiveChild(child);
                         setShowChildSelector(false);
-                        // Auto-apply child's grade filter
                         setSelectedGrade(child.grade);
                       }}
                     >
-                      <div className="flex flex-col items-start gap-1">
-                        <span className="font-semibold">{child.displayName}</span>
+                      <div className="flex flex-col items-start gap-0.5">
+                        <span className="text-sm font-semibold">{child.displayName}</span>
                         <span className="text-xs text-muted-foreground">{child.grade} · {child.schoolName || "No school"}</span>
                       </div>
                     </Button>
@@ -449,61 +510,42 @@ export default function Marketplace() {
         </div>
       )}
 
-      {/* Smart Sticky Filter Bar */}
-      <>
-        {/* Placeholder to prevent content jump when filter bar becomes fixed */}
-        {filterBarSticky && <div className="h-[140px]" />}
-
-        <div
-          ref={filterBarRef}
-          className={`bg-background border-b transition-all duration-300 ${
-            filterBarSticky
-              ? 'fixed top-0 left-0 right-0 z-40 shadow-lg animate-in slide-in-from-top-2'
-              : 'relative'
-          }`}
-        >
-          <div className="container px-4 lg:px-8 py-4 space-y-4">
-          {/* Search Bar */}
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by title, author, or ISBN..."
-                className={`pl-9 h-10 ${searchTerm ? 'pr-20' : 'pr-4'} ${debouncedSearchTerm ? 'ring-2 ring-primary/20' : ''}`}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setSearchTerm('');
-                  }
-                }}
-              />
-              {/* Search State Indicators */}
-              {searchTerm && (
-                <div className="absolute right-3 top-2.5 flex items-center gap-2">
-                  {searchTerm !== debouncedSearchTerm && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 w-5 p-0 hover:bg-muted"
-                    onClick={() => setSearchTerm('')}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-              {/* Search Results Count */}
-              {debouncedSearchTerm && (
-                <div className="absolute -bottom-6 left-0 text-xs text-muted-foreground">
-                  Found {transformedBooks.length} {transformedBooks.length === 1 ? 'book' : 'books'} matching "{debouncedSearchTerm}"
-                </div>
+      {/* Compact Filter Bar - Jiji Style */}
+      <div className="bg-background border-b">
+        <div className="container px-4 lg:px-8 py-3">
+          {/* Quick Filter Chips & Controls */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2">
+              {quickFilters.map((filter) => (
+                <Badge
+                  key={filter.id}
+                  variant={filter.active ? "default" : "outline"}
+                  className={`px-2.5 py-1 text-xs transition-colors flex items-center gap-1 ${
+                    filter.disabled
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer hover:bg-primary/90 hover:text-primary-foreground"
+                  }`}
+                  onClick={filter.disabled ? undefined : filter.onClick}
+                >
+                  {filter.icon}
+                  <span>{filter.label}</span>
+                </Badge>
+              ))}
+              {activeFilterCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors px-2.5 py-1 text-xs"
+                  onClick={clearAllFilters}
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  Clear ({activeFilterCount})
+                </Badge>
               )}
             </div>
-            <div className="flex gap-2">
+
+            <div className="flex items-center gap-2">
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[200px] h-10">
+                <SelectTrigger className="w-[180px] h-9 text-sm">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
@@ -520,12 +562,12 @@ export default function Marketplace() {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 relative"
+                className="h-9 w-9 relative"
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               >
                 <SlidersHorizontal className="w-4 h-4" />
                 {activeFilterCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium">
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-medium">
                     {activeFilterCount}
                   </span>
                 )}
@@ -533,63 +575,15 @@ export default function Marketplace() {
             </div>
           </div>
 
-          {/* Quick Filter Chips */}
-          <div className="flex flex-wrap gap-2">
-            {quickFilters.map((filter) => (
-              <Badge
-                key={filter.id}
-                variant={filter.active ? "default" : "outline"}
-                className={`px-3 py-1.5 transition-colors flex items-center gap-1.5 ${
-                  filter.disabled
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer hover:bg-primary/90 hover:text-primary-foreground"
-                }`}
-                onClick={filter.disabled ? undefined : filter.onClick}
-              >
-                {filter.icon}
-                <span>{filter.label}</span>
-              </Badge>
-            ))}
-            {activeFilterCount > 0 && (
-              <Badge
-                variant="secondary"
-                className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors px-3 py-1.5"
-                onClick={clearAllFilters}
-              >
-                <X className="w-3 h-3 mr-1" />
-                Clear All ({activeFilterCount})
-              </Badge>
-            )}
-          </div>
-
           {/* Advanced Filters */}
           {showAdvancedFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border rounded-lg bg-muted/20">
-              {/* Grade Filter */}
-              <div>
-                <label className="text-sm font-medium mb-2 block">Grade/Class</label>
-                <Select value={selectedGrade} onValueChange={setSelectedGrade}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="All Grades" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Grades</SelectItem>
-                    {grades.map(grade => (
-                      <SelectItem key={grade} value={grade}>{grade}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-3 border rounded-lg bg-muted/20 mt-3">
               {/* Subject Filter */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Subject</label>
+                <label className="text-xs font-medium mb-1.5 block text-muted-foreground">Subject</label>
                 <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-                  <SelectTrigger className="h-10">
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-muted-foreground" />
-                      <SelectValue placeholder="All Subjects" />
-                    </div>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="All Subjects" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Subjects</SelectItem>
@@ -602,9 +596,9 @@ export default function Marketplace() {
 
               {/* Condition Filter */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Condition</label>
+                <label className="text-xs font-medium mb-1.5 block text-muted-foreground">Condition</label>
                 <Select value={selectedCondition} onValueChange={setSelectedCondition}>
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger className="h-9 text-sm">
                     <SelectValue placeholder="All Conditions" />
                   </SelectTrigger>
                   <SelectContent>
@@ -618,13 +612,10 @@ export default function Marketplace() {
 
               {/* Listing Type Filter */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Listing Type</label>
+                <label className="text-xs font-medium mb-1.5 block text-muted-foreground">Listing Type</label>
                 <Select value={listingType} onValueChange={setListingType}>
-                  <SelectTrigger className="h-10">
-                    <div className="flex items-center gap-2">
-                      <Filter className="w-4 h-4 text-muted-foreground" />
-                      <SelectValue placeholder="Type" />
-                    </div>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Listings</SelectItem>
@@ -636,9 +627,9 @@ export default function Marketplace() {
 
               {/* Curriculum Filter */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Curriculum</label>
+                <label className="text-xs font-medium mb-1.5 block text-muted-foreground">Curriculum</label>
                 <Select value={curriculum} onValueChange={setCurriculum}>
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger className="h-9 text-sm">
                     <SelectValue placeholder="All Curriculums" />
                   </SelectTrigger>
                   <SelectContent>
@@ -651,7 +642,7 @@ export default function Marketplace() {
 
               {/* Distance Filter */}
               <div>
-                <label className="text-sm font-medium mb-2 block">
+                <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
                   Distance {activeChild?.schoolId && "(from school)"}
                 </label>
                 <Select
@@ -659,11 +650,8 @@ export default function Marketplace() {
                   onValueChange={(value) => setMaxDistance(value === "all" ? null : Number(value))}
                   disabled={!(activeChild?.schoolId || (user?.latitude && user?.longitude))}
                 >
-                  <SelectTrigger className="h-10">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <SelectValue placeholder="Any Distance" />
-                    </div>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Any Distance" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Any Distance</SelectItem>
@@ -673,17 +661,12 @@ export default function Marketplace() {
                     <SelectItem value="50">Within 50 km</SelectItem>
                   </SelectContent>
                 </Select>
-                {!activeChild?.schoolId && !user?.latitude && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Select a child or enable location to use distance filter
-                  </p>
-                )}
               </div>
 
               {/* Price Range Filter */}
               <div className="md:col-span-2">
-                <label className="text-sm font-medium mb-2 block">
-                  Price Range: KSh {priceRange[0].toLocaleString()} - KSh {priceRange[1].toLocaleString()}
+                <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
+                  Price: KSh {priceRange[0].toLocaleString()} - KSh {priceRange[1].toLocaleString()}
                 </label>
                 <Slider
                   min={0}
@@ -704,86 +687,85 @@ export default function Marketplace() {
                   onChange={(e) => setNegotiableOnly(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300"
                 />
-                <label htmlFor="negotiable" className="text-sm font-medium cursor-pointer">
+                <label htmlFor="negotiable" className="text-xs font-medium cursor-pointer">
                   Negotiable prices only
                 </label>
               </div>
             </div>
           )}
-          </div>
         </div>
-      </>
+      </div>
 
       {/* Results Section */}
-      <div className="container px-4 lg:px-8 py-8">
-        {/* Active Filters Summary */}
+      <div className="container px-4 lg:px-8 py-4">
+        {/* Active Filters Summary - Compact */}
         {(activeFilterCount > 0 || debouncedSearchTerm) && (
-          <div className="mb-6 p-4 bg-primary/5 border border-primary/10 rounded-lg">
-            <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="mb-4 p-3 bg-primary/5 border border-primary/10 rounded-lg">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium">Active filters:</span>
+                <span className="text-xs font-medium">Active filters:</span>
                 {debouncedSearchTerm && (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 text-[10px] px-2 py-0.5">
                     Search: "{debouncedSearchTerm}"
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      className="h-3 w-3 p-0 ml-0.5 hover:bg-muted"
                       onClick={() => setSearchTerm('')}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-2.5 w-2.5" />
                     </Button>
                   </Badge>
                 )}
                 {selectedGrade !== "all" && (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 text-[10px] px-2 py-0.5">
                     {selectedGrade}
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      className="h-3 w-3 p-0 ml-0.5 hover:bg-muted"
                       onClick={() => setSelectedGrade("all")}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-2.5 w-2.5" />
                     </Button>
                   </Badge>
                 )}
                 {selectedSubject !== "all" && (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 text-[10px] px-2 py-0.5">
                     {selectedSubject}
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      className="h-3 w-3 p-0 ml-0.5 hover:bg-muted"
                       onClick={() => setSelectedSubject("all")}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-2.5 w-2.5" />
                     </Button>
                   </Badge>
                 )}
                 {listingType !== "all" && (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 text-[10px] px-2 py-0.5">
                     {listingType === "swap" ? "Swap only" : "For sale"}
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      className="h-3 w-3 p-0 ml-0.5 hover:bg-muted"
                       onClick={() => setListingType("all")}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-2.5 w-2.5" />
                     </Button>
                   </Badge>
                 )}
                 {maxDistance && (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 text-[10px] px-2 py-0.5">
                     Within {maxDistance}km
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-4 w-4 p-0 ml-1 hover:bg-muted"
+                      className="h-3 w-3 p-0 ml-0.5 hover:bg-muted"
                       onClick={() => setMaxDistance(null)}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-2.5 w-2.5" />
                     </Button>
                   </Badge>
                 )}
@@ -791,7 +773,7 @@ export default function Marketplace() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs"
+                className="text-[10px] h-6"
                 onClick={clearAllFilters}
               >
                 Clear all
@@ -800,58 +782,56 @@ export default function Marketplace() {
           </div>
         )}
 
-        <div className="flex flex-col gap-3 mb-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold font-display">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-bold">
               {debouncedSearchTerm ? 'Search Results' : activeChild ? `Books for ${activeChild.displayName}` : 'All Listings'}
-            </h1>
-            <span className="text-muted-foreground text-sm">
-              {transformedBooks.length > 0 && (
-                <span>
-                  Showing {transformedBooks.length} of {data?.pagination?.total || 0} books
-                </span>
-              )}
-            </span>
+            </h2>
+            {activeChild && children.length > 0 && !debouncedSearchTerm && selectedGrade === "all" && (
+              <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 text-xs">
+                <BookOpen className="w-3 h-3 mr-1" />
+                {activeChild.grade}
+              </Badge>
+            )}
           </div>
-
-          {/* Personalization Indicator */}
-          {activeChild && children.length > 0 && !debouncedSearchTerm && selectedGrade === "all" && (
-            <Badge variant="secondary" className="w-fit bg-primary/10 text-primary border-primary/20">
-              <BookOpen className="w-3 h-3 mr-1.5" />
-              Personalized for {activeChild.grade}
-            </Badge>
-          )}
+          <span className="text-muted-foreground text-xs">
+            {transformedBooks.length > 0 && (
+              <span>
+                {transformedBooks.length} of {data?.pagination?.total || 0} books
+              </span>
+            )}
+          </span>
         </div>
 
         {isLoading && allBooks.length === 0 ? (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : transformedBooks.length > 0 ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {transformedBooks.map((book) => (
                 <BookCard key={`${book.id}-${book.sellerId}`} book={book} />
               ))}
             </div>
 
             {/* Infinite Scroll Trigger - Always render but conditionally show */}
-            <div ref={loadMoreRef} className="mt-8 flex items-center justify-center py-8">
+            <div ref={loadMoreRef} className="mt-6 flex items-center justify-center py-6">
               {hasMore && isFetching && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Loading more books...</span>
                 </div>
               )}
               {!hasMore && allBooks.length > 0 && (
-                <div className="text-center text-muted-foreground text-sm">
-                  You've reached the end. No more books to show.
+                <div className="text-center text-muted-foreground text-xs">
+                  You've reached the end
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="text-center py-20 bg-muted/20 rounded-xl border border-dashed max-w-2xl mx-auto">
+          <div className="text-center py-16 bg-muted/20 rounded-lg border border-dashed max-w-2xl mx-auto">
             <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
             <h3 className="text-lg font-medium mb-2">
               {debouncedSearchTerm ? `No books found for "${debouncedSearchTerm}"` : 'No books found'}
@@ -891,14 +871,14 @@ export default function Marketplace() {
         )}
       </div>
 
-      {/* Scroll to Top Button */}
+      {/* Scroll to Top Button - Compact */}
       {showScrollTop && (
         <Button
           onClick={scrollToTop}
           size="icon"
-          className="fixed bottom-8 right-8 rounded-full shadow-lg z-40 h-12 w-12"
+          className="fixed bottom-6 right-6 rounded-full shadow-lg z-40 h-10 w-10"
         >
-          <ArrowUp className="w-5 h-5" />
+          <ArrowUp className="w-4 h-4" />
         </Button>
       )}
     </div>

@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "d9d11912-2e6c-4123-b1ac-fb8030b954aa",
+  "id": "e53a9672-ec20-47f3-b0cf-a55e7e483cbc",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_condition_reports": {
@@ -4445,8 +4445,29 @@
           "notNull": false,
           "autoincrement": false
         },
+        "service_fee": {
+          "name": "service_fee",
+          "type": "decimal(10,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "convenience_fee": {
           "name": "convenience_fee",
+          "type": "decimal(10,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "paystack_transaction_fee": {
+          "name": "paystack_transaction_fee",
+          "type": "decimal(10,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subtotal": {
+          "name": "subtotal",
           "type": "decimal(10,2)",
           "primaryKey": false,
           "notNull": false,
@@ -4544,6 +4565,21 @@
           "notNull": false,
           "autoincrement": false,
           "default": "'50.00'"
+        },
+        "exchange_fee": {
+          "name": "exchange_fee",
+          "type": "decimal(10,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'50.00'"
+        },
+        "exchange_paystack_fee": {
+          "name": "exchange_paystack_fee",
+          "type": "decimal(10,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "escrow_id": {
           "name": "escrow_id",

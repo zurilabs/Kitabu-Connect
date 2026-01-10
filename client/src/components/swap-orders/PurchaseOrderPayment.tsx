@@ -11,6 +11,9 @@ interface PurchaseOrderPaymentProps {
   buyerPaid: boolean;
   bookPrice: string;
   convenienceFee: string;
+  serviceFee?: string;
+  paystackTransactionFee?: string;
+  subtotal?: string;
   totalAmount: string;
   status: string;
 }
@@ -21,6 +24,9 @@ export default function PurchaseOrderPayment({
   buyerPaid,
   bookPrice,
   convenienceFee,
+  serviceFee,
+  paystackTransactionFee,
+  subtotal,
   totalAmount,
   status,
 }: PurchaseOrderPaymentProps) {
@@ -112,9 +118,15 @@ export default function PurchaseOrderPayment({
               <span className="font-medium">KES {parseFloat(bookPrice).toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Platform Fee (5%)</span>
-              <span className="font-medium">KES {parseFloat(convenienceFee).toLocaleString()}</span>
+              <span className="text-muted-foreground">Service Fee (5%)</span>
+              <span className="font-medium">KES {parseFloat(serviceFee || convenienceFee).toLocaleString()}</span>
             </div>
+            {paystackTransactionFee && parseFloat(paystackTransactionFee) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Paystack Fee (1.5%)</span>
+                <span className="font-medium">KES {parseFloat(paystackTransactionFee).toLocaleString()}</span>
+              </div>
+            )}
             <div className="border-t pt-2 flex justify-between">
               <span className="font-semibold">Total Amount</span>
               <span className="font-bold text-lg">KES {parseFloat(totalAmount).toLocaleString()}</span>
