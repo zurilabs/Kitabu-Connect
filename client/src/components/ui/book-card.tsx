@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { BookPlaceholder } from "@/components/ui/book-placeholder";
 import { Book } from "@/lib/mockData";
 import { Link } from "wouter";
-import { MapPin, User, ArrowRight, ArrowLeftRight, School, ShieldCheck, TrendingDown } from "lucide-react";
+import { ArrowLeftRight, BookUser } from "lucide-react";
 import { generateBookSlug } from "@/lib/utils";
 import { FavoriteButton } from "@/components/books/FavoriteButton";
 import { useIsFavorited } from "@/hooks/use-favorites";
@@ -29,13 +29,13 @@ export function BookCard({ book }: BookCardProps) {
   const savingsPercentage = book.listingType !== 'swap' ? Math.round((savings / estimatedRetailPrice) * 100) : 0;
 
   return (
-    <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 border-border/50">
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+    <Card className="overflow-hidden group hover:shadow-md transition-all duration-200 border-border/50">
+      <div className="relative aspect-square overflow-hidden bg-muted">
         {hasValidImage ? (
           <img
             src={book.image}
             alt={book.title}
-            width="400"
+            width="300"
             height="300"
             loading="lazy"
             decoding="async"
@@ -49,73 +49,67 @@ export function BookCard({ book }: BookCardProps) {
             />
           </div>
         )}
-        {book.listingType === 'swap' && (
-          <div className="absolute top-1.5 right-1.5">
-            <Badge className="bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs px-2.5 py-0.5 flex items-center gap-1">
-              <ArrowLeftRight className="w-3 h-3" />
+        {/* Condition Badge - Top Right */}
+        {book.listingType === 'swap' ? (
+          <div className="absolute top-1 right-1">
+            <Badge className="bg-blue-500 hover:bg-blue-600 text-white font-semibold text-[10px] px-1.5 py-0.5 flex items-center gap-0.5">
+              <ArrowLeftRight className="w-2.5 h-2.5" />
               SWAP
             </Badge>
           </div>
-        )}
-        {book.listingType !== 'swap' && (
-          <div className="absolute top-1.5 right-1.5">
-            <Badge variant={book.status === 'available' ? 'default' : 'secondary'} className="bg-background/80 backdrop-blur text-foreground font-medium text-xs px-2 py-0.5">
+        ) : (
+          <div className="absolute top-1 right-1">
+            <Badge className="bg-background/90 backdrop-blur text-foreground font-medium text-[10px] px-1.5 py-0.5">
               {book.condition}
             </Badge>
           </div>
         )}
-        <div className="absolute top-1.5 left-1.5">
+        {/* Favorite Button - Top Left */}
+        <div className="absolute top-1 left-1">
           <FavoriteButton
             listingId={listingId}
             initialIsFavorited={isFavorited}
             size="icon"
-            className="bg-background/80 backdrop-blur hover:bg-background/90"
+            className="h-7 w-7 bg-background/80 backdrop-blur hover:bg-background/90"
           />
         </div>
       </div>
-      <CardContent className="p-3">
-        <div className="text-xs text-muted-foreground mb-0.5">{book.category}</div>
-        <h3 className="font-display font-semibold text-base leading-tight mb-0.5 truncate" title={book.title}>
+      <CardContent className="p-2">
+        {/* Title */}
+        <h3 className="font-semibold text-sm leading-tight mb-1 line-clamp-2 min-h-[2.5rem]" title={book.title}>
           {book.title}
         </h3>
-        <p className="text-xs text-muted-foreground mb-2 truncate">{book.author}</p>
 
-        <div className="flex items-center gap-2 text-xs mb-2 flex-wrap">
-          {book.schoolName && (
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <School className="w-3 h-3" />
-              <span className="truncate max-w-[140px]" title={book.schoolName}>{book.schoolName}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-1 text-green-600">
-            <ShieldCheck className="w-3 h-3" />
-            <span className="text-xs font-medium">Verified Parent</span>
+        {/* Author */}
+        {book.author && (
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1.5">
+            <BookUser className="w-2.5 h-2.5" />
+            <span className="truncate">{book.author}</span>
           </div>
-        </div>
+        )}
 
+        {/* Price or Swap Info */}
         {book.listingType === 'swap' ? (
-          <div className="text-sm font-semibold text-blue-600">
+          <div className="text-xs font-semibold text-blue-600 mt-2">
             Looking to swap
           </div>
         ) : (
-          <div className="space-y-1">
-            <div className="font-bold text-lg text-primary">
+          <div className="mt-1">
+            <div className="font-bold text-base text-primary">
               KSh {book.price.toLocaleString()}
             </div>
             {savingsPercentage > 0 && (
-              <div className="flex items-center gap-1 text-xs">
-                <TrendingDown className="w-3 h-3 text-green-600" />
+              <div className="flex items-center gap-1 text-[10px] mt-0.5">
                 <span className="text-green-600 font-medium">Save {savingsPercentage}%</span>
-                <span className="text-muted-foreground line-through">KSh {estimatedRetailPrice.toLocaleString()}</span>
               </div>
             )}
           </div>
         )}
       </CardContent>
-      <CardFooter className="p-3 pt-0">
-        <Button className="w-full group-hover:bg-primary/90 h-8 text-sm" asChild>
+      <CardFooter className="p-2 pt-0">
+        <Button className="w-full h-7 text-xs" variant="outline" asChild>
           <Link href={`/book/${bookSlug}`}>
-            View Details
+            View
           </Link>
         </Button>
       </CardFooter>

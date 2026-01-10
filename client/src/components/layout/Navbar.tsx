@@ -12,7 +12,9 @@ import {
   ArrowLeftRight,
   MessageSquare,
   Users,
-  BookMarked
+  BookMarked,
+  Bell,
+  Plus
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -133,19 +135,8 @@ export function Navbar() {
               Wishlist
             </span>
           </Link>
-          <Link href="/conversations">
-            <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer relative ${isActive('/conversations') ? 'text-primary' : 'text-muted-foreground'}`}>
-              Messages
-              <UnreadMessagesIndicator />
-            </span>
-          </Link>
         </>
       )}
-      <Link href="/sell" onClick={handleSellClick}>
-        <span className={`text-sm font-medium transition-colors hover:text-primary cursor-pointer ${isActive('/sell') ? 'text-primary' : 'text-muted-foreground'}`}>
-          Sell Books
-        </span>
-      </Link>
     </>
   );
 
@@ -155,27 +146,60 @@ export function Navbar() {
         isVisible ? 'translate-y-0' : '-translate-y-full'
       }`}
     >
-      <div className="container flex h-16 items-center px-4 md:px-6">
-        <div className="mr-4 hidden md:flex">
-          <Link href="/" className="mr-6 flex items-center space-x-2">
+      <div className="container flex h-16 items-center px-4 md:px-6 justify-between">
+        {/* Left: Logo and Nav Links */}
+        <div className="flex items-center gap-8">
+          <Link href="/" className="flex items-center space-x-2">
             <BookOpen className="h-6 w-6 text-primary" />
-            <span className="hidden font-display font-bold text-xl sm:inline-block">
+            <span className="font-display font-bold text-xl">
               Kitabu
             </span>
           </Link>
-          <nav className="flex items-center space-x-6 text-sm font-medium">
+          <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
             <NavLinks />
           </nav>
         </div>
 
-        <div className="flex flex-1 items-center justify-end space-x-2">
-          <div className="flex items-center gap-2">
-            {user && <NotificationBell />}
-            {user ? (
+        {/* Right: Action Icons */}
+        <div className="flex items-center gap-1">
+          {user ? (
+            <>
+              {/* Messages Icon */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-9 w-9 hidden md:flex"
+                asChild
+              >
+                <Link href="/conversations">
+                  <MessageSquare className="h-5 w-5" />
+                  <UnreadMessagesIndicator />
+                </Link>
+              </Button>
+
+              {/* Notifications Icon */}
+              <div className="hidden md:block">
+                <NotificationBell />
+              </div>
+
+              {/* Sell Books Button */}
+              <Button
+                variant="default"
+                size="sm"
+                className="hidden md:flex items-center gap-1.5 h-9 px-3"
+                asChild
+              >
+                <Link href="/sell">
+                  <Plus className="h-4 w-4" />
+                  <span className="text-sm font-medium">Sell</span>
+                </Link>
+              </Button>
+
+              {/* Profile Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0">
-                    <Avatar className="h-8 w-8">
+                  <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 ml-1">
+                    <Avatar className="h-9 w-9">
                       {user.profilePictureUrl && (
                         <AvatarImage src={user.profilePictureUrl} alt={user.fullName || 'User'} />
                       )}
@@ -215,66 +239,72 @@ export function Navbar() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : (
-              <Button asChild>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" className="hidden md:flex h-9" asChild>
+                <Link href="/login">Log In</Link>
+              </Button>
+              <Button size="sm" className="h-9" asChild>
                 <Link href="/signup">Get Started</Link>
               </Button>
-            )}
+            </>
+          )}
 
-            <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Toggle Menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="pr-0">
-                <Link href="/" className="flex items-center space-x-2" onClick={() => setIsMobileOpen(false)}>
-                  <BookOpen className="h-6 w-6 text-primary" />
-                  <span className="font-bold text-xl">Kitabu</span>
+          {/* Mobile Menu */}
+          <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden ml-1 h-9 w-9">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle Menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="pr-0">
+              <Link href="/" className="flex items-center space-x-2" onClick={() => setIsMobileOpen(false)}>
+                <BookOpen className="h-6 w-6 text-primary" />
+                <span className="font-bold text-xl">Kitabu</span>
+              </Link>
+              <div className="my-4 flex flex-col space-y-3 pb-10 pl-6">
+                <Link href="/marketplace" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                  Marketplace
                 </Link>
-                <div className="my-4 flex flex-col space-y-3 pb-10 pl-6">
-                  <Link href="/marketplace" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                    Marketplace
-                  </Link>
-                  {user && (
-                    <>
-                      <Link href="/swaps" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                        Swaps
-                      </Link>
-                      <Link href="/swap-cycles" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                        Multi-Way Swaps
-                      </Link>
-                      <Link href="/conversations" className="py-2 hover:text-primary relative inline-block" onClick={() => setIsMobileOpen(false)}>
-                        Messages
-                        <UnreadMessagesIndicator />
-                      </Link>
-                      <Link href="/favorites" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                        Favorites
-                      </Link>
-                      <Link href="/wishlist" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                        Wishlist
-                      </Link>
-                      <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                        Dashboard
-                      </Link>
-                    </>
-                  )}
-                  <Link href="/sell" className="py-2 hover:text-primary" onClick={(e) => {
-                    handleSellClick(e);
-                    setIsMobileOpen(false);
-                  }}>
-                    Sell Books
-                  </Link>
-                  {!user && (
-                    <Link href="/signup" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
-                      Get Started
+                {user && (
+                  <>
+                    <Link href="/swaps" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                      Swaps
                     </Link>
-                  )}
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+                    <Link href="/swap-cycles" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                      Multi-Way Swaps
+                    </Link>
+                    <Link href="/conversations" className="py-2 hover:text-primary relative inline-block" onClick={() => setIsMobileOpen(false)}>
+                      Messages
+                      <UnreadMessagesIndicator />
+                    </Link>
+                    <Link href="/favorites" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                      Favorites
+                    </Link>
+                    <Link href="/wishlist" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                      Wishlist
+                    </Link>
+                    <Link href="/dashboard" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                      Dashboard
+                    </Link>
+                  </>
+                )}
+                <Link href="/sell" className="py-2 hover:text-primary" onClick={(e) => {
+                  handleSellClick(e);
+                  setIsMobileOpen(false);
+                }}>
+                  Sell Books
+                </Link>
+                {!user && (
+                  <Link href="/signup" className="py-2 hover:text-primary" onClick={() => setIsMobileOpen(false)}>
+                    Get Started
+                  </Link>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </header>
