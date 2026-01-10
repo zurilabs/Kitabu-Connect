@@ -175,6 +175,36 @@ router.get('/topup/verify/:reference', authenticateToken, async (req, res) => {
 ================================ */
 
 /**
+ * Preview withdrawal fees for given amount and method
+ * GET /api/wallet/withdrawal/preview?amount=1000&method=mpesa
+ */
+router.get('/withdrawal/preview', authenticateToken, async (req, res) => {
+  try {
+    const amount = parseFloat(req.query.amount as string);
+    const method = (req.query.method as 'mpesa' | 'bank') || 'mpesa';
+
+    if (!amount || isNaN(amount)) {
+      return res.status(400).json({ message: 'Valid amount is required' });
+    }
+
+    const result = await withdrawalService.previewWithdrawalFees(amount, method);
+
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+
+    return res.json({
+      success: true,
+      breakdown: result.breakdown,
+      feeTiers: result.feeTiers,
+    });
+  } catch (error) {
+    console.error('[Wallet] Preview withdrawal fees error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+/**
  * Get available balance for withdrawal
  * GET /api/wallet/withdrawal/available
  */

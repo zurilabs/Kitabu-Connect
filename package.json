@@ -20,7 +20,7 @@
     "db:seed:subjects": "tsx server/db/seeders/seed-subjects.ts",
     "db:seed:metadata": "npm run db:seed:publishers && npm run db:seed:subjects",
     "db:drop-all": "tsx scripts/drop-all-tables.ts",
-    "db": "npm run db:generate && npm run db:migrate",
+    "db": "npm run db:generate && npm run db:migrate && npm run db:seed && npm run db:seed:metadata && npm run db:seed:realistic",
     "seed:stress-test": "tsx server/db/seeders/stress-test/run-stress-test.ts",
     "seed:stress-test:clean": "tsx server/db/seeders/stress-test/cleanup.ts",
     "seed:stress-test:verify": "tsx server/db/seeders/stress-test/verify-results.ts"

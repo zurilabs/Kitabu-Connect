@@ -8,8 +8,58 @@ import {
   getBanks,
   resolveAccountNumber,
 } from "../config/paystack";
+import {
+  calculateWithdrawalFee,
+  calculateWithdrawalBreakdown,
+  isValidWithdrawalAmount,
+  getMinimumWithdrawalAmount,
+  getWithdrawalFeeTiers,
+  WithdrawalMethod,
+  WithdrawalFeeBreakdown,
+} from "../utils/withdrawalFees";
 
 export class WithdrawalService {
+  /**
+   * Preview withdrawal fees for a given amount and method
+   * This doesn't perform any withdrawal, just calculates the fees
+   */
+  async previewWithdrawalFees(
+    amount: number,
+    method: WithdrawalMethod = 'mpesa'
+  ): Promise<{
+    success: boolean;
+    breakdown?: WithdrawalFeeBreakdown;
+    feeTiers?: Array<{ range: string; fee: number }>;
+    message?: string;
+  }> {
+    try {
+      // Validate minimum amount
+      if (!isValidWithdrawalAmount(amount, method)) {
+        const minAmount = getMinimumWithdrawalAmount(method);
+        return {
+          success: false,
+          message: `Minimum withdrawal amount for ${method.toUpperCase()} is KES ${minAmount.toLocaleString()}`,
+        };
+      }
+
+      // Calculate fee breakdown
+      const breakdown = calculateWithdrawalBreakdown(amount, method);
+      const feeTiers = getWithdrawalFeeTiers(method);
+
+      return {
+        success: true,
+        breakdown,
+        feeTiers,
+      };
+    } catch (error: any) {
+      console.error("[WithdrawalService] Preview fees error:", error);
+      return {
+        success: false,
+        message: error.message || "Failed to calculate withdrawal fees",
+      };
+    }
+  }
+
   /**
    * Calculate available balance for withdrawal
    * Available = Total Balance - Funds in Active Escrow (as seller)
@@ -82,12 +132,17 @@ export class WithdrawalService {
    */
   async validateWithdrawal(
     userId: string,
-    amount: number
+    amount: number,
+    method: WithdrawalMethod = 'mpesa'
   ): Promise<{ success: boolean; message?: string; availableBalance?: number }> {
     try {
-      // Check minimum withdrawal amount
-      if (amount < 100) {
-        return { success: false, message: "Minimum withdrawal amount is KES 100" };
+      // Check minimum withdrawal amount based on method
+      const minAmount = getMinimumWithdrawalAmount(method);
+      if (amount < minAmount) {
+        return {
+          success: false,
+          message: `Minimum withdrawal amount for ${method.toUpperCase()} is KES ${minAmount.toLocaleString()}`,
+        };
       }
 
       // Check maximum withdrawal amount (anti-fraud measure)
@@ -227,10 +282,16 @@ export class WithdrawalService {
       accountName?: string;
       paypalEmail?: string;
     };
-  }): Promise<{ success: boolean; withdrawalId?: number; message?: string }> {
+  }): Promise<{ success: boolean; withdrawalId?: number; message?: string; breakdown?: WithdrawalFeeBreakdown }> {
     try {
-      // Validate withdrawal
-      const validation = await this.validateWithdrawal(params.userId, params.amount);
+      // Map paymentMethod to WithdrawalMethod
+      const withdrawalMethod: WithdrawalMethod = params.paymentMethod === 'mpesa' ? 'mpesa' : 'bank';
+
+      // Calculate withdrawal fees
+      const feeBreakdown = calculateWithdrawalBreakdown(params.amount, withdrawalMethod);
+
+      // Validate withdrawal (amount must cover fees)
+      const validation = await this.validateWithdrawal(params.userId, params.amount, withdrawalMethod);
       if (!validation.success) {
         return { success: false, message: validation.message };
       }
@@ -242,10 +303,14 @@ export class WithdrawalService {
         amount: params.amount,
         status: "pending",
         paymentMethod: params.paymentMethod,
-        description: `Withdrawal to ${params.paymentMethod.toUpperCase()}`,
+        description: `Withdrawal to ${params.paymentMethod.toUpperCase()} (Fee: KES ${feeBreakdown.withdrawalFee}, You receive: KES ${feeBreakdown.amountToReceive})`,
         metadata: {
           accountDetails: params.accountDetails,
           requestedAt: new Date().toISOString(),
+          withdrawalFee: feeBreakdown.withdrawalFee,
+          amountToReceive: feeBreakdown.amountToReceive,
+          requestedAmount: feeBreakdown.requestedAmount,
+          method: withdrawalMethod,
         },
       });
 
@@ -308,11 +373,12 @@ export class WithdrawalService {
         return { success: false, message: recipientResult.message || "Failed to create recipient" };
       }
 
-      // Initiate Paystack transfer
+      // Initiate Paystack transfer with the net amount (after withdrawal fees)
+      // User receives: requestedAmount - withdrawalFee
       const transferResult = await initiateTransfer({
-        amount: params.amount,
+        amount: feeBreakdown.amountToReceive, // Send net amount after deducting withdrawal fee
         recipient: recipientResult.recipientCode,
-        reason: `Withdrawal to ${params.paymentMethod}`,
+        reason: `Withdrawal to ${params.paymentMethod} (Net: KES ${feeBreakdown.amountToReceive})`,
         reference: `WD-${txResult.transactionId}-${Date.now()}`,
       });
 
@@ -348,13 +414,14 @@ export class WithdrawalService {
         .where(eq(transactions.id, txResult.transactionId));
 
       console.log(
-        `[WithdrawalService] Paystack transfer initiated for user ${params.userId}. Amount: ${params.amount}, Transfer: ${transferResult.data.transfer_code}`
+        `[WithdrawalService] Paystack transfer initiated for user ${params.userId}. Requested: ${params.amount}, Fee: ${feeBreakdown.withdrawalFee}, Net: ${feeBreakdown.amountToReceive}, Transfer: ${transferResult.data.transfer_code}`
       );
 
       return {
         success: true,
         withdrawalId: txResult.transactionId,
-        message: "Withdrawal initiated successfully. You will receive your funds within 1-3 business days.",
+        breakdown: feeBreakdown,
+        message: `Withdrawal initiated successfully. You will receive KES ${feeBreakdown.amountToReceive.toLocaleString()} (after KES ${feeBreakdown.withdrawalFee} withdrawal fee) within 1-3 business days.`,
       };
     } catch (error) {
       console.error("[WithdrawalService] Initiate withdrawal error:", error);

@@ -69,6 +69,9 @@ interface SwapOrder {
   ownerReceivedBook: boolean;
   bookPrice?: string;
   convenienceFee?: string;
+  serviceFee?: string;
+  paystackTransactionFee?: string;
+  subtotal?: string;
   totalAmount?: string;
   createdAt: string;
   escrowId?: number;
@@ -745,6 +748,9 @@ export default function SwapOrderDetail() {
                   buyerPaid={swapOrder.requesterPaidFee || false}
                   bookPrice={swapOrder.bookPrice || "0"}
                   convenienceFee={swapOrder.convenienceFee || "0"}
+                  serviceFee={swapOrder.serviceFee}
+                  paystackTransactionFee={swapOrder.paystackTransactionFee}
+                  subtotal={swapOrder.subtotal}
                   totalAmount={swapOrder.totalAmount || "0"}
                   status={swapOrder.status}
                 />

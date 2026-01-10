@@ -35,6 +35,18 @@ interface AvailableBalanceData {
   }>;
 }
 
+interface WithdrawalFeeBreakdown {
+  requestedAmount: number;
+  withdrawalFee: number;
+  amountToReceive: number;
+  method: 'mpesa' | 'bank';
+}
+
+interface WithdrawalFeePreview {
+  breakdown: WithdrawalFeeBreakdown;
+  feeTiers: Array<{ range: string; fee: number }>;
+}
+
 export function WithdrawDialog({ open, onOpenChange, currentBalance }: WithdrawDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -70,6 +82,27 @@ export function WithdrawDialog({ open, onOpenChange, currentBalance }: WithdrawD
 
   const availableBalance = availableData?.availableForWithdrawal ?? currentBalance;
   const lockedInEscrow = availableData?.lockedInEscrow ?? 0;
+
+  // Fetch withdrawal fee preview when amount changes
+  const { data: feePreview, isLoading: isLoadingFees } = useQuery<WithdrawalFeePreview>({
+    queryKey: ["wallet", "withdrawal", "preview", amount, paymentMethod],
+    queryFn: async () => {
+      const amountNumber = parseFloat(amount);
+      const response = await fetch(
+        `/api/wallet/withdrawal/preview?amount=${amountNumber}&method=${paymentMethod}`,
+        { credentials: "include" }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Failed to calculate fees");
+      }
+
+      return await response.json();
+    },
+    enabled: open && !!amount && parseFloat(amount) > 0,
+    retry: false,
+  });
 
   // Fetch list of banks from Paystack
   const { data: banksData, isLoading: isLoadingBanks } = useQuery<{ name: string; code: string }[]>({
@@ -280,6 +313,7 @@ export function WithdrawDialog({ open, onOpenChange, currentBalance }: WithdrawD
           <DialogTitle>Withdraw Funds</DialogTitle>
           <DialogDescription>
             Withdraw available funds from your wallet to your preferred payment method.
+            Withdrawal fees will be deducted from your requested amount based on the method and amount tier.
           </DialogDescription>
         </DialogHeader>
 
@@ -333,6 +367,51 @@ export function WithdrawDialog({ open, onOpenChange, currentBalance }: WithdrawD
                   </p>
                 </div>
               </div>
+
+              {/* Withdrawal Fee Breakdown */}
+              {amount && parseFloat(amount) > 0 && feePreview?.breakdown && (
+                <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                  <AlertCircle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="space-y-2">
+                    <p className="font-semibold text-blue-900 dark:text-blue-100">Withdrawal Breakdown</p>
+                    <div className="space-y-1 text-xs text-blue-700 dark:text-blue-300">
+                      <div className="flex justify-between">
+                        <span>Requested Amount:</span>
+                        <span className="font-medium">KES {feePreview.breakdown.requestedAmount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Withdrawal Fee ({paymentMethod.toUpperCase()}):</span>
+                        <span className="font-medium text-red-600 dark:text-red-400">
+                          - KES {feePreview.breakdown.withdrawalFee.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="border-t border-blue-300 dark:border-blue-700 pt-1 flex justify-between">
+                        <span className="font-semibold">You will receive:</span>
+                        <span className="font-bold text-green-600 dark:text-green-400">
+                          KES {feePreview.breakdown.amountToReceive.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Fee Tiers Info */}
+              {feePreview?.feeTiers && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <p className="font-semibold mb-1">{paymentMethod.toUpperCase()} Withdrawal Fee Tiers:</p>
+                    <ul className="space-y-0.5 text-muted-foreground">
+                      {feePreview.feeTiers.map((tier, index) => (
+                        <li key={index}>
+                          {tier.range}: KES {tier.fee}
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <div className="space-y-3">
                 <Label>Payment Method</Label>
