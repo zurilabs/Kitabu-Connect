@@ -720,11 +720,9 @@ export async function getUserReferralStats(userId: string): Promise<{
 }
 
 /**
- * Get referral leaderboard (school or global)
+ * Get referral leaderboard
  */
 export async function getReferralLeaderboard(
-  scope: "global" | "school",
-  schoolId?: number,
   limit: number = 10
 ): Promise<{ success: boolean; leaderboard?: any[]; message?: string }> {
   try {
@@ -737,14 +735,9 @@ export async function getReferralLeaderboard(
         hasReducedEscrowHold: referralStats.hasReducedEscrowHold,
         hasFeaturedSeller: referralStats.hasFeaturedSeller,
         hasPriorityListing: referralStats.hasPriorityListing,
-        schoolName: sql<string>`${users.schoolId}`,
       })
       .from(referralStats)
       .innerJoin(users, eq(referralStats.userId, users.id));
-
-    if (scope === "school" && schoolId) {
-      query = query.where(eq(users.schoolId, schoolId)) as any;
-    }
 
     const leaderboard = await query
       .orderBy(desc(referralStats.qualifiedReferrals))

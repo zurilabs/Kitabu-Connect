@@ -969,7 +969,10 @@ export const completeOnboardingSchema = z.object({
     schoolId: z.string().min(1, "School is required"),
     schoolName: z.string().min(1, "School name is required"),
   })).optional().default([]),
+  markAsComplete: z.boolean().optional().default(true), // Whether to mark onboarding as complete
 });
+
+export type CompleteOnboardingInput = z.infer<typeof completeOnboardingSchema>;
 
 export const updateProfileSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters").optional(),

@@ -143,13 +143,11 @@ export default function Profile() {
     }
   }, [user, isLoadingAuth, setLocation]);
 
-  // Form state
+  // Form state - initialize with empty strings, will be populated by useEffect
   const [formData, setFormData] = useState({
-    name: user?.fullName || "",
-    email: user?.email || "",
-    phone: user?.phoneNumber || "",
-    schoolId: user?.schoolId || "",
-    schoolName: user?.schoolName || "",
+    name: "",
+    email: "",
+    phone: "",
   });
 
   // Payment form state - initialized from preferences
@@ -170,8 +168,6 @@ export default function Profile() {
         name: user.fullName || "",
         email: user.email || "",
         phone: user.phoneNumber || "",
-        schoolId: user.schoolId || "",
-        schoolName: user.schoolName || "",
       });
       setProfilePicture(user.profilePictureUrl || null);
     }
@@ -275,8 +271,6 @@ export default function Profile() {
         body: JSON.stringify({
           fullName: formData.name,
           email: formData.email,
-          schoolId: formData.schoolId,
-          schoolName: formData.schoolName,
         }),
       });
 

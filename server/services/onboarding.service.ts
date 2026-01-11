@@ -31,7 +31,7 @@ export class OnboardingService {
         role,
         latitude: data.latitude !== null && data.latitude !== undefined ? data.latitude.toString() : null,
         longitude: data.longitude !== null && data.longitude !== undefined ? data.longitude.toString() : null,
-        onboardingCompleted: true,
+        onboardingCompleted: data.markAsComplete !== false, // Only mark complete if explicitly requested (defaults to true)
         updatedAt: new Date(),
       };
 

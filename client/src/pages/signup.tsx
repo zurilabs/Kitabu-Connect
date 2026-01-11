@@ -33,6 +33,8 @@ export default function Signup() {
 
     if (refCode) {
       setReferralCode(refCode);
+      // Store in localStorage so onboarding can access it
+      localStorage.setItem("pendingReferralCode", refCode);
       validateReferralCode(refCode);
     }
   }, []);

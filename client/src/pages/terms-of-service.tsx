@@ -240,7 +240,7 @@ export default function TermsOfService() {
             <section className="mb-8">
               <h2 className="text-2xl font-semibold text-gray-900 mb-4">11. DISPUTE RESOLUTION</h2>
               <p className="text-gray-700 mb-4">
-                In the event of any dispute, you agree to first contact us at disputes@kitabuconnect.co.ke to attempt informal resolution. If unsuccessful, disputes will be submitted to mediation and, if necessary, arbitration under the Arbitration Act, 1995 of Kenya.
+                In the event of any dispute, you agree to first contact us at disputes@kitabuconnect.com to attempt informal resolution. If unsuccessful, disputes will be submitted to mediation and, if necessary, arbitration under the Arbitration Act, 1995 of Kenya.
               </p>
             </section>
 
@@ -270,8 +270,8 @@ export default function TermsOfService() {
               <p className="text-gray-700 mb-2">For questions regarding these Terms, please contact:</p>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-gray-700"><strong>Kitabu Connect</strong></p>
-                <p className="text-gray-700">Email: legal@kitabuconnect.co.ke</p>
-                <p className="text-gray-700">Support: support@kitabuconnect.co.ke</p>
+                <p className="text-gray-700">Email: legal@kitabuconnect.com</p>
+                <p className="text-gray-700">Support: support@kitabuconnect.com</p>
               </div>
             </section>
 

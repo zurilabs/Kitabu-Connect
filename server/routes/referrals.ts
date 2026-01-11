@@ -126,11 +126,9 @@ router.post("/track-signup", authenticateToken, async (req, res) => {
  */
 router.get("/leaderboard", async (req, res) => {
   try {
-    const scope = (req.query.scope as "global" | "school") || "global";
-    const schoolId = req.query.schoolId ? parseInt(req.query.schoolId as string) : undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
 
-    const result = await getReferralLeaderboard(scope, schoolId, limit);
+    const result = await getReferralLeaderboard(limit);
 
     if (!result.success) {
       return res.status(400).json({ message: result.message });
