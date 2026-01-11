@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { School, Mail, KeyRound, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +18,6 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -205,35 +203,10 @@ export default function Login() {
                     />
                   </div>
 
-                  <div className="flex items-start space-x-2">
-                    <Checkbox
-                      id="terms"
-                      checked={agreedToTerms}
-                      onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
-                    />
-                    <label
-                      htmlFor="terms"
-                      className="text-sm text-muted-foreground leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      I agree to the{" "}
-                      <Link href="/terms-of-service">
-                        <a className="text-primary hover:underline font-medium" target="_blank">
-                          Terms of Service
-                        </a>
-                      </Link>
-                      {" "}and{" "}
-                      <Link href="/privacy-policy">
-                        <a className="text-primary hover:underline font-medium" target="_blank">
-                          Privacy Policy
-                        </a>
-                      </Link>
-                    </label>
-                  </div>
-
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={isSendingOTP || !email.trim() || !agreedToTerms}
+                    disabled={isSendingOTP || !email.trim()}
                   >
                     {isSendingOTP ? "Sending..." : "Send Code"}
                   </Button>
@@ -254,7 +227,6 @@ export default function Login() {
                     variant="outline"
                     className="w-full"
                     onClick={handleGoogleLogin}
-                    disabled={!agreedToTerms}
                   >
                     <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                       <path

@@ -387,6 +387,17 @@ export default function Onboarding() {
                           Add Another Child
                         </Button>
                       )}
+
+                      <div className="text-center pt-4">
+                        <Button
+                          variant="link"
+                          className="text-muted-foreground"
+                          onClick={handleSkipChildren}
+                          disabled={loading}
+                        >
+                          {loading ? "Saving..." : "Skip for now"}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>

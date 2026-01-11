@@ -164,7 +164,7 @@ router.get("/validate/:code", async (req, res) => {
         id: referrals.id,
         referralCode: referrals.referralCode,
         referrerId: referrals.referrerId,
-        referrerName: users.firstName,
+        referrerName: users.fullName,
         refereeId: referrals.refereeId,
         status: referrals.status,
       })

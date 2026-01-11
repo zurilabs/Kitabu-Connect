@@ -690,7 +690,7 @@ export async function getUserReferralStats(userId: string): Promise<{
         firstTransactionAt: referrals.firstTransactionAt,
         status: referrals.status,
         isFraudulent: referrals.isFraudulent,
-        refereeName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        refereeName: users.fullName,
       })
       .from(referrals)
       .leftJoin(users, eq(referrals.refereeId, users.id))
@@ -731,7 +731,7 @@ export async function getReferralLeaderboard(
     let query = db
       .select({
         userId: referralStats.userId,
-        userName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        userName: users.fullName,
         qualifiedReferrals: referralStats.qualifiedReferrals,
         totalReferrals: referralStats.totalReferrals,
         hasReducedEscrowHold: referralStats.hasReducedEscrowHold,
