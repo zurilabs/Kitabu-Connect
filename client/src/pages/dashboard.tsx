@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BookPlaceholder } from "@/components/ui/book-placeholder";
 import { useState, useEffect, useRef } from "react";
-import { Wallet, Package, Plus, Edit, Trash2, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { Wallet, Package, Plus, Edit, Trash2, ArrowUpCircle, ArrowDownCircle, Share2, Copy, Gift } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBookListing } from "@/hooks/useBookListing";
@@ -13,6 +13,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { Link, useLocation, useSearch } from "wouter";
 import { TopUpDialog } from "@/components/wallet/TopUpDialog";
 import { WithdrawDialog } from "@/components/wallet/WithdrawDialog";
+import { useQuery } from "@tanstack/react-query";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("listings");
@@ -24,6 +25,23 @@ export default function Dashboard() {
   const { balance, transactions, isLoadingTransactions, verifyPayment } = useWallet();
   const searchParams = useSearch();
   const verifiedRef = useRef<Set<string>>(new Set());
+
+  // Fetch referral data
+  const { data: referralData, isLoading: isLoadingReferral, error: referralError } = useQuery({
+    queryKey: ["referral-code"],
+    queryFn: async () => {
+      const response = await fetch("/api/referrals/my-code", {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        console.error("Referral API error:", response.status, response.statusText);
+        return null;
+      }
+      const data = await response.json();
+      console.log("Referral data received:", data);
+      return data;
+    },
+  });
 
   // Handle payment verification after redirect from Paystack
   useEffect(() => {
@@ -46,11 +64,51 @@ export default function Dashboard() {
     }
   };
 
+  // Copy referral code to clipboard
+  const copyReferralCode = async () => {
+    if (!referralData?.referralCode) return;
+    try {
+      await navigator.clipboard.writeText(referralData.referralCode);
+      toast({
+        title: "Copied!",
+        description: "Referral code copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to copy",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Copy referral link to clipboard
+  const copyReferralLink = async () => {
+    if (!referralData?.referralCode) return;
+    const referralLink = `${window.location.origin}/signup?ref=${referralData.referralCode}`;
+    try {
+      await navigator.clipboard.writeText(referralLink);
+      toast({
+        title: "Copied!",
+        description: "Referral link copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to copy",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Calculate stats from listings
   const activeListingsCount = myListings.filter(l => l.listingStatus === "active").length;
-  const totalSalesAmount = myListings
-    .filter(l => l.listingStatus === "sold")
-    .reduce((sum, l) => sum + parseFloat(l.price.toString()), 0);
+
+  // Calculate total sales from actual completed transactions (sale type)
+  // This gives us the real revenue from sales, not just listing prices
+  const totalSalesAmount = transactions
+    .filter(t => t.type === "sale" && t.status === "completed")
+    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
   const getInitials = (name: string | null) => {
     if (!name) return "?";
@@ -144,6 +202,38 @@ export default function Dashboard() {
                 </Button>
               </div>
             </div>
+
+            {/* Referral Section */}
+            {referralData?.referralCode && (
+              <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 rounded-xl border border-purple-200 dark:border-purple-800">
+                <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 mb-2">
+                  <Gift className="w-4 h-4" />
+                  <span className="text-sm font-medium">Earn Rewards</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Share your referral code and earn KES 50 per signup!
+                </p>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <code className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 rounded border text-sm font-mono">
+                      {referralData.referralCode}
+                    </code>
+                    <Button size="sm" variant="outline" onClick={copyReferralCode}>
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <Button size="sm" variant="outline" className="w-full" onClick={copyReferralLink}>
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Copy Referral Link
+                  </Button>
+                </div>
+                <Link href="/referrals">
+                  <Button size="sm" variant="link" className="w-full mt-2 text-xs">
+                    View Referral Stats →
+                  </Button>
+                </Link>
+              </div>
+            )}
 
             <div className="space-y-2 pt-2 border-t">
               <div className="flex justify-between text-sm">

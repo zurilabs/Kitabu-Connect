@@ -992,6 +992,11 @@ export default function Profile() {
           </Card>
           )}
 
+          {/* Ratings & Reviews Section */}
+          {activeSection === "ratings" && user && (
+            <UserRatingsDisplay userId={user.id} limit={20} />
+          )}
+
           {/* Payment Methods Section */}
           {activeSection === "payment" && (
           <Card>

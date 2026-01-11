@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { notifications } from "../db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { sendNotificationEmail } from "./email.service";
 
 interface CreateNotificationInput {
   userId: string;
@@ -11,11 +12,13 @@ interface CreateNotificationInput {
   relatedBookListingId?: number;
   relatedOrderId?: number;
   actionUrl?: string;
+  emailData?: any; // Additional data for email template
 }
 
 export class NotificationService {
   /**
    * Create a new notification
+   * Also sends email notification if email service is enabled
    */
   async createNotification(data: CreateNotificationInput): Promise<{
     success: boolean;
@@ -23,6 +26,7 @@ export class NotificationService {
     message?: string;
   }> {
     try {
+      // Create in-app notification
       const [result] = await db.insert(notifications).values({
         userId: data.userId,
         type: data.type,
@@ -36,6 +40,18 @@ export class NotificationService {
       });
 
       console.log(`[NotificationService] Created notification for user ${data.userId}: ${data.title}`);
+
+      // Send email notification asynchronously (don't wait for it)
+      if (data.emailData) {
+        sendNotificationEmail({
+          userId: data.userId,
+          notificationType: data.type,
+          templateData: data.emailData,
+        }).catch((error) => {
+          console.error(`[NotificationService] Failed to send email for notification type ${data.type}:`, error);
+          // Don't fail the notification creation if email fails
+        });
+      }
 
       return {
         success: true,

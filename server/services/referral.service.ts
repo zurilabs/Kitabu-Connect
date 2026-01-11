@@ -113,8 +113,9 @@ export async function createOrGetReferralCode(
       return { success: false, message: "User not found" };
     }
 
-    // Generate unique code
-    let referralCode = generateReferralCode(user.firstName);
+    // Generate unique code using first part of full name
+    const firstName = user.fullName?.split(' ')[0] || 'USER';
+    let referralCode = generateReferralCode(firstName);
     let attempts = 0;
     const maxAttempts = 10;
 
@@ -129,7 +130,7 @@ export async function createOrGetReferralCode(
       if (existingCode.length === 0) break;
 
       // Generate new code with more randomness
-      referralCode = generateReferralCode(user.firstName) + Math.floor(Math.random() * 99);
+      referralCode = generateReferralCode(firstName) + Math.floor(Math.random() * 99);
       attempts++;
     }
 
@@ -141,7 +142,7 @@ export async function createOrGetReferralCode(
     await db.insert(referrals).values({
       referralCode,
       referrerId: userId,
-      referrerSchoolId: user.schoolId,
+      referrerSchoolId: null, // School ID is not in users table
       status: "pending",
     });
 

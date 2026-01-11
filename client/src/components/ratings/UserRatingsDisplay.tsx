@@ -215,7 +215,13 @@ export function UserRatingsDisplay({ userId, ratingType, limit = 10 }: UserRatin
         {/* Individual Ratings */}
         <div className="space-y-4">
           {displayedRatings.map((rating) => {
-            const tags = rating.tags ? JSON.parse(rating.tags) : [];
+            let tags: string[] = [];
+            try {
+              tags = rating.tags && rating.tags.trim() ? JSON.parse(rating.tags) : [];
+            } catch (e) {
+              console.error('Failed to parse rating tags:', e);
+              tags = [];
+            }
 
             return (
               <div key={rating.id} className="border-b pb-4 last:border-0">
