@@ -10,6 +10,7 @@ import { SchoolCombobox } from "@/components/ui/school-combobox";
 import { CheckCircle2, School, ArrowRight, ShieldCheck, Phone, Lock, Users, X } from "lucide-react";
 import onboardingHero from "@assets/generated_images/friendly_parents_talking_at_school_gate.png";
 import { useAuth } from "@/hooks/useAuth";
+import { generateDeviceFingerprint } from "@/lib/deviceFingerprint";
 
 const GRADES = [
   "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6",
@@ -17,11 +18,22 @@ const GRADES = [
   "Form 1", "Form 2", "Form 3", "Form 4"
 ];
 
+const ONBOARDING_DATA_KEY = "onboarding_progress";
+
 interface ChildData {
   name: string;
   grade: string;
   schoolId: string;
   schoolName: string;
+}
+
+interface OnboardingProgress {
+  step: number;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  childrenCount: number | null;
+  children: ChildData[];
 }
 
 export default function Onboarding() {
@@ -42,8 +54,78 @@ export default function Onboarding() {
   const totalSteps = 2;
   const progress = (step / totalSteps) * 100;
 
-  // Pre-fill form with user data from Google OAuth
+  // Helper function to save onboarding progress to localStorage
+  const saveProgress = () => {
+    const progress: OnboardingProgress = {
+      step,
+      firstName,
+      lastName,
+      phoneNumber,
+      childrenCount,
+      children,
+    };
+    localStorage.setItem(ONBOARDING_DATA_KEY, JSON.stringify(progress));
+  };
+
+  // Helper function to restore onboarding progress from localStorage
+  const restoreProgress = () => {
+    try {
+      const saved = localStorage.getItem(ONBOARDING_DATA_KEY);
+      if (saved) {
+        const progress: OnboardingProgress = JSON.parse(saved);
+        setStep(progress.step || 1);
+        setFirstName(progress.firstName || "");
+        setLastName(progress.lastName || "");
+        setPhoneNumber(progress.phoneNumber || "");
+        setChildrenCount(progress.childrenCount || null);
+        setChildren(progress.children || []);
+      }
+    } catch (error) {
+      console.error("Failed to restore onboarding progress:", error);
+    }
+  };
+
+  // Helper function to clear saved progress
+  const clearProgress = () => {
+    localStorage.removeItem(ONBOARDING_DATA_KEY);
+  };
+
+  // Helper function to track referral signup
+  const trackReferralSignup = async () => {
+    const referralCode = localStorage.getItem("pendingReferralCode");
+    if (!referralCode) return; // No referral code to track
+
+    try {
+      const deviceFingerprint = generateDeviceFingerprint();
+      const response = await fetch("/api/referrals/track-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          referralCode,
+          deviceFingerprint,
+        }),
+      });
+
+      if (response.ok) {
+        console.log("Referral tracked successfully");
+        // Clean up the stored referral code
+        localStorage.removeItem("pendingReferralCode");
+      } else {
+        const error = await response.json();
+        console.error("Failed to track referral:", error.message);
+      }
+    } catch (error) {
+      console.error("Error tracking referral:", error);
+    }
+  };
+
+  // Restore saved progress and pre-fill form with user data from Google OAuth
   useEffect(() => {
+    // First, try to restore saved progress
+    restoreProgress();
+
+    // Then, override with OAuth data if available (OAuth takes precedence)
     if (user?.fullName) {
       const nameParts = user.fullName.trim().split(/\s+/);
       if (nameParts.length >= 2) {
@@ -62,9 +144,48 @@ export default function Onboarding() {
     }
   }, [user]);
 
+  // Auto-save progress whenever form data changes
+  useEffect(() => {
+    // Skip initial render (when all fields are empty)
+    if (firstName || lastName || phoneNumber || childrenCount !== null || children.length > 0) {
+      saveProgress();
+    }
+  }, [step, firstName, lastName, phoneNumber, childrenCount, children]);
+
   const handleNext = async () => {
     if (step < totalSteps) {
-      setStep(step + 1);
+      // Step 1 - Save basic info to database before moving to Step 2
+      if (step === 1) {
+        setLoading(true);
+        try {
+          const response = await fetch("/api/onboarding/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              fullName: `${firstName} ${lastName}`,
+              phoneNumber,
+              children: [], // No children yet, just saving basic info
+              markAsComplete: false, // Don't mark onboarding as complete yet
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to save onboarding data");
+          }
+
+          console.log("Step 1 data saved to database");
+          setLoading(false);
+          setStep(step + 1);
+        } catch (error) {
+          console.error("Failed to save Step 1 data:", error);
+          setLoading(false);
+          // Still allow moving to next step even if save fails
+          setStep(step + 1);
+        }
+      } else {
+        setStep(step + 1);
+      }
     } else {
       // Step 2 - Submit all data and complete onboarding
       setLoading(true);
@@ -82,12 +203,19 @@ export default function Onboarding() {
               schoolId: child.schoolId,
               schoolName: child.schoolName,
             })),
+            markAsComplete: true, // Now mark onboarding as complete
           }),
         });
 
         if (!response.ok) {
           throw new Error("Failed to complete onboarding");
         }
+
+        // Track referral signup if there's a pending referral code
+        await trackReferralSignup();
+
+        // Clear saved onboarding progress
+        clearProgress();
 
         // Navigate to marketplace
         setLocation("/marketplace");
@@ -128,12 +256,19 @@ export default function Onboarding() {
           fullName: `${firstName} ${lastName}`,
           phoneNumber,
           children: [],
+          markAsComplete: true, // Mark onboarding as complete when skipping
         }),
       });
 
       if (!response.ok) {
         throw new Error("Failed to complete onboarding");
       }
+
+      // Track referral signup if there's a pending referral code
+      await trackReferralSignup();
+
+      // Clear saved onboarding progress
+      clearProgress();
 
       // Navigate to marketplace
       setLocation("/marketplace");
@@ -249,7 +384,7 @@ export default function Onboarding() {
                     <>
                       <div className="text-center space-y-2">
                         <Users className="w-12 h-12 mx-auto text-primary" />
-                        <h3 className="text-lg font-semibold">How many children do you have?</h3>
+                        <h3 className="text-lg font-semibold">How many children do you have(Optional)?</h3>
                         <p className="text-sm text-muted-foreground">
                           This helps us personalize your experience
                         </p>
@@ -387,6 +522,17 @@ export default function Onboarding() {
                           Add Another Child
                         </Button>
                       )}
+
+                      <div className="text-center pt-4">
+                        <Button
+                          variant="link"
+                          className="text-muted-foreground"
+                          onClick={handleSkipChildren}
+                          disabled={loading}
+                        >
+                          {loading ? "Saving..." : "Skip for now"}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>

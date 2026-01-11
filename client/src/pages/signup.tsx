@@ -33,6 +33,8 @@ export default function Signup() {
 
     if (refCode) {
       setReferralCode(refCode);
+      // Store in localStorage so onboarding can access it
+      localStorage.setItem("pendingReferralCode", refCode);
       validateReferralCode(refCode);
     }
   }, []);
@@ -369,6 +371,7 @@ export default function Signup() {
                     className="w-full"
                     size="lg"
                     onClick={handleGoogleSignup}
+                    disabled={!agreedToTerms}
                   >
                     <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                       <path

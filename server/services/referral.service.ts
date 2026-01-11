@@ -690,7 +690,7 @@ export async function getUserReferralStats(userId: string): Promise<{
         firstTransactionAt: referrals.firstTransactionAt,
         status: referrals.status,
         isFraudulent: referrals.isFraudulent,
-        refereeName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        refereeName: users.fullName,
       })
       .from(referrals)
       .leftJoin(users, eq(referrals.refereeId, users.id))
@@ -720,31 +720,24 @@ export async function getUserReferralStats(userId: string): Promise<{
 }
 
 /**
- * Get referral leaderboard (school or global)
+ * Get referral leaderboard
  */
 export async function getReferralLeaderboard(
-  scope: "global" | "school",
-  schoolId?: number,
   limit: number = 10
 ): Promise<{ success: boolean; leaderboard?: any[]; message?: string }> {
   try {
     let query = db
       .select({
         userId: referralStats.userId,
-        userName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        userName: users.fullName,
         qualifiedReferrals: referralStats.qualifiedReferrals,
         totalReferrals: referralStats.totalReferrals,
         hasReducedEscrowHold: referralStats.hasReducedEscrowHold,
         hasFeaturedSeller: referralStats.hasFeaturedSeller,
         hasPriorityListing: referralStats.hasPriorityListing,
-        schoolName: sql<string>`${users.schoolId}`,
       })
       .from(referralStats)
       .innerJoin(users, eq(referralStats.userId, users.id));
-
-    if (scope === "school" && schoolId) {
-      query = query.where(eq(users.schoolId, schoolId)) as any;
-    }
 
     const leaderboard = await query
       .orderBy(desc(referralStats.qualifiedReferrals))

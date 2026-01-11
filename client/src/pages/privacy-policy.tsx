@@ -56,8 +56,8 @@ export default function PrivacyPolicy() {
               </p>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-gray-700"><strong>Kitabu Connect</strong></p>
-                <p className="text-gray-700">Email: privacy@kitabuconnect.co.ke</p>
-                <p className="text-gray-700">Support: support@kitabuconnect.co.ke</p>
+                <p className="text-gray-700">Email: privacy@kitabuconnect.com</p>
+                <p className="text-gray-700">Support: support@kitabuconnect.com</p>
               </div>
             </section>
 
@@ -294,7 +294,7 @@ export default function PrivacyPolicy() {
               <div className="bg-purple-50 border-l-4 border-purple-600 p-4 mt-4">
                 <p className="text-gray-800 font-semibold mb-2">Exercising Your Rights</p>
                 <p className="text-gray-700">
-                  To exercise any of these rights, contact us at privacy@kitabuconnect.co.ke. We will respond within thirty (30) days.
+                  To exercise any of these rights, contact us at privacy@kitabuconnect.com. We will respond within thirty (30) days.
                 </p>
               </div>
             </section>
@@ -328,7 +328,7 @@ export default function PrivacyPolicy() {
             <section className="mb-8">
               <h2 className="text-2xl font-semibold text-gray-900 mb-4">15. COMPLAINTS AND DISPUTE RESOLUTION</h2>
               <p className="text-gray-700 mb-4">
-                If you have concerns about how we handle your data, contact us at privacy@kitabuconnect.co.ke. We will investigate and respond within thirty (30) days.
+                If you have concerns about how we handle your data, contact us at privacy@kitabuconnect.com. We will investigate and respond within thirty (30) days.
               </p>
 
               <p className="text-gray-700 mb-2">If not satisfied, you may lodge a complaint with the Office of the Data Protection Commissioner:</p>
@@ -346,8 +346,8 @@ export default function PrivacyPolicy() {
               <p className="text-gray-700 mb-2">For questions or requests regarding this Privacy Policy, contact:</p>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-gray-700"><strong>Kitabu Connect</strong></p>
-                <p className="text-gray-700">Email: privacy@kitabuconnect.co.ke</p>
-                <p className="text-gray-700">Support: support@kitabuconnect.co.ke</p>
+                <p className="text-gray-700">Email: privacy@kitabuconnect.com</p>
+                <p className="text-gray-700">Support: support@kitabuconnect.com</p>
               </div>
             </section>
 
