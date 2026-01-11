@@ -33,6 +33,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { PWAInstallPrompt } from "@/components/ui/pwa-install-prompt";
 
 import Profile from "@/pages/profile";
+import TermsOfService from "@/pages/terms-of-service";
+import PrivacyPolicy from "@/pages/privacy-policy";
 
 function Router() {
   const [location] = useLocation();
@@ -70,6 +72,8 @@ function Router() {
           <Route path="/book/:id" component={BookDetails} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/profile" component={Profile} />
+          <Route path="/terms-of-service" component={TermsOfService} />
+          <Route path="/privacy-policy" component={PrivacyPolicy} />
           <Route component={NotFound} />
         </Switch>
       </main>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { School, Mail, KeyRound, ArrowRight, ArrowLeft, Gift } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +24,7 @@ export default function Signup() {
   const [referralCode, setReferralCode] = useState("");
   const [referrerName, setReferrerName] = useState("");
   const [isValidatingReferral, setIsValidatingReferral] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Check for referral code in URL on mount
   useEffect(() => {
@@ -311,18 +313,36 @@ export default function Signup() {
                     )}
                   </div>
 
-                  <Alert>
-                    <AlertDescription className="text-sm">
-                      By signing up, you agree to connect with verified parents in your school's community.
-                      Your email will be kept private.
-                    </AlertDescription>
-                  </Alert>
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="terms"
+                      checked={agreedToTerms}
+                      onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                    />
+                    <label
+                      htmlFor="terms"
+                      className="text-sm text-muted-foreground leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      I agree to the{" "}
+                      <Link href="/terms-of-service">
+                        <a className="text-primary hover:underline font-medium" target="_blank">
+                          Terms of Service
+                        </a>
+                      </Link>
+                      {" "}and{" "}
+                      <Link href="/privacy-policy">
+                        <a className="text-primary hover:underline font-medium" target="_blank">
+                          Privacy Policy
+                        </a>
+                      </Link>
+                    </label>
+                  </div>
 
                   <Button
                     type="submit"
                     className="w-full"
                     size="lg"
-                    disabled={isSendingOTP || !email.trim()}
+                    disabled={isSendingOTP || !email.trim() || !agreedToTerms}
                   >
                     {isSendingOTP ? "Sending code..." : (
                       <>

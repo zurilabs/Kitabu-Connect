@@ -439,7 +439,7 @@ export async function getUserRatingStats(userId: string) {
       success: true,
       stats: {
         // Flat structure for easy access
-        averageRating: result.avgOverall ? parseFloat(result.avgOverall.toFixed(2)) : 0,
+        averageRating: result.avgOverall ? parseFloat(Number(result.avgOverall).toFixed(2)) : 0,
         totalRatings: result.total || 0,
         ratingDistribution: {
           5: result.fiveStars || 0,
@@ -449,16 +449,16 @@ export async function getUserRatingStats(userId: string) {
           1: result.oneStar || 0,
         },
         categoryAverages: {
-          communication: result.avgCommunication ? parseFloat(result.avgCommunication.toFixed(2)) : 0,
-          accuracy: result.avgAccuracy ? parseFloat(result.avgAccuracy.toFixed(2)) : 0,
-          timeliness: result.avgTimeliness ? parseFloat(result.avgTimeliness.toFixed(2)) : 0,
-          condition: result.avgCondition ? parseFloat(result.avgCondition.toFixed(2)) : 0,
-          professionalism: result.avgProfessionalism ? parseFloat(result.avgProfessionalism.toFixed(2)) : 0,
+          communication: result.avgCommunication ? parseFloat(Number(result.avgCommunication).toFixed(2)) : 0,
+          accuracy: result.avgAccuracy ? parseFloat(Number(result.avgAccuracy).toFixed(2)) : 0,
+          timeliness: result.avgTimeliness ? parseFloat(Number(result.avgTimeliness).toFixed(2)) : 0,
+          condition: result.avgCondition ? parseFloat(Number(result.avgCondition).toFixed(2)) : 0,
+          professionalism: result.avgProfessionalism ? parseFloat(Number(result.avgProfessionalism).toFixed(2)) : 0,
         },
         byType: typeStats.reduce((acc, item) => {
           acc[item.ratingType] = {
             count: item.count || 0,
-            average: item.avg ? parseFloat(item.avg.toFixed(2)) : 0,
+            average: item.avg ? parseFloat(Number(item.avg).toFixed(2)) : 0,
           };
           return acc;
         }, {} as Record<string, { count: number; average: number }>),
